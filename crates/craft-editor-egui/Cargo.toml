@@ -6,11 +6,22 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+default = []
+wordcraft-geometry = ["dep:wordcraft-doc", "dep:wordcraft-layout", "dep:wordcraft-geom"]
+
 [dependencies]
 egui.workspace = true
 craft-editor-model.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+wordcraft-doc = { git = "https://github.com/storytold/wordcraft", rev = "da914ce674f18ebc4e08cca425cc8f8acca3372f", optional = true }
+wordcraft-layout = { git = "https://github.com/storytold/wordcraft", rev = "da914ce674f18ebc4e08cca425cc8f8acca3372f", optional = true }
+wordcraft-geom = { git = "https://github.com/storytold/wordcraft", rev = "da914ce674f18ebc4e08cca425cc8f8acca3372f", optional = true }
 
 [lints]
 workspace = true
+
+[[example]]
+name = "wordcraft_geometry"
+required-features = ["wordcraft-geometry"]

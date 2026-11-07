@@ -5,6 +5,10 @@
 //! cell traversal; complex blocks/atoms and rich system clipboard still need their real renderers.
 #![deny(missing_docs)]
 
+/// Optional hosted qualification of a pinned native flow/table geometry backend.
+#[cfg(feature = "wordcraft-geometry")]
+pub mod layout;
+
 mod projection;
 use craft_editor_model::{
     Change, Command, Document, Editor, Mark, MarkMode, Revision, ScalarOffset, TextRange,
