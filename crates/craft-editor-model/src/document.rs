@@ -106,6 +106,17 @@ impl Node {
     pub fn block_id(&self) -> Option<&str> {
         self.string_attr("blockId")
     }
+    pub(crate) fn can_coalesce_text(&self, other: &Self) -> bool {
+        self.node_type == "text"
+            && other.node_type == "text"
+            && self.text.as_ref().is_some_and(|text| !text.is_empty())
+            && other.text.as_ref().is_some_and(|text| !text.is_empty())
+            && self.attrs == other.attrs
+            && self.marks == other.marks
+            && self.content == other.content
+            && self.extra == other.extra
+            && self.null_fields == other.null_fields
+    }
     /// The shared inline projection: hard breaks are newlines; inline atoms are U+FFFC.
     pub fn inline_text(&self) -> String {
         match self.node_type.as_str() {

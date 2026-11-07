@@ -1,12 +1,14 @@
-# Craft Editor
+# CraftEditor
 
 Reusable native Rust rich-document editing components for WriterCraft and other desktop applications.
 
 **Development status:** architecture and implementation work in progress. No full native-editor parity or production readiness is claimed. WriterCraft alpha.2 requires the complete original editor workflow; internal model/view checkpoints do not satisfy that release gate.
 
-## Verified model checkpoint
+## Verified development checkpoint
 
-The current model passes 19 semantic tests, formatting and strict Clippy locally. It covers lossless structured JSON (including unknown fields and explicit nulls), schema validation, typed positions, revision guards, exact text/mark operations, top-level insertion, split/join and Undo/Redo. These are model tests, not proof of the native editing surface. Structural table/list commands, native renderers, input/clipboard/IME/accessibility and full host integration remain required development work.
+The workspace passes **45 semantic/headless tests** locally: 35 model/structure checks and 10 native-input-session checks, plus formatting and strict Clippy. The model preserves complete JSON, unknown fields/explicit nulls, typed positions, exact edits, marks, split/join, nested guarded Insert/Replace/Delete/Move and Undo/Redo. Local typing coalesces compatible text runs without losing metadata.
+
+The initial egui session has one input/selection surface and emits semantic model commands. Headless input tests cover text, shifted selection and IME preedit/commit into a table-cell paragraph. **Tables still use a linear projection; this is not a completed WYSIWYG grid.** Complex unsupported blocks fail explicitly. True table/atom layout, all block renderers, rich clipboard, platform IME/accessibility and full host integration remain mandatory work; neither these tests nor a projection can pass full editor parity.
 
 ## Boundaries
 

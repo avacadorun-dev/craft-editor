@@ -524,3 +524,112 @@ fn reserved_mark_extra_fields_cannot_override_canonical_mark_attributes() {
         assert!(!editor.can_undo());
     }
 }
+
+#[test]
+fn hundreds_of_typing_transactions_coalesce_identical_text_metadata() {
+    let mut editor = editor("А").with_history_limit(4);
+    for position in 1..=160 {
+        transact(
+            &mut editor,
+            vec![Command::ReplaceText {
+                range: range("p", position, position),
+                expected: String::new(),
+                replacement: "😀".into(),
+            }],
+        )
+        .expect("type");
+        assert_eq!(
+            editor
+                .document()
+                .block("p")
+                .expect("paragraph")
+                .children()
+                .len(),
+            1
+        );
+    }
+    assert_eq!(
+        editor
+            .document()
+            .block_text("p")
+            .expect("text")
+            .chars()
+            .count(),
+        161
+    );
+}
+#[test]
+fn coalescing_preserves_marks_unknown_fields_and_block_provenance() {
+    let original = json!({"type":"doc","content":[{"type":"paragraph","attrs":{"blockId":"p","sourceRefs":["source"]},"content":[
+        {"type":"text","text":"А","attrs":{"custom":1},"marks":[{"type":"bold","vendor":"mark"}],"vendor":{"nested":[1,null]}},
+        {"type":"text","text":"Б","attrs":{"custom":2},"marks":[{"type":"bold","vendor":"mark"}],"vendor":{"nested":[1,null]}}
+    ]}]});
+    let mut editor = Editor::new(
+        Document::from_json(original.clone()).expect("fixture"),
+        Revision(1),
+    )
+    .with_history_limit(4);
+    for _ in 0..120 {
+        transact(
+            &mut editor,
+            vec![Command::ReplaceText {
+                range: range("p", 1, 1),
+                expected: String::new(),
+                replacement: "я".into(),
+            }],
+        )
+        .expect("insert inside second metadata run");
+    }
+    let after = editor.document().to_json().expect("json");
+    let children = editor.document().block("p").expect("paragraph").children();
+    assert_eq!(children.len(), 2);
+    assert_eq!(children[0].extra, children[1].extra);
+    assert_ne!(children[0].attrs, children[1].attrs);
+    assert_eq!(
+        after["content"][0]["attrs"],
+        original["content"][0]["attrs"]
+    );
+    assert_eq!(
+        after["content"][0]["content"][1]["marks"],
+        original["content"][0]["content"][1]["marks"]
+    );
+    assert_eq!(
+        after["content"][0]["content"][1]["vendor"],
+        original["content"][0]["content"][1]["vendor"]
+    );
+}
+#[test]
+fn coalescing_never_erases_null_empty_or_different_unknown_field_presence() {
+    let input = json!({"type":"doc","content":[{"type":"paragraph","attrs":{"blockId":"p"},"content":[
+        {"type":"text","text":"a","attrs":null},
+        {"type":"text","text":"b"},
+        {"type":"text","text":"c","marks":[]},
+        {"type":"text","text":"d","vendor":null},
+        {"type":"text","text":"e","vendor":{"same":false}}
+    ]}]});
+    let mut editor = Editor::new(
+        Document::from_json(input.clone()).expect("fixture"),
+        Revision(1),
+    );
+    transact(
+        &mut editor,
+        vec![Command::ReplaceText {
+            range: range("p", 5, 5),
+            expected: String::new(),
+            replacement: "x".into(),
+        }],
+    )
+    .expect("append");
+    let after = editor.document().to_json().expect("json");
+    assert_eq!(editor.document().block("p").expect("p").children().len(), 5);
+    for index in 0..4 {
+        assert_eq!(
+            after["content"][0]["content"][index],
+            input["content"][0]["content"][index]
+        );
+    }
+    assert_eq!(
+        after["content"][0]["content"][4]["vendor"],
+        json!({"same":false})
+    );
+}

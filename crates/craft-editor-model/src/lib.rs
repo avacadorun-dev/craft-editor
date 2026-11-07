@@ -8,6 +8,7 @@
 
 mod document;
 mod position;
+mod structural;
 mod transaction;
 
 pub use document::{Document, Mark, Node};
@@ -15,6 +16,7 @@ pub use position::{
     ByteOffset, ScalarOffset, TextRange, Utf16Offset, byte_to_scalar, scalar_to_byte,
     scalar_to_utf16, utf16_to_scalar,
 };
+pub use structural::{NodePath, NodeRef};
 pub use transaction::{Change, Command, Editor, MarkMode, PositionMap, Revision, Transaction};
 
 /// A stable, content-free model diagnostic. Hosts provide localized UI messages.
@@ -32,6 +34,9 @@ pub enum Error {
     /// A stable block identifier could not be resolved.
     #[error("block_not_found")]
     BlockNotFound,
+    /// A revision-local structural reference no longer matches its exact node.
+    #[error("node_reference_conflict")]
+    NodeReferenceConflict,
     /// A requested operation cannot safely preserve the selected structure.
     #[error("unsupported_edit")]
     UnsupportedEdit,

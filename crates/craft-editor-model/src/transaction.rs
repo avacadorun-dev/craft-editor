@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::{
-    Document, Error, Mark, Node, Result, ScalarOffset, TextRange, document::validate_mark,
-    scalar_to_byte,
+    Document, Error, Mark, Node, NodePath, NodeRef, Result, ScalarOffset, TextRange,
+    document::validate_mark, scalar_to_byte,
 };
 
 /// Monotonic document revision identity, independent of history depth.
@@ -28,6 +28,48 @@ pub enum MarkMode {
 /// A generic operation applied through one atomic canonical engine.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Command {
+    /// Insert complete children at a guarded parent, including nested/inline atoms.
+    InsertChildren {
+        /// Exact expected parent in the sequential intermediate state.
+        parent: NodeRef,
+        /// Insertion child ordinal, including the end.
+        index: usize,
+        /// Complete canonical child trees.
+        children: Vec<Node>,
+    },
+    /// Replace a half-open child range at a guarded parent.
+    ReplaceChildren {
+        /// Exact expected parent.
+        parent: NodeRef,
+        /// Inclusive child ordinal.
+        from: usize,
+        /// Exclusive child ordinal.
+        to: usize,
+        /// Complete replacement child trees.
+        children: Vec<Node>,
+    },
+    /// Delete a half-open child range, subject to full schema validation.
+    DeleteChildren {
+        /// Exact expected parent.
+        parent: NodeRef,
+        /// Inclusive child ordinal.
+        from: usize,
+        /// Exclusive child ordinal.
+        to: usize,
+    },
+    /// Move children preserving identities, metadata and original relative order.
+    MoveChildren {
+        /// Exact expected source parent.
+        source: NodeRef,
+        /// Inclusive source child ordinal.
+        from: usize,
+        /// Exclusive source child ordinal.
+        to: usize,
+        /// Exact destination parent before removal, checked with source together.
+        destination: NodeRef,
+        /// Destination ordinal before source removal; inside the same range is a no-op.
+        index: usize,
+    },
     /// Insert ordered canonical blocks at a top-level block ordinal.
     InsertBlocks {
         /// Zero-based insertion ordinal, including the end of the document.
@@ -90,6 +132,41 @@ pub struct Transaction {
 /// A scalar-space mapping produced by an actual successful operation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PositionMap {
+    /// Inline runs were rebuilt without changing scalar positions.
+    InlineRebuild {
+        /// Identified text block whose marks/run boundaries changed.
+        block_id: String,
+    },
+    /// Structural child replacement, using paths from before this operation.
+    Children {
+        /// Parent path, unchanged by its own child replacement.
+        parent: NodePath,
+        /// Inclusive former child ordinal.
+        from: usize,
+        /// Exclusive former child ordinal.
+        to: usize,
+        /// Number of inserted children.
+        inserted: usize,
+        /// Stable IDs in all removed subtrees, including descendants.
+        removed_ids: Vec<String>,
+        /// Stable IDs in all inserted subtrees, including descendants.
+        inserted_ids: Vec<String>,
+    },
+    /// Structural move; moved node paths follow their actual new location.
+    MoveChildren {
+        /// Source parent path before the operation.
+        source_parent: NodePath,
+        /// Inclusive source ordinal.
+        from: usize,
+        /// Exclusive source ordinal.
+        to: usize,
+        /// Destination parent before removal.
+        destination_parent: NodePath,
+        /// Destination ordinal before removal.
+        index: usize,
+        /// Stable IDs preserved by this move, including descendant blocks.
+        moved_ids: Vec<String>,
+    },
     /// Inline replacement in one block; maps are expressed in Unicode scalars.
     Text {
         /// Block identity.
@@ -122,6 +199,52 @@ pub enum PositionMap {
 }
 
 impl PositionMap {
+    /// Map a node path. Deleted/replaced targets detach; moved targets follow.
+    /// Scalar/run/split/join maps conservatively invalidate paths; recapture refs.
+    /// Block-local scalar carets use map_existing_caret instead.
+    pub fn map_path(&self, path: &NodePath) -> Option<NodePath> {
+        match self {
+            Self::Children {
+                parent,
+                from,
+                to,
+                inserted,
+                ..
+            } => crate::structural::map_splice_path(path, parent, *from, *to, *inserted),
+            Self::MoveChildren {
+                source_parent,
+                from,
+                to,
+                destination_parent,
+                index,
+                ..
+            } => crate::structural::map_move_path(
+                path,
+                source_parent,
+                *from,
+                *to,
+                destination_parent,
+                *index,
+            ),
+            _ => None,
+        }
+    }
+    /// Map a caret, explicitly detaching blocks removed by structural replacement.
+    /// A surviving mapped range still needs current-text and revision validation.
+    pub fn map_existing_caret(
+        &self,
+        block_id: &str,
+        offset: ScalarOffset,
+        right_bias: bool,
+    ) -> Option<(String, ScalarOffset)> {
+        if let Self::Children { removed_ids, .. } = self
+            && removed_ids.iter().any(|id| id == block_id)
+        {
+            return None;
+        }
+        Some(self.map_caret(block_id, offset, right_bias))
+    }
+
     /// Map a block-local caret with explicit left(-1)/right(1) boundary bias.
     /// This does not prove an attached quote's semantic validity after edits.
     pub fn map_caret(
@@ -314,6 +437,37 @@ fn apply_command(
     mappings: &mut Vec<PositionMap>,
 ) -> Result<()> {
     match command {
+        Command::InsertChildren {
+            parent,
+            index,
+            children,
+        } => {
+            crate::structural::splice_children(document, parent, index, index, children, mappings)?
+        }
+        Command::ReplaceChildren {
+            parent,
+            from,
+            to,
+            children,
+        } => crate::structural::splice_children(document, parent, from, to, children, mappings)?,
+        Command::DeleteChildren { parent, from, to } => {
+            crate::structural::splice_children(document, parent, from, to, vec![], mappings)?
+        }
+        Command::MoveChildren {
+            source,
+            from,
+            to,
+            destination,
+            index,
+        } => crate::structural::move_children(
+            document,
+            source,
+            from,
+            to,
+            destination,
+            index,
+            mappings,
+        )?,
         Command::InsertBlocks { index, blocks } => {
             let existing = document.root.content.get_or_insert_default();
             if index > existing.len() {
@@ -346,7 +500,7 @@ fn apply_command(
                 content.push(leaf);
             }
             content.extend(suffix);
-            node.content = Some(content);
+            node.content = Some(coalesce_text(content));
             mappings.push(PositionMap::Text {
                 block_id: range.block_id,
                 start: range.start.0,
@@ -396,7 +550,12 @@ fn apply_command(
                     MarkMode::Replace => *current = marks.clone(),
                 }
             }
-            node.content = Some(prefix.into_iter().chain(selected).chain(suffix).collect());
+            node.content = Some(coalesce_text(
+                prefix.into_iter().chain(selected).chain(suffix).collect(),
+            ));
+            mappings.push(PositionMap::InlineRebuild {
+                block_id: range.block_id,
+            });
         }
         Command::SetBlockAttrs { block_id, attrs } => {
             document
@@ -475,9 +634,9 @@ fn apply_command(
                     }
                 }
             }
-            left.content
-                .get_or_insert_default()
-                .extend(right.content.unwrap_or_default());
+            let content = left.content.get_or_insert_default();
+            content.extend(right.content.unwrap_or_default());
+            *content = coalesce_text(std::mem::take(content));
             mappings.push(PositionMap::Join {
                 left_id,
                 right_id,
@@ -576,4 +735,20 @@ fn join_compatible(left: &Node, right: &Node) -> bool {
         result
     };
     stripped(&left.attrs) == stripped(&right.attrs)
+}
+
+fn coalesce_text(nodes: Vec<Node>) -> Vec<Node> {
+    let mut result: Vec<Node> = Vec::with_capacity(nodes.len());
+    for node in nodes {
+        if let Some(previous) = result.last_mut()
+            && previous.can_coalesce_text(&node)
+            && let Some(previous_text) = previous.text.as_mut()
+            && let Some(text) = node.text.as_deref()
+        {
+            previous_text.push_str(text);
+        } else {
+            result.push(node);
+        }
+    }
+    result
 }
