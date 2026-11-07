@@ -4,6 +4,10 @@ Reusable native Rust rich-document editing components for WriterCraft and other 
 
 **Development status:** architecture and implementation work in progress. No full native-editor parity or production readiness is claimed. WriterCraft alpha.2 requires the complete original editor workflow; internal model/view checkpoints do not satisfy that release gate.
 
+## Verified model checkpoint
+
+The current model passes 19 semantic tests, formatting and strict Clippy locally. It covers lossless structured JSON (including unknown fields and explicit nulls), schema validation, typed positions, revision guards, exact text/mark operations, top-level insertion, split/join and Undo/Redo. These are model tests, not proof of the native editing surface. Structural table/list commands, native renderers, input/clipboard/IME/accessibility and full host integration remain required development work.
+
 ## Boundaries
 
 - `craft-editor-model`: revisioned structured documents, typed positions, validated transactions and rich history.
