@@ -1,0 +1,114 @@
+%YAML 1.2
+---
+# Native port of the pinned MIT Refractor 5.0.0 grammar; see NOTICE.md.
+{
+  "name": "Fortran",
+  "scope": "source.fortran",
+  "file_extensions": [
+    "fortran",
+    "f90",
+    "f95"
+  ],
+  "contexts": {
+    "main": [
+      {
+        "match": "(?i)[BOZ](['\"])[A-F0-9]+\\1",
+        "scope": "constant.numeric.fortran"
+      },
+      {
+        "match": "(?i)(?:\\b\\w+_)?\"",
+        "scope": "punctuation.definition.string.begin.fortran",
+        "push": "double-string"
+      },
+      {
+        "match": "(?i)(?:\\b\\w+_)?'",
+        "scope": "punctuation.definition.string.begin.fortran",
+        "push": "single-string"
+      },
+      {
+        "match": "!.*",
+        "scope": "comment.line.fortran"
+      },
+      {
+        "match": "(?i)\\.(?:FALSE|TRUE)\\.(?:_\\w+)?",
+        "scope": "constant.language.fortran"
+      },
+      {
+        "match": "(?i)(?:\\b\\d+(?:\\.\\d*)?|\\B\\.\\d+)(?:[ED][+-]?\\d+)?(?:_\\w+)?",
+        "scope": "constant.numeric.fortran"
+      },
+      {
+        "match": "(?i)\\b(?:CHARACTER|COMPLEX|DOUBLE ?PRECISION|INTEGER|LOGICAL|REAL)\\b",
+        "scope": "keyword.control.fortran"
+      },
+      {
+        "match": "(?i)\\b(?:END ?)?(?:BLOCK ?DATA|DO|FILE|FORALL|FUNCTION|IF|INTERFACE|MODULE(?! PROCEDURE)|PROGRAM|SELECT|SUBROUTINE|TYPE|WHERE)\\b",
+        "scope": "keyword.control.fortran"
+      },
+      {
+        "match": "(?i)\\b(?:ALLOCATABLE|ALLOCATE|BACKSPACE|CALL|CASE|CLOSE|COMMON|CONTAINS|CONTINUE|CYCLE|DATA|DEALLOCATE|DIMENSION|DO|END|EQUIVALENCE|EXIT|EXTERNAL|FORMAT|GO ?TO|IMPLICIT(?: NONE)?|INQUIRE|INTENT|INTRINSIC|MODULE PROCEDURE|NAMELIST|NULLIFY|OPEN|OPTIONAL|PARAMETER|POINTER|PRINT|PRIVATE|PUBLIC|READ|RETURN|REWIND|SAVE|SELECT|STOP|TARGET|WHILE|WRITE)\\b",
+        "scope": "keyword.control.fortran"
+      },
+      {
+        "match": "(?i)\\b(?:ASSIGNMENT|DEFAULT|ELEMENTAL|ELSE|ELSEIF|ELSEWHERE|ENTRY|IN|INCLUDE|INOUT|KIND|NULL|ONLY|OPERATOR|OUT|PURE|RECURSIVE|RESULT|SEQUENCE|STAT|THEN|USE)\\b",
+        "scope": "keyword.control.fortran"
+      },
+      {
+        "match": "(?i)\\*\\*|//|=>|[=/]=|[<>]=?|::|[+\\-*=%]|\\.[A-Z]+\\.",
+        "scope": "keyword.operator.fortran"
+      },
+      {
+        "match": "(^|(?!\\().)(/(?!\\)))",
+        "captures": {
+          "2": "keyword.operator.fortran"
+        }
+      },
+      {
+        "match": "\\(/|/\\)|[(),;:&]",
+        "scope": "punctuation.fortran"
+      }
+    ],
+    "double-string": [
+      {
+        "meta_scope": "string.quoted.fortran"
+      },
+      {
+        "meta_include_prototype": false
+      },
+      {
+        "match": "\"\"",
+        "scope": "constant.character.escape.fortran"
+      },
+      {
+        "match": "^\\s*!.*",
+        "scope": "comment.line.fortran"
+      },
+      {
+        "match": "\"",
+        "scope": "punctuation.definition.string.end.fortran",
+        "pop": true
+      }
+    ],
+    "single-string": [
+      {
+        "meta_scope": "string.quoted.fortran"
+      },
+      {
+        "meta_include_prototype": false
+      },
+      {
+        "match": "''",
+        "scope": "constant.character.escape.fortran"
+      },
+      {
+        "match": "^\\s*!.*",
+        "scope": "comment.line.fortran"
+      },
+      {
+        "match": "'",
+        "scope": "punctuation.definition.string.end.fortran",
+        "pop": true
+      }
+    ]
+  }
+}

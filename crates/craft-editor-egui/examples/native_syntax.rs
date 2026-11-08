@@ -18,6 +18,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .into_iter()
         .map(|(language, coverage)| {
             let (status, grammar) = match coverage {
+                Coverage::GrammarBundleUnavailable => ("grammar-bundle-unavailable", None),
                 Coverage::PlainText => ("plain", None),
                 Coverage::Highlighted { grammar } => ("highlighted", Some(grammar)),
                 Coverage::MissingRequiredGrammar { .. } => ("missing-required-grammar", None),
@@ -28,7 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .collect();
     let missing: Vec<_> = coverage
         .iter()
-        .filter(|row| row["status"] == "missing-required-grammar")
+        .filter(|row| row["status"] != "highlighted" && row["status"] != "plain")
         .map(|row| row["language"].clone())
         .collect();
     let code = "// Unicode source remains exact: Русский 日本語 🪶\nfn describe_story(title: &str) -> String {\n    let chapter_count = 42;\n    format!(\"{title}: {chapter_count}\")\n}";
@@ -78,7 +79,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         output.join("two-face-NOTICE.md"),
         syntax::acknowledgements_markdown(),
     )?;
-    let report = json!({"source_option_count":coverage.len(),"coverage":coverage,"missing_required_grammars":missing,"real_native_rasters":renders,"canonical_json_unchanged":true,"full_syntax_parity":missing.is_empty(),"native_editor_ux_acceptance":false});
+    let report = json!({"source_option_count":coverage.len(),"coverage":coverage,"missing_required_grammars":missing,"real_native_rasters":renders,"canonical_json_unchanged":true,"all_required_grammars_available":missing.is_empty(),"full_syntax_parity":false,"native_editor_ux_acceptance":false});
     std::fs::write(
         output.join("syntax-report.json"),
         serde_json::to_vec_pretty(&report)?,

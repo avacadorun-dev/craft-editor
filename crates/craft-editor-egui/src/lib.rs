@@ -5,6 +5,10 @@
 //! cell traversal; complex blocks/atoms and rich system clipboard still need their real renderers.
 #![deny(missing_docs)]
 
+/// Host-provided native font registration and explicit glyph coverage.
+#[cfg(feature = "wordcraft-geometry")]
+pub mod fonts;
+
 /// Optional hosted qualification of a pinned native flow/table geometry backend.
 #[cfg(feature = "wordcraft-geometry")]
 pub mod layout;

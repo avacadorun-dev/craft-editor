@@ -1,0 +1,124 @@
+%YAML 1.2
+---
+# Native port of the pinned MIT Refractor 5.0.0 grammar; see NOTICE.md.
+{
+  "name": "Mermaid",
+  "scope": "source.mermaid",
+  "file_extensions": [
+    "mermaid",
+    "mmd"
+  ],
+  "contexts": {
+    "main": [
+      {
+        "match": "%%.*",
+        "scope": "comment.line.mermaid"
+      },
+      {
+        "match": "^([ \\t]*)(classDef|linkStyle|style)([ \\t]+)([\\w$-]+)([ \\t]+)",
+        "captures": {
+          "2": "keyword.control.mermaid",
+          "4": "entity.other.attribute-name.mermaid"
+        },
+        "push": [
+          {
+            "match": "$",
+            "pop": true
+          },
+          {
+            "match": "\\b\\w[\\w-]*(?=[ \\t]*:)",
+            "scope": "entity.other.attribute-name.mermaid"
+          },
+          {
+            "match": ":",
+            "scope": "keyword.operator.mermaid"
+          },
+          {
+            "match": "[,;]",
+            "scope": "punctuation.mermaid"
+          },
+          {
+            "match": "#[a-fA-F0-9]+\\b|\\b\\d+(?:\\.\\d+)?(?:px|em|%)?",
+            "scope": "constant.numeric.mermaid"
+          }
+        ]
+      },
+      {
+        "match": "([^<>ox.=-])((?:-[-.]|==))(?![<>ox.=-])[ \\t]*(\"[^\"\\r\\n]*\"|[^\\s\".=-](?:[^\\r\\n.=-]*[^\\s.=-])?)[ \\t]*((?:\\.+->?|--+[->]|==+[=>]))(?![<>ox.=-])",
+        "captures": {
+          "2": "keyword.operator.mermaid",
+          "3": "entity.other.attribute-name.label.mermaid",
+          "4": "keyword.operator.mermaid"
+        }
+      },
+      {
+        "match": "(^|[^{}|o.-])([|}][|o](?:--|\\.\\.)[|o][|{](?![{}|o.-]))",
+        "captures": {
+          "2": "keyword.operator.arrow.mermaid"
+        }
+      },
+      {
+        "match": "(^|[^<>ox.=-])((?:[<ox](?:==+|--+|-\\.*-)[>ox]?|(?:==+|--+|-\\.*-)[>ox]|===+|---+|-\\.+-)(?![<>ox.=-]))",
+        "captures": {
+          "2": "keyword.operator.arrow.mermaid"
+        }
+      },
+      {
+        "match": "(^|[^<>()x-])((?:--?(?:>>|[x>)])(?![<>()x])|(?:<<|[x<(])--?(?!-)))",
+        "captures": {
+          "2": "keyword.operator.arrow.mermaid"
+        }
+      },
+      {
+        "match": "(^|[^<>|*o.-])((?:[*o]--|--[*o]|<\\|?(?:--|\\.\\.)|(?:--|\\.\\.)\\|?>|--|\\.\\.)(?![<>|*o.-]))",
+        "captures": {
+          "2": "keyword.operator.arrow.mermaid"
+        }
+      },
+      {
+        "match": "(^|[^|<])(\\|(?:[^\\r\\n\"|]|\"[^\"\\r\\n]*\")+\\|)",
+        "captures": {
+          "2": "entity.other.attribute-name.label.mermaid"
+        }
+      },
+      {
+        "match": "(?i)<<(?:abstract|choice|enumeration|fork|interface|join|service)>>|\\[\\[(?:choice|fork|join)\\]\\]",
+        "scope": "keyword.other.annotation.mermaid"
+      },
+      {
+        "match": "(?:[(\\[{]+|\\b>)(?:[^\\r\\n\"()\\[\\]{}]|\"[^\"\\r\\n]*\")+(?:[)\\]}]+|>)",
+        "scope": "string.other.node.mermaid"
+      },
+      {
+        "match": "\"[^\"\\r\\n]*\"",
+        "scope": "string.quoted.double.mermaid"
+      },
+      {
+        "match": "(^[ \\t]*)((?:action|callback|class|classDef|classDiagram|click|direction|erDiagram|flowchart|gantt|gitGraph|graph|journey|link|linkStyle|pie|requirementDiagram|sequenceDiagram|stateDiagram|stateDiagram-v2|style|subgraph)(?![\\w$-]))",
+        "captures": {
+          "2": "keyword.control.mermaid"
+        }
+      },
+      {
+        "match": "(?i)(^[ \\t]*)((?:activate|alt|and|as|autonumber|deactivate|else|end(?:[ \\t]+note)?|loop|opt|par|participant|rect|state|note[ \\t]+(?:over|(?:left|right)[ \\t]+of))(?![\\w$-]))",
+        "captures": {
+          "2": "keyword.control.mermaid"
+        }
+      },
+      {
+        "match": "#[a-z0-9]+;",
+        "scope": "constant.character.entity.mermaid"
+      },
+      {
+        "match": "(\\w[ \\t]*)(&(?=[ \\t]*\\w)|:::|:)",
+        "captures": {
+          "2": "keyword.operator.mermaid"
+        }
+      },
+      {
+        "match": "[(){};]",
+        "scope": "punctuation.mermaid"
+      }
+    ]
+  }
+}

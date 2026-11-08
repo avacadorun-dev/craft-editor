@@ -19,7 +19,7 @@ Primary references verified on 2026-11-08:
 - [Exact bundle manifest](https://docs.rs/crate/two-face/0.5.2%2Bbat-0.26.1/source/Cargo.toml.orig).
 - [Full upstream notices](https://codeberg.org/CosmicHarper/two-face/src/tag/v0.5.2+bat-0.26.1/generated/acknowledgements_full.md), retained verbatim in `third_party/licenses/two-face-NOTICE.md`. Hosts also have `acknowledgements_markdown()` for packaging.
 
-The selected bundle does not advertise all original long-tail grammars. Supplementary licensed native grammars are still required for formats such as BASIC/VB.NET, COBOL, JSON5, PromQL, Mermaid and PlantUML; the actual hosted coverage report, including exact grammar names, is authoritative. JSX, Scheme, Gradle, Java properties, HTTP and alias mappings also require explicit audit rather than an unrelated-language fallback. Do not mark #8 complete from the broad bundle alone.
+The baseline hosted bundle audit found ten actual gaps: BASIC, VB.NET, Arduino, Fortran, COBOL, Scheme, PromQL, JSON5, Mermaid and PlantUML. Ten pinned native supplementary definitions now address them, as recorded in [native grammar provenance](../assets/syntaxes/NOTICE.md). Source-format samples test all 77 options, not merely the bundle lookup. The actual hosted report remains authoritative; grammar availability is separately named from full syntax UX parity. Do not close #8 from a broad bundle, token sample or compiler alone.
 
 ## Public token and color contract
 
@@ -37,7 +37,7 @@ Hosted tests cover Unicode byte partitions, multiline state, Rust semantic class
 
 Required before issue/release acceptance:
 
-- Supply and qualify every missing required grammar and source-specific aliases; no generic catch-all token simulation.
+- Qualify every supplementary required grammar and source-specific alias on the hosted runner; no generic catch-all token simulation.
 - Exercise all supported source samples, invalid/incomplete edit states, whitespace and Unicode combinations.
 - Integrate visible language controls, original code copy behavior and source-dialog highlighting in the consumer.
 - Qualify parsing/caching/worker scheduling for long code documents so editing remains responsive; a synchronous native layout checkpoint alone is not performance acceptance.

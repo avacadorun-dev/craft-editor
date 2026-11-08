@@ -1,0 +1,104 @@
+[
+  {
+    "file": "third_party/syntaxes/json5.sublime-syntax",
+    "sha256": "143cf5b0aa86c6a8676233127ad0cfb1feaa06dc0a9132056eb8696376ee43a1",
+    "source": "https://github.com/bschwind/sublime-json5/blob/4772caed5da6bcce48c3ad7a787b97302c1c2f8f/json5.sublime-syntax",
+    "source_revision": "4772caed5da6bcce48c3ad7a787b97302c1c2f8f",
+    "license": "MIT",
+    "license_file": "third_party/licenses/sublime-json5-LICENSE.txt",
+    "modified": false
+  },
+  {
+    "file": "third_party/syntaxes/PlantUML.sublime-syntax",
+    "sha256": "84d197f43ff1d5e7b82325b65cd6911286a8fb9c7b63a43fff70282be335f3f8",
+    "source": "https://github.com/nsiena/sublime-plantuml/blob/e6c03ac5ce2d458cdbffa34bd07fc8a3a04c30b8/PlantUML.sublime-syntax",
+    "source_revision": "e6c03ac5ce2d458cdbffa34bd07fc8a3a04c30b8",
+    "license": "MIT",
+    "license_file": "third_party/licenses/sublime-plantuml-LICENSE.txt",
+    "modified": false
+  },
+  {
+    "file": "third_party/syntaxes/promql.sublime-syntax",
+    "sha256": "90d94da41afac8118382848d3377e62a51708657dc03f09b15efe321e1ef656f",
+    "source": "https://github.com/prometheus-community/sublimelsp-promql/blob/0a432fff4e217c40d2e293caeda2aa6acf6cc0e7/promql.sublime-syntax",
+    "source_revision": "0a432fff4e217c40d2e293caeda2aa6acf6cc0e7",
+    "license": "Apache-2.0",
+    "license_file": "third_party/licenses/sublimelsp-promql-LICENSE.txt",
+    "modified": false
+  },
+  {
+    "file": "third_party/syntaxes/COBOL.sublime-syntax",
+    "sha256": "2f9378f959cbe058b023096d00cc9993b94caca506d2a571a0c5eb994daae330",
+    "source": "https://github.com/adukhan99/sublime_cobol/blob/27825ee0220fb7fee73617f7404d4d214dc71b8f/syntaxes/COBOL.sublime-syntax",
+    "source_revision": "27825ee0220fb7fee73617f7404d4d214dc71b8f",
+    "license": "BSD-2-Clause",
+    "license_file": "third_party/licenses/sublime_cobol-LICENSE.txt",
+    "modified": false
+  },
+  {
+    "file": "assets/syntaxes/basic.sublime-syntax",
+    "sha256": "2cf67ab097ccf3bd33baac419f19bb18c255e450c443ec08b254f8496ba90073",
+    "source": "https://github.com/wooorm/refractor/blob/ed824ac801ef4bb5b25f73a4bcd6ce46b7eec8c9/lang/basic.js",
+    "source_revision": "ed824ac801ef4bb5b25f73a4bcd6ce46b7eec8c9",
+    "source_sha256": "c26efe5990ec34c145b1636119c6f5ca7f90ac51ca89c4abdeca0a0c86f25e0c",
+    "license": "MIT",
+    "license_file": "third_party/licenses/refractor-LICENSE.txt",
+    "modified": true,
+    "adaptation": "Native YAML contexts and original language-specific regex vocabulary; no JavaScript runtime. See assets/syntaxes/NOTICE.md."
+  },
+  {
+    "file": "assets/syntaxes/vbnet.sublime-syntax",
+    "sha256": "b240b1babd9de643e2ac33f44ef295e1a59ecd44165646a6388d7cbf270ab2b7",
+    "source": "https://github.com/wooorm/refractor/blob/ed824ac801ef4bb5b25f73a4bcd6ce46b7eec8c9/lang/visual-basic.js",
+    "source_revision": "ed824ac801ef4bb5b25f73a4bcd6ce46b7eec8c9",
+    "source_sha256": "eb1914cce549b047b6245e222662e64b5938deaa550cbcbd8f6f6be719ba8231",
+    "license": "MIT",
+    "license_file": "third_party/licenses/refractor-LICENSE.txt",
+    "modified": true,
+    "adaptation": "Native YAML contexts and original language-specific regex vocabulary; no JavaScript runtime. See assets/syntaxes/NOTICE.md."
+  },
+  {
+    "file": "assets/syntaxes/arduino.sublime-syntax",
+    "sha256": "b3b81923ab4f431f13ffd7d734c69e13039a19b4184c48f16a495aae61065826",
+    "source": "https://github.com/wooorm/refractor/blob/ed824ac801ef4bb5b25f73a4bcd6ce46b7eec8c9/lang/arduino.js",
+    "source_revision": "ed824ac801ef4bb5b25f73a4bcd6ce46b7eec8c9",
+    "source_sha256": "42ef593bfb03589390262e9b214a14c4261326b1fed71ecfde1d0e6e233df8ec",
+    "license": "MIT",
+    "license_file": "third_party/licenses/refractor-LICENSE.txt",
+    "modified": true,
+    "adaptation": "Native YAML contexts and original language-specific regex vocabulary; no JavaScript runtime. See assets/syntaxes/NOTICE.md."
+  },
+  {
+    "file": "assets/syntaxes/scheme.sublime-syntax",
+    "sha256": "5ec203ffbb043b7b8a0bd73f08efbb97732f6a832cf73b71bab007d759d16335",
+    "source": "https://github.com/wooorm/refractor/blob/ed824ac801ef4bb5b25f73a4bcd6ce46b7eec8c9/lang/scheme.js",
+    "source_revision": "ed824ac801ef4bb5b25f73a4bcd6ce46b7eec8c9",
+    "source_sha256": "8d38181ab74f4a49ec76d5482e2af03704dade57d0bb9945aa65e6fe49e3b43b",
+    "license": "MIT",
+    "license_file": "third_party/licenses/refractor-LICENSE.txt",
+    "modified": true,
+    "adaptation": "Native YAML contexts and original language-specific regex vocabulary; no JavaScript runtime. See assets/syntaxes/NOTICE.md."
+  },
+  {
+    "file": "assets/syntaxes/mermaid.sublime-syntax",
+    "sha256": "b78197b0ab78129cb05502f0d9138ac8d8f60012662667079ed37965b50bc78a",
+    "source": "https://github.com/wooorm/refractor/blob/ed824ac801ef4bb5b25f73a4bcd6ce46b7eec8c9/lang/mermaid.js",
+    "source_revision": "ed824ac801ef4bb5b25f73a4bcd6ce46b7eec8c9",
+    "source_sha256": "61d59512448e2c33aa1236556387ee8a36fc820f930bd8e1c8c8fc2bee60ca0e",
+    "license": "MIT",
+    "license_file": "third_party/licenses/refractor-LICENSE.txt",
+    "modified": true,
+    "adaptation": "Native YAML contexts and original language-specific regex vocabulary; no JavaScript runtime. See assets/syntaxes/NOTICE.md."
+  },
+  {
+    "file": "assets/syntaxes/fortran.sublime-syntax",
+    "sha256": "e8246b1692ca89f866972ce554edc7413d3e36ab2290d491f1fba88b0c82817d",
+    "source": "https://github.com/wooorm/refractor/blob/ed824ac801ef4bb5b25f73a4bcd6ce46b7eec8c9/lang/fortran.js",
+    "source_revision": "ed824ac801ef4bb5b25f73a4bcd6ce46b7eec8c9",
+    "source_sha256": "c83dd1303a461baac26db97365e0cadda9ba0dc12afd959856fb078568869898",
+    "license": "MIT",
+    "license_file": "third_party/licenses/refractor-LICENSE.txt",
+    "modified": true,
+    "adaptation": "Native YAML contexts and original language-specific regex vocabulary; no JavaScript runtime. See assets/syntaxes/NOTICE.md."
+  }
+]

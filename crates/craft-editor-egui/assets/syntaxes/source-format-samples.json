@@ -1,0 +1,310 @@
+[
+  {
+    "language": "",
+    "source": "ordinary text 🪶\n"
+  },
+  {
+    "language": "go",
+    "source": "// comment\npackage main\nfunc main() { println(\"story\") }"
+  },
+  {
+    "language": "javascript",
+    "source": "// comment\nconst title = \"Story\";"
+  },
+  {
+    "language": "typescript",
+    "source": "// comment\nconst title: string = \"Story\";"
+  },
+  {
+    "language": "html",
+    "source": "<!-- comment -->\n<p title=\"Story\">Text</p>"
+  },
+  {
+    "language": "xml",
+    "source": "<!-- comment -->\n<story title=\"Story\"/>"
+  },
+  {
+    "language": "css",
+    "source": "/* comment */\n.story { color: #123456; }"
+  },
+  {
+    "language": "scss",
+    "source": "/* comment */\n$title: #123456; .story { color: $title; }"
+  },
+  {
+    "language": "sass",
+    "source": "// comment\n$title: #123456\n.story\n  color: $title"
+  },
+  {
+    "language": "less",
+    "source": "/* comment */\n@title: #123456; .story { color: @title; }"
+  },
+  {
+    "language": "json",
+    "source": "{\"title\": \"Story\", \"count\": 42}"
+  },
+  {
+    "language": "yaml",
+    "source": "# comment\nstory:\n  title: \"Story\"\n  count: 42"
+  },
+  {
+    "language": "markdown",
+    "source": "# Story\n\n**bold** and `code`\n"
+  },
+  {
+    "language": "bash",
+    "source": "# comment\ntitle=\"Story\"\necho \"$title\""
+  },
+  {
+    "language": "powershell",
+    "source": "# comment\n$title = \"Story\"\nWrite-Output $title"
+  },
+  {
+    "language": "python",
+    "source": "# comment\ndef title():\n    return \"Story\""
+  },
+  {
+    "language": "java",
+    "source": "// comment\nclass Story { String title = \"Story\"; }"
+  },
+  {
+    "language": "kotlin",
+    "source": "// comment\nval title: String = \"Story\""
+  },
+  {
+    "language": "c",
+    "source": "// comment\nint main(void) { return 42; }"
+  },
+  {
+    "language": "cpp",
+    "source": "// comment\nstd::string title = \"Story\";"
+  },
+  {
+    "language": "csharp",
+    "source": "// comment\nclass Story { string title = \"Story\"; }"
+  },
+  {
+    "language": "rust",
+    "source": "// comment\nlet title = \"Story\";"
+  },
+  {
+    "language": "swift",
+    "source": "// comment\nlet title: String = \"Story\""
+  },
+  {
+    "language": "objectivec",
+    "source": "// comment\nNSString *title = @\"Story\";"
+  },
+  {
+    "language": "php",
+    "source": "<?php\n// comment\n$title = \"Story\";"
+  },
+  {
+    "language": "ruby",
+    "source": "# comment\ntitle = \"Story\""
+  },
+  {
+    "language": "lua",
+    "source": "-- comment\nlocal title = \"Story\""
+  },
+  {
+    "language": "sql",
+    "source": "-- comment\nSELECT 'Story' AS title;"
+  },
+  {
+    "language": "r",
+    "source": "# comment\ntitle <- \"Story\""
+  },
+  {
+    "language": "perl",
+    "source": "# comment\nmy $title = \"Story\";"
+  },
+  {
+    "language": "vbnet",
+    "source": "' comment\nModule Story\nDim title As String = \"Story\"\nEnd Module"
+  },
+  {
+    "language": "basic",
+    "source": "REM comment\n10 PRINT \"Story\"\n20 GOTO 10"
+  },
+  {
+    "language": "arduino",
+    "source": "// comment\nvoid setup() { pinMode(LED_BUILTIN, OUTPUT); }"
+  },
+  {
+    "language": "makefile",
+    "source": "# comment\nstory:\n\t@echo \"Story\""
+  },
+  {
+    "language": "ini",
+    "source": "; comment\n[story]\ntitle=Story"
+  },
+  {
+    "language": "diff",
+    "source": "--- before\n+++ after\n@@ -1 +1 @@\n-old\n+new\n"
+  },
+  {
+    "language": "jsx",
+    "source": "const story = <Story title=\"Story\" />;"
+  },
+  {
+    "language": "tsx",
+    "source": "const story: JSX.Element = <Story title=\"Story\" />;"
+  },
+  {
+    "language": "graphql",
+    "source": "# comment\nquery Story { title }"
+  },
+  {
+    "language": "dockerfile",
+    "source": "# comment\nFROM rust:stable\nRUN echo \"Story\""
+  },
+  {
+    "language": "hcl",
+    "source": "# comment\nvariable \"title\" { default = \"Story\" }"
+  },
+  {
+    "language": "terraform",
+    "source": "# comment\nvariable \"title\" { default = \"Story\" }"
+  },
+  {
+    "language": "toml",
+    "source": "# comment\n[story]\ntitle = \"Story\"\ncount = 42"
+  },
+  {
+    "language": "protobuf",
+    "source": "// comment\nsyntax = \"proto3\";\nmessage Story { string title = 1; }"
+  },
+  {
+    "language": "dart",
+    "source": "// comment\nString title = \"Story\";"
+  },
+  {
+    "language": "scala",
+    "source": "// comment\nval title: String = \"Story\""
+  },
+  {
+    "language": "clojure",
+    "source": "; comment\n(def title \"Story\")"
+  },
+  {
+    "language": "elixir",
+    "source": "# comment\ntitle = \"Story\""
+  },
+  {
+    "language": "erlang",
+    "source": "% comment\ntitle() -> \"Story\"."
+  },
+  {
+    "language": "haskell",
+    "source": "-- comment\ntitle = \"Story\""
+  },
+  {
+    "language": "fsharp",
+    "source": "// comment\nlet title = \"Story\""
+  },
+  {
+    "language": "ocaml",
+    "source": "(* comment *)\nlet title = \"Story\""
+  },
+  {
+    "language": "groovy",
+    "source": "// comment\ndef title = \"Story\""
+  },
+  {
+    "language": "gradle",
+    "source": "// comment\nplugins { id \"java\" }"
+  },
+  {
+    "language": "julia",
+    "source": "# comment\ntitle = \"Story\""
+  },
+  {
+    "language": "matlab",
+    "source": "% comment\ntitle = 'Story';"
+  },
+  {
+    "language": "fortran",
+    "source": "! comment\nprogram story\nprint *, 'Story'\nend program story"
+  },
+  {
+    "language": "pascal",
+    "source": "{ comment }\nprogram Story; begin writeln('Story'); end."
+  },
+  {
+    "language": "cobol",
+    "source": "      * comment\n       IDENTIFICATION DIVISION.\n       PROGRAM-ID. STORY.\n       PROCEDURE DIVISION.\n           DISPLAY \"Story\".\n"
+  },
+  {
+    "language": "lisp",
+    "source": "; comment\n(defvar title \"Story\")"
+  },
+  {
+    "language": "scheme",
+    "source": "; comment\n(define title \"Story\")\n(display title)"
+  },
+  {
+    "language": "solidity",
+    "source": "// comment\npragma solidity ^0.8.0; contract Story { string title = \"Story\"; }"
+  },
+  {
+    "language": "nix",
+    "source": "# comment\n{ title = \"Story\"; }"
+  },
+  {
+    "language": "gdscript",
+    "source": "# comment\nvar title: String = \"Story\""
+  },
+  {
+    "language": "glsl",
+    "source": "// comment\nvoid main() { gl_Position = vec4(1.0); }"
+  },
+  {
+    "language": "nasm",
+    "source": "; comment\nsection .text\nmov eax, 42"
+  },
+  {
+    "language": "asm",
+    "source": "; comment\nsection .text\nmov eax, 42"
+  },
+  {
+    "language": "cmake",
+    "source": "# comment\nset(TITLE \"Story\")"
+  },
+  {
+    "language": "nginx",
+    "source": "# comment\nserver { listen 8080; server_name story.local; }"
+  },
+  {
+    "language": "http",
+    "source": "GET /story HTTP/1.1\nHost: example.test\nContent-Type: application/json\n\n{\"title\":\"Story\"}"
+  },
+  {
+    "language": "promql",
+    "source": "# comment\nrate(http_requests_total{job=\"story\"}[5m])"
+  },
+  {
+    "language": "jq",
+    "source": "# comment\n.title | select(.count > 42)"
+  },
+  {
+    "language": "json5",
+    "source": "// comment\n{ title: \"Story\", count: 42, }"
+  },
+  {
+    "language": "properties",
+    "source": "# comment\nstory.title=Story\nstory.count=42"
+  },
+  {
+    "language": "latex",
+    "source": "% comment\n\\section{Story}\n\\frac{1}{2}"
+  },
+  {
+    "language": "mermaid",
+    "source": "%% comment\nflowchart TD\n A[Start] --> B[Story]"
+  },
+  {
+    "language": "plantuml",
+    "source": "@startuml\n' comment\nAlice -> Bob : Story\n@enduml"
+  }
+]

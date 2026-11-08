@@ -8,13 +8,16 @@ use std::sync::OnceLock;
 use craft_editor_model::ByteOffset;
 use syntect::{
     easy::ScopeRangeIterator,
-    parsing::{ParseState, ScopeStack, SyntaxReference, SyntaxSet},
+    parsing::{ParseState, ScopeStack, SyntaxDefinition, SyntaxReference, SyntaxSet},
     util::LinesWithEndings,
 };
 
 /// Stable content-free highlighting failure.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// A pinned native supplementary grammar failed to load. The value is an asset name.
+    #[error("syntax_grammar_definition_failed: {0}")]
+    GrammarDefinition(&'static str),
     /// The pinned grammar engine could not parse one source line.
     #[error("syntax_parse_failed")]
     Parse,
@@ -78,6 +81,8 @@ impl TokenSpan {
 /// Distinguishes a grammar-backed result from intentional plain text and required gaps.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Coverage {
+    /// The versioned grammar registry failed to initialize; this is never completed coverage.
+    GrammarBundleUnavailable,
     /// The author explicitly selected plain text.
     PlainText,
     /// A versioned native grammar was actually selected.
@@ -239,10 +244,64 @@ fn readable(color: [u8; 3], foreground: [u8; 3], background: [u8; 3]) -> [u8; 3]
     foreground
 }
 
-fn syntaxes() -> &'static SyntaxSet {
-    static SYNTAXES: OnceLock<SyntaxSet> = OnceLock::new();
-    SYNTAXES.get_or_init(two_face::syntax::extra_newlines)
+fn syntaxes() -> Result<&'static SyntaxSet> {
+    static SYNTAXES: OnceLock<std::result::Result<SyntaxSet, &'static str>> = OnceLock::new();
+    SYNTAXES
+        .get_or_init(|| {
+            let mut builder = two_face::syntax::extra_newlines().into_builder();
+            for (name, source) in SUPPLEMENTARY_GRAMMARS {
+                let definition =
+                    SyntaxDefinition::load_from_str(source, true, None).map_err(|_| *name)?;
+                builder.add(definition);
+            }
+            Ok(builder.build())
+        })
+        .as_ref()
+        .map_err(|name| Error::GrammarDefinition(name))
 }
+const SUPPLEMENTARY_GRAMMARS: &[(&str, &str)] = &[
+    (
+        "basic",
+        include_str!("../assets/syntaxes/basic.sublime-syntax"),
+    ),
+    (
+        "vbnet",
+        include_str!("../assets/syntaxes/vbnet.sublime-syntax"),
+    ),
+    (
+        "arduino",
+        include_str!("../assets/syntaxes/arduino.sublime-syntax"),
+    ),
+    (
+        "scheme",
+        include_str!("../assets/syntaxes/scheme.sublime-syntax"),
+    ),
+    (
+        "mermaid",
+        include_str!("../assets/syntaxes/mermaid.sublime-syntax"),
+    ),
+    (
+        "fortran",
+        include_str!("../assets/syntaxes/fortran.sublime-syntax"),
+    ),
+    (
+        "json5",
+        include_str!("../third_party/syntaxes/json5.sublime-syntax"),
+    ),
+    (
+        "plantuml",
+        include_str!("../third_party/syntaxes/PlantUML.sublime-syntax"),
+    ),
+    (
+        "promql",
+        include_str!("../third_party/syntaxes/promql.sublime-syntax"),
+    ),
+    (
+        "cobol",
+        include_str!("../third_party/syntaxes/COBOL.sublime-syntax"),
+    ),
+];
+
 /// Full original source option set, including intentional plain text; order matches the source UI.
 pub const REQUIRED_LANGUAGES: &[&str] = &[
     "",
@@ -338,6 +397,8 @@ pub fn lookup_language(language: &str) -> String {
         "obj_c" | "objective-c" => "objectivec",
         "plant-uml" => "plantuml",
         "ps1" => "powershell",
+        "ino" => "arduino",
+        "visual-basic" | "vba" => "vbnet",
         "py" => "python",
         "rb" => "ruby",
         "shell" | "sh" => "bash",
@@ -348,7 +409,7 @@ pub fn lookup_language(language: &str) -> String {
     }
     .into()
 }
-fn grammar(language: &str) -> Option<&'static SyntaxReference> {
+fn grammar(language: &str) -> Result<Option<&'static SyntaxReference>> {
     let candidates: &[&str] = match language {
         "csharp" => &["C#", "cs"],
         "objectivec" => &["Objective-C", "m"],
@@ -364,11 +425,11 @@ fn grammar(language: &str) -> Option<&'static SyntaxReference> {
         // BASIC, VB.NET and Scheme are distinct languages, not aliases for an unrelated grammar.
         _ => &[],
     };
-    let set = syntaxes();
-    candidates
+    let set = syntaxes()?;
+    Ok(candidates
         .iter()
         .find_map(|candidate| set.find_syntax_by_token(candidate))
-        .or_else(|| set.find_syntax_by_token(language))
+        .or_else(|| set.find_syntax_by_token(language)))
 }
 /// Audit every required source language against the actual pinned grammar bundle.
 pub fn coverage_report() -> Vec<(&'static str, Coverage)> {
@@ -383,10 +444,14 @@ pub fn coverage(language: &str) -> Coverage {
     if language.is_empty() {
         return Coverage::PlainText;
     }
-    if let Some(grammar) = grammar(&language) {
-        return Coverage::Highlighted {
-            grammar: grammar.name.clone(),
-        };
+    match grammar(&language) {
+        Ok(Some(grammar)) => {
+            return Coverage::Highlighted {
+                grammar: grammar.name.clone(),
+            };
+        }
+        Err(_) => return Coverage::GrammarBundleUnavailable,
+        Ok(None) => {}
     }
     if REQUIRED_LANGUAGES.contains(&language.as_str()) {
         Coverage::MissingRequiredGrammar { language }
@@ -403,7 +468,7 @@ pub fn coverage(language: &str) -> Coverage {
 pub fn highlight(source: &str, language: &str) -> Result<Highlighted> {
     let language = lookup_language(language);
     let coverage = coverage(&language);
-    let Some(grammar) = grammar(&language).filter(|_| !language.is_empty()) else {
+    let Some(grammar) = grammar(&language)?.filter(|_| !language.is_empty()) else {
         return Ok(Highlighted {
             coverage,
             tokens: if source.is_empty() {
@@ -426,7 +491,7 @@ pub fn highlight(source: &str, language: &str) -> Result<Highlighted> {
     let mut base = 0;
     for line in LinesWithEndings::from(source) {
         let operations = parser
-            .parse_line(line, syntaxes())
+            .parse_line(line, syntaxes()?)
             .map_err(|_| Error::Parse)?;
         for (range, operation) in ScopeRangeIterator::new(&operations, line) {
             scopes.apply(operation).map_err(|_| Error::Scope)?;
@@ -458,6 +523,18 @@ fn classify(scopes: &ScopeStack) -> TokenKind {
         let scope = scope.to_string();
         let kind = if scope.starts_with("comment") {
             TokenKind::Comment
+        } else if scope.starts_with("markup.heading") || scope.starts_with("markup.bold") {
+            TokenKind::Keyword
+        } else if scope.starts_with("markup.italic") || scope.starts_with("markup.underline") {
+            TokenKind::Type
+        } else if scope.starts_with("markup.inserted") || scope.starts_with("markup.raw") {
+            TokenKind::String
+        } else if scope.starts_with("markup.deleted") {
+            TokenKind::Invalid
+        } else if scope.starts_with("markup.quote") {
+            TokenKind::Comment
+        } else if scope.starts_with("markup.list") {
+            TokenKind::Punctuation
         } else if scope.starts_with("invalid") {
             TokenKind::Invalid
         } else if scope.starts_with("string") || scope.starts_with("constant.character") {
@@ -474,16 +551,16 @@ fn classify(scopes: &ScopeStack) -> TokenKind {
         } else if scope.starts_with("entity.name.function") || scope.starts_with("support.function")
         {
             TokenKind::Function
+        } else if scope.starts_with("entity.other.attribute-name")
+            || scope.starts_with("support.type.property-name")
+        {
+            TokenKind::Attribute
         } else if scope.starts_with("entity.name.type")
             || scope.starts_with("entity.name.class")
             || scope.starts_with("support.type")
             || scope.starts_with("support.class")
         {
             TokenKind::Type
-        } else if scope.starts_with("entity.other.attribute-name")
-            || scope.starts_with("support.type.property-name")
-        {
-            TokenKind::Attribute
         } else {
             continue;
         };
@@ -637,5 +714,112 @@ mod tests {
         let notices = acknowledgements_markdown();
         assert!(notices.contains("Syntaxes"));
         assert!(notices.contains("Copyright") || notices.contains("copyright"));
+    }
+    #[test]
+    fn every_original_named_format_has_a_real_native_grammar_and_colored_sample() -> Result<()> {
+        let samples: serde_json::Value = serde_json::from_str(include_str!(
+            "../assets/syntaxes/source-format-samples.json"
+        ))
+        .map_err(|_| Error::InvalidTokenRange)?;
+        let samples = samples.as_array().ok_or(Error::InvalidTokenRange)?;
+        assert_eq!(samples.len(), REQUIRED_LANGUAGES.len());
+        for (expected, sample) in REQUIRED_LANGUAGES.iter().zip(samples) {
+            let language = sample["language"]
+                .as_str()
+                .ok_or(Error::InvalidTokenRange)?;
+            let source = sample["source"].as_str().ok_or(Error::InvalidTokenRange)?;
+            assert_eq!(language, *expected);
+            let output = highlight(source, language)?;
+            output.validate(source)?;
+            if language.is_empty() {
+                assert_eq!(output.coverage, Coverage::PlainText);
+            } else {
+                assert!(
+                    matches!(output.coverage, Coverage::Highlighted { .. }),
+                    "required grammar unavailable: {language}: {:?}",
+                    output.coverage
+                );
+                assert!(
+                    output
+                        .tokens
+                        .iter()
+                        .any(|token| token.kind != TokenKind::Plain),
+                    "grammar emitted no visible syntax roles: {language}"
+                );
+            }
+        }
+        Ok(())
+    }
+    fn kind_at(output: &Highlighted, source: &str, needle: &str) -> Result<TokenKind> {
+        let offset = source.find(needle).ok_or(Error::InvalidTokenRange)?;
+        output
+            .tokens
+            .iter()
+            .find(|token| token.from.0 <= offset && token.to.0 > offset)
+            .map(|token| token.kind)
+            .ok_or(Error::InvalidTokenRange)
+    }
+    #[test]
+    fn arduino_vocabulary_stays_active_in_function_bodies_but_not_comments_or_strings() -> Result<()>
+    {
+        let source = "// HIGH pinMode\nvoid setup() { pinMode(LED_BUILTIN, OUTPUT); const char* text = \"HIGH pinMode\"; }";
+        let output = highlight(source, "arduino")?;
+        assert_eq!(kind_at(&output, source, "HIGH")?, TokenKind::Comment);
+        assert_eq!(
+            kind_at(&output, source, "LED_BUILTIN")?,
+            TokenKind::Constant
+        );
+        assert_eq!(kind_at(&output, source, "OUTPUT")?, TokenKind::Constant);
+        let code_call = source.find("pinMode(LED").ok_or(Error::InvalidTokenRange)?;
+        assert!(output.tokens.iter().any(|token| token.from.0 <= code_call
+            && token.to.0 > code_call
+            && token.kind == TokenKind::Function));
+        let string = source.rfind("HIGH").ok_or(Error::InvalidTokenRange)?;
+        assert!(output.tokens.iter().any(|token| token.from.0 <= string
+            && token.to.0 > string
+            && token.kind == TokenKind::String));
+        Ok(())
+    }
+    #[test]
+    fn scheme_nested_comments_radix_numbers_and_unicode_strings_keep_native_state() -> Result<()> {
+        let source =
+            "#| first\n #| nested |# still comment\n|#\n(define value #x2a)\n(display \"日本語\")";
+        let output = highlight(source, "scheme")?;
+        assert_eq!(
+            kind_at(&output, source, "still comment")?,
+            TokenKind::Comment
+        );
+        assert_eq!(kind_at(&output, source, "define")?, TokenKind::Keyword);
+        assert_eq!(kind_at(&output, source, "#x2a")?, TokenKind::Constant);
+        assert_eq!(kind_at(&output, source, "日本語")?, TokenKind::String);
+        Ok(())
+    }
+    #[test]
+    fn mermaid_arrow_families_and_label_sources_are_not_plain_paragraph_simulations() -> Result<()>
+    {
+        for source in [
+            "flowchart TD\n A[Start] --> B[End]",
+            "sequenceDiagram\n Alice->>Bob: Hello",
+            "classDiagram\n Animal <|-- Duck",
+            "erDiagram\n STORY ||--o{ CHAPTER : contains",
+        ] {
+            let output = highlight(source, "mermaid")?;
+            assert!(
+                output
+                    .tokens
+                    .iter()
+                    .any(|token| token.kind == TokenKind::Keyword),
+                "missing diagram declaration"
+            );
+            assert!(
+                output
+                    .tokens
+                    .iter()
+                    .any(|token| token.kind == TokenKind::Punctuation),
+                "missing diagram arrows"
+            );
+            output.validate(source)?;
+        }
+        Ok(())
     }
 }
