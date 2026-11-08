@@ -17,6 +17,9 @@ pub mod renderers;
 #[cfg(feature = "wordcraft-canvas")]
 pub mod canvas;
 
+mod insertion;
+pub use insertion::ContentSlice;
+
 mod projection;
 use craft_editor_model::{
     Change, Command, Document, Editor, Mark, MarkMode, NodeRef, Revision, ScalarOffset, TextRange,
@@ -483,12 +486,13 @@ impl EditorSession {
             .map_or(0, |span| span.start);
         let mut children = Vec::new();
         if !text.is_empty() || parent.expected.children().len() == 1 {
+            let mut reserved = insertion::block_id_reservations(self.document());
             for line in text.split('\n') {
-                self.next_id = self
-                    .next_id
-                    .checked_add(1)
-                    .ok_or(craft_editor_model::Error::ResourceLimit)?;
-                let id = format!("craft-view-{}-{}", self.revision().0, self.next_id);
+                let id = insertion::allocate_block_id(
+                    self.editor.revision().0,
+                    &mut self.next_id,
+                    &mut reserved,
+                )?;
                 children.push(craft_editor_model::Node::paragraph(id, line));
             }
         }
@@ -619,18 +623,35 @@ impl EditorSession {
         let Some(selection) = &self.selection else {
             return Ok(Vec::new());
         };
-        let node = self.document().block(&selection.head.block_id)?;
+        self.marks_at(&selection.head)
+    }
+    fn marks_at(&self, point: &DocPoint) -> Result<Vec<Mark>> {
+        let node = self.document().block(&point.block_id)?;
         let mut offset = 0;
         for inline in node.children() {
             let end = offset + inline.inline_text().chars().count();
-            if selection.head.offset.0 <= end
-                && (selection.head.offset.0 > offset || selection.head.offset.0 == 0)
-            {
+            if point.offset.0 <= end && (point.offset.0 > offset || point.offset.0 == 0) {
                 return Ok(inline.marks.clone().unwrap_or_default());
             }
             offset = end;
         }
         Ok(Vec::new())
+    }
+    fn typing_leaf_at(&self, point: &DocPoint) -> Result<craft_editor_model::Node> {
+        let block = self.document().block(&point.block_id)?;
+        let mut offset = 0;
+        let mut previous = None;
+        for inline in block.children() {
+            let end = offset + inline.inline_text().chars().count();
+            if inline.node_type == "text" {
+                if point.offset.0 <= end && (point.offset.0 > offset || point.offset.0 == 0) {
+                    return Ok(inline.clone());
+                }
+                previous = Some(inline.clone());
+            }
+            offset = end;
+        }
+        Ok(previous.unwrap_or_else(|| craft_editor_model::Node::text("")))
     }
     /// Add or remove a mark across the exact selection's text-block ranges atomically.
     pub fn format_selection(&mut self, mark: Mark, mode: MarkMode) -> Result<Change> {
@@ -988,6 +1009,11 @@ impl SemanticBuffer {
             return Ok(text.chars().count());
         }
         let lines: Vec<_> = text.split('\n').collect();
+        let mut reserved = if lines.len() > 1 {
+            insertion::block_id_reservations(self.editor.document())
+        } else {
+            std::collections::HashSet::new()
+        };
         let mut current = point.block_id;
         let mut offset = point.offset.0;
         for (index, line) in lines.iter().enumerate() {
@@ -1015,8 +1041,11 @@ impl SemanticBuffer {
                 offset += line.chars().count();
             }
             if index + 1 < lines.len() {
-                self.next_id = self.next_id.saturating_add(1);
-                let next = format!("craft-view-{}-{}", self.editor.revision().0, self.next_id);
+                let next = insertion::allocate_block_id(
+                    self.editor.revision().0,
+                    &mut self.next_id,
+                    &mut reserved,
+                )?;
                 commands.push(Command::SplitBlock {
                     block_id: current,
                     at: ScalarOffset(offset),
@@ -1392,6 +1421,19 @@ mod tests {
         let painted = frame(&mut session, &egui::Context::default(), vec![]);
         assert!(painted.changes.is_empty());
         assert!(session.take_pending_changes().is_empty());
+        Ok(())
+    }
+    #[test]
+    fn exhausted_fresh_identity_counter_rejects_enter_without_mutation() -> TestResult {
+        let original = Document::plain("p", "AB")?;
+        let projection = Projection::new(&original)?;
+        let mut buffer = SemanticBuffer::new(original.clone(), Revision(0), projection, u64::MAX);
+        assert!(matches!(
+            buffer.insert("\n", 1),
+            Err(Error::Model(craft_editor_model::Error::ResourceLimit))
+        ));
+        assert_eq!(buffer.editor.document(), &original);
+        assert!(buffer.commands.is_empty());
         Ok(())
     }
 }

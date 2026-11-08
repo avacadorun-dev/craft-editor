@@ -5,11 +5,11 @@
 //! checkpoint: unsupported nodes fail explicitly; rich clipboard, full accessibility and native
 //! platform IME acceptance are not implied by the headless tests.
 
-use craft_editor_model::{Command, Document, Mark, Revision, ScalarOffset, TextRange};
+use craft_editor_model::{Document, Mark, Revision, ScalarOffset};
 use egui::{Color32, Event, Key, Modifiers, Pos2, Rect, Sense, TextureHandle, Vec2};
 
 use crate::{
-    DocPoint, EditorSession, Error, Result, Selection, SemanticBuffer, ViewResponse,
+    DocPoint, EditorSession, Error, Result, Selection, ViewResponse,
     layout::{FlowGeometry, GeometryRect, GeometryStyle},
     projection::Projection,
 };
@@ -445,16 +445,13 @@ impl CanvasState {
                 self.scroll_to_caret = true;
             }
             Event::Ime(egui::ImeEvent::Preedit { text, .. }) if !read_only => {
-                if session.node_selection.is_some() {
-                    return Err(Error::UnsupportedStructuralEdit);
-                }
                 self.preedit_epoch = self.preedit_epoch.wrapping_add(1);
                 if text.is_empty() {
                     self.cancel_preedit(session);
                 } else {
-                    let (buffer, caret) = replacement_buffer(session, &text)?;
+                    let (document, caret) = preedit_document(session, &text)?;
                     self.preedit = Some(Preedit {
-                        document: buffer.editor.document().clone(),
+                        document,
                         caret,
                         text,
                     });
@@ -810,114 +807,29 @@ fn editor_event(event: &Event) -> bool {
     }
 }
 
-fn replacement_buffer(session: &EditorSession, text: &str) -> Result<(SemanticBuffer, DocPoint)> {
-    let projection = Projection::new(session.document())?;
-    let selection = session
+fn preedit_document(session: &EditorSession, text: &str) -> Result<(Document, DocPoint)> {
+    let mut shadow = EditorSession::new(session.document().clone(), session.revision());
+    shadow.selection.clone_from(&session.selection);
+    shadow.node_selection.clone_from(&session.node_selection);
+    shadow.stored_marks.clone_from(&session.stored_marks);
+    shadow.next_id = session.next_id;
+    shadow.insert_plain_text(text)?;
+    let caret = shadow
         .selection
-        .clone()
-        .unwrap_or(collapsed(projection.point(0, true)?));
-    let a = projection.scalar(&selection.anchor)?;
-    let b = projection.scalar(&selection.head)?;
-    let at = a.min(b);
-    let mut buffer = SemanticBuffer::new(
-        session.document().clone(),
-        session.revision(),
-        projection,
-        session.next_id,
-    );
-    buffer.typing_marks.clone_from(&session.stored_marks);
-    if a != b {
-        let spans: Vec<_> = buffer
-            .projection
-            .spans
-            .iter()
-            .filter(|span| span.end >= at && span.start <= a.max(b))
-            .cloned()
-            .collect();
-        if spans.iter().any(|span| span.atom) {
-            return Err(Error::UnsupportedStructuralEdit);
-        }
-        if spans.len() > 1 && spans.iter().any(|span| span.table || span.path.len() != 1) {
-            // Text-range deletion through cells clears their content, preserving the grid and
-            // durable cell/block identities. Joining cells is a separate structural command.
-            let mut commands = Vec::new();
-            for span in spans {
-                let from = at.max(span.start) - span.start;
-                let to = a.max(b).min(span.end).saturating_sub(span.start);
-                if from < to {
-                    commands.push(Command::ReplaceText {
-                        range: TextRange {
-                            block_id: span.id,
-                            start: ScalarOffset(from),
-                            end: ScalarOffset(to),
-                        },
-                        expected: span
-                            .node
-                            .inline_text()
-                            .chars()
-                            .skip(from)
-                            .take(to - from)
-                            .collect(),
-                        replacement: String::new(),
-                    });
-                }
-            }
-            buffer.execute(commands)?;
-        } else {
-            buffer.delete(at..a.max(b))?;
-        }
-    }
-    let insertion = buffer.projection.point(at, true)?;
-    if !text.is_empty() {
-        buffer.insert(text, at)?;
-    }
-    // Resolve the final caret from the command sequence, not by adding flattened offsets
-    // through preserved cell separators or freshly split paragraph identities.
-    let mut caret = insertion;
-    for command in &buffer.commands {
-        match command {
-            Command::SplitBlock {
-                block_id,
-                new_block_id,
-                ..
-            } if *block_id == caret.block_id => {
-                caret.block_id.clone_from(new_block_id);
-                caret.offset = ScalarOffset(0);
-            }
-            Command::ReplaceText {
-                range, replacement, ..
-            } if range.block_id == caret.block_id
-                && range.start == range.end
-                && !replacement.is_empty() =>
-            {
-                caret.offset = ScalarOffset(range.start.0 + replacement.chars().count());
-            }
-            _ => {}
-        }
-    }
-    Ok((buffer, caret))
+        .as_ref()
+        .ok_or(Error::InvalidSelection)?
+        .head
+        .clone();
+    Ok((shadow.document().clone(), caret))
 }
 fn replace(session: &mut EditorSession, text: &str) -> Result<()> {
-    let stored_marks = session.stored_marks.clone();
-    let (buffer, caret) = replacement_buffer(session, text)?;
-    let next_id = buffer.next_id;
-    let change = session.apply_commands(buffer.commands)?;
-    session.next_id = next_id;
-    session.stored_marks = stored_marks;
-    session.selection = Some(collapsed(caret));
-    if change.before_revision != change.after_revision
-        && let Some(history) = session.undo_selection.last_mut()
-    {
-        history.after = session.selection.clone();
-    }
-    session.restore_cursor = false;
-    Ok(())
+    session.insert_plain_text(text).map(|_| ())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use craft_editor_model::MarkMode;
+    use craft_editor_model::{Command, MarkMode};
     type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
     fn fixture() -> craft_editor_model::Result<Document> {
@@ -1542,6 +1454,65 @@ mod tests {
         session.undo()?;
         assert_eq!(session.document(), &original);
         assert_eq!(session.node_selection(), Some(&reference));
+        Ok(())
+    }
+    #[test]
+    fn selected_atom_preedit_is_transient_and_commits_one_exact_replacement() -> TestResult {
+        let original = Document::from_json(
+            serde_json::json!({"type":"doc","attrs":{"schemaVersion":4},"content":[{"type":"paragraph","attrs":{"blockId":"p"},"content":[{"type":"text","text":"A"},{"type":"inlineMath","attrs":{"latex":"x^2"}},{"type":"text","text":"B"}]}]}),
+        )?;
+        let mut session = EditorSession::new(original.clone(), Revision(0));
+        let selected = session
+            .document()
+            .node_ref(&craft_editor_model::NodePath(vec![0, 1]))?;
+        session.select_node(selected.clone())?;
+        let context = egui::Context::default();
+        context.memory_mut(|memory| memory.request_focus(session.options.id));
+        let run = |session: &mut EditorSession, event: Event| {
+            let mut result = None;
+            let mut output = context.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(700.0, 650.0))),
+                    events: vec![event],
+                    focused: true,
+                    ..Default::default()
+                },
+                |root| {
+                    egui::CentralPanel::default().show(root, |ui| {
+                        result = Some(session.show_canvas_with_resolver(
+                            ui,
+                            &CanvasStyle::default(),
+                            &ContractResolver,
+                        ));
+                    });
+                },
+            );
+            output.textures_delta.clear();
+            result.ok_or("missing frame")
+        };
+        let preedit = run(
+            &mut session,
+            Event::Ime(egui::ImeEvent::Preedit {
+                text: "ni".into(),
+                active_range_chars: Some(0..2),
+            }),
+        )?;
+        assert!(preedit.errors.is_empty(), "{:?}", preedit.errors);
+        assert!(preedit.changes.is_empty());
+        assert!(session.is_composing());
+        assert_eq!(session.document(), &original);
+        assert_eq!(session.node_selection(), Some(&selected));
+        let committed = run(
+            &mut session,
+            Event::Ime(egui::ImeEvent::Commit("字".into())),
+        )?;
+        assert!(committed.errors.is_empty(), "{:?}", committed.errors);
+        assert_eq!(committed.changes.len(), 1);
+        assert!(!session.is_composing());
+        assert_eq!(session.document().block_text("p")?, "A字B");
+        session.undo()?;
+        assert_eq!(session.document(), &original);
+        assert_eq!(session.node_selection(), Some(&selected));
         Ok(())
     }
 }
