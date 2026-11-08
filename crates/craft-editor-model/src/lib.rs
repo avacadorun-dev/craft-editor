@@ -30,7 +30,7 @@ pub use position::{
 };
 pub use structural::{NodePath, NodeRef};
 pub use table_paste::{PastedCells, table_cells_from_slice};
-pub use table_paste_edit::{TablePasteOptions, paste_table_cells};
+pub use table_paste_edit::{TablePasteOptions, copy_table_fragment, paste_table_cells};
 pub use tables::{
     CellAlignment, CellRect, CellSelection, TableGrid, delete_table_column, delete_table_row,
     empty_table_cell, insert_table_column, insert_table_row, merge_table_cells,

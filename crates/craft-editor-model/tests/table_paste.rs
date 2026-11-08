@@ -376,3 +376,88 @@ fn generic_paste_keeps_wide_spans_and_resolves_wholly_covered_last_row_without_s
     }
     Ok(())
 }
+
+#[test]
+fn rectangular_copy_matches_source_selected_content_without_mutating_the_table() -> TestResult {
+    use craft_editor_model::{CellSelection, Document, NodePath, TableGrid, copy_table_fragment};
+    let fixture: Value = serde_json::from_str(include_str!("fixtures/source_table_paste.json"))?;
+    let mut checked = 0;
+    for case in fixture["cases"].as_array().ok_or("missing source cases")? {
+        let Some(expected) = case.get("sourceCopy") else {
+            continue;
+        };
+        let document = Document::from_json(
+            json!({"type":"doc","attrs":{"schemaVersion":4},"content":case["target"]}),
+        )?;
+        let before = document.to_json()?;
+        let target = document.node_ref(&NodePath(vec![0]))?;
+        let grid = TableGrid::new(&target.expected)?;
+        let first = cell_for_id(
+            &target.expected,
+            &grid,
+            case["from"][0].as_str().ok_or("missing start")?,
+        )
+        .ok_or("missing cell")?;
+        let last = cell_for_id(
+            &target.expected,
+            &grid,
+            case.get("to").unwrap_or(&case["from"])[0]
+                .as_str()
+                .ok_or("missing end")?,
+        )
+        .ok_or("missing cell")?;
+        let rect = CellSelection {
+            top: first.row.min(last.row),
+            left: first.column.min(last.column),
+            bottom: first.bottom().max(last.bottom()),
+            right: first.right().max(last.right()),
+        };
+        let copied = copy_table_fragment(&document, &target, rect, 1_000_000, || {
+            Ok("clipped-empty".into())
+        })?;
+        let mut actual = if expected["content"][0]["type"] == "table" {
+            json!([copied])
+        } else {
+            serde_json::to_value(copied.children())?
+        };
+        let mut expected = expected["content"].clone();
+        normalize(&mut actual);
+        normalize(&mut expected);
+        assert_eq!(actual, expected, "{}", case["name"]);
+        assert_eq!(document.to_json()?, before);
+        checked += 1;
+    }
+    assert_eq!(checked, 4);
+    Ok(())
+}
+#[test]
+fn copied_partial_spans_exclude_unselected_origin_writing_and_preserve_cell_envelopes() -> TestResult
+{
+    use craft_editor_model::{CellSelection, Document, NodePath, copy_table_fragment};
+    let document = Document::from_json(
+        json!({"type":"doc","attrs":{"schemaVersion":4},"content":[{"type":"table","attrs":{"blockId":"table","vendor":null},"content":[{"type":"tableRow","content":[{"type":"tableCell","content":[{"type":"paragraph","attrs":{"blockId":"a"},"content":[{"type":"text","text":"A"}]}]},{"type":"tableCell","attrs":{"rowspan":2,"vendorSpan":null},"content":[{"type":"paragraph","attrs":{"blockId":"private"},"content":[{"type":"text","text":"UNSELECTED ORIGIN WRITING"}]}]}]},{"type":"tableRow","content":[{"type":"tableCell","content":[{"type":"paragraph","attrs":{"blockId":"selected"},"content":[{"type":"text","text":"Selected 😀"}]}]}]}]}]}),
+    )?;
+    let before = document.to_json()?;
+    let copied = copy_table_fragment(
+        &document,
+        &document.node_ref(&NodePath(vec![0]))?,
+        CellSelection {
+            top: 1,
+            left: 0,
+            bottom: 2,
+            right: 2,
+        },
+        1_000_000,
+        || Ok("clipped".into()),
+    )?;
+    let output = serde_json::to_string(&copied)?;
+    assert!(output.contains("Selected 😀"));
+    assert!(!output.contains("UNSELECTED ORIGIN WRITING"));
+    assert!(output.contains("vendorSpan"));
+    assert_eq!(
+        copied.children()[0].children()[1].children()[0].block_id(),
+        Some("clipped")
+    );
+    assert_eq!(document.to_json()?, before);
+    Ok(())
+}

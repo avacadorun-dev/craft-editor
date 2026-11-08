@@ -588,3 +588,76 @@ pub fn paste_table_cells<F: FnMut() -> Result<String>>(
         },
     ))
 }
+
+/// Copy a logical rectangle without including writing from a cell whose origin lies outside it.
+/// The returned table envelope preserves context metadata; the clipboard layer owns open depths.
+/// Clipped empty cells receive explicit fresh IDs while the source document stays immutable.
+pub fn copy_table_fragment<F: FnMut() -> Result<String>>(
+    document: &Document,
+    target: &NodeRef,
+    selection: CellSelection,
+    max_expanded_bytes: usize,
+    mut allocate: F,
+) -> Result<Node> {
+    crate::structural::check_ref(document, target)?;
+    let table = target.expected.as_ref();
+    let grid = TableGrid::new(table)?;
+    if selection.top >= selection.bottom
+        || selection.left >= selection.right
+        || selection.bottom > grid.rows
+        || selection.right > grid.columns
+    {
+        return Err(Error::InvalidPosition);
+    }
+    let mut reserved = HashSet::new();
+    ids(document.root(), &mut reserved);
+    let mut fresh = Fresh {
+        allocate: &mut allocate,
+        reserved,
+        remaining: max_expanded_bytes,
+    };
+    let mut copied = fresh.cloned(&table.content_envelope(), false)?;
+    let mut rows = Vec::with_capacity(selection.bottom - selection.top);
+    for row in selection.top..selection.bottom {
+        let mut envelope = fresh.cloned(&table.children()[row].content_envelope(), false)?;
+        let mut cells = grid
+            .cells
+            .iter()
+            .filter(|cell| {
+                let origin = cell.row.max(selection.top);
+                origin == row
+                    && cell.row < selection.bottom
+                    && selection.top < cell.bottom()
+                    && cell.column < selection.right
+                    && selection.left < cell.right()
+            })
+            .collect::<Vec<_>>();
+        cells.sort_by_key(|cell| cell.column);
+        let mut content = Vec::with_capacity(cells.len());
+        for rect in cells {
+            let original = &table.children()[rect.row].children()[rect.cell_index];
+            let mut node = if rect.row < selection.top || rect.column < selection.left {
+                fresh.split_empty(original)?
+            } else {
+                fresh.cloned(original, false)?
+            };
+            let left = rect.column.max(selection.left);
+            let right = rect.right().min(selection.right);
+            if left != rect.column || right != rect.right() {
+                columns(&mut node, left - rect.column, right - left)?;
+            }
+            let top = rect.row.max(selection.top);
+            let bottom = rect.bottom().min(selection.bottom);
+            if top != rect.row || bottom != rect.bottom() {
+                set_span(&mut node, "rowspan", bottom - top)?;
+            }
+            content.push(node);
+        }
+        envelope.content = Some(content);
+        rows.push(envelope);
+    }
+    copied.content = Some(rows);
+    TableGrid::new(&copied)?;
+    crate::structural::check_subtree_bounds(&copied)?;
+    Ok(copied)
+}
