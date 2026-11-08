@@ -248,6 +248,10 @@ impl PreparedCatalog {
     pub fn len(&self) -> usize {
         self.images.len()
     }
+    /// Total encoded raster bytes retained by this catalog, for host cache accounting.
+    pub fn encoded_bytes(&self) -> usize {
+        self.images.values().map(|image| image.encoded.len()).sum()
+    }
     /// Whether no atoms were present in the snapshot.
     pub fn is_empty(&self) -> bool {
         self.images.is_empty()
@@ -359,6 +363,36 @@ impl Renderer {
             &mut catalog,
             &mut total,
         )?;
+        Ok(catalog)
+    }
+
+    /// Prepare one exact canonical atom, retaining the same explicit source fallback as a document.
+    ///
+    /// Hosts may acknowledge these catalogs progressively; source and resource access remain owned
+    /// by the host. This does not render unrelated atoms or wait for a whole document batch.
+    ///
+    /// # Errors
+    /// Reject unsupported atoms, invalid identity, aggregate bounds, or unavailable fallback output.
+    pub fn prepare_atom(
+        &self,
+        node: &Node,
+        assets: &dyn AssetSource,
+        generation: u64,
+    ) -> Result<PreparedCatalog> {
+        if !matches!(
+            node.node_type.as_str(),
+            "mermaidBlock" | "mathBlock" | "inlineMath" | "imageBlock"
+        ) {
+            return Err(Error::UnsupportedAtom);
+        }
+        let mut catalog = PreparedCatalog {
+            generation,
+            images: HashMap::new(),
+            failures: vec![],
+            errors: HashMap::new(),
+        };
+        let mut total = 0;
+        self.visit(node, &mut vec![], assets, &mut catalog, &mut total)?;
         Ok(catalog)
     }
 

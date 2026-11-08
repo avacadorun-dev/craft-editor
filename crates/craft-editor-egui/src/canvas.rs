@@ -91,6 +91,7 @@ struct MeasurementKey {
     preedit_epoch: u64,
     resolver_generation: Option<u64>,
     resolver_identity: Option<usize>,
+    font_generation: u64,
 }
 struct Tile {
     column: i32,
@@ -135,6 +136,7 @@ impl CanvasState {
             resolver_identity: resolver.map(|resolver| {
                 (resolver as *const dyn crate::renderers::AtomResolver).cast::<()>() as usize
             }),
+            font_generation: crate::fonts::generation(),
         };
         if self.measured.as_ref() != Some(&key) {
             let document = self
@@ -200,6 +202,23 @@ impl CanvasState {
         let extent = self.geometry.as_ref().and_then(FlowGeometry::extent);
         let height = extent.map_or(style.min_height, |rect| rect.height.max(style.min_height));
         let (rect, _) = ui.allocate_exact_size(Vec2::new(width, height), Sense::hover());
+        if let (Some(resolver), Some(geometry)) = (resolver, self.geometry.as_ref()) {
+            let visible = rect.intersect(ui.clip_rect());
+            let paths: Vec<_> = geometry
+                .nodes()
+                .into_iter()
+                .filter(|node| on_screen(rect.min, node.rect).intersects(visible))
+                .map(|node| node.canonical_path)
+                .collect();
+            resolver.prioritize(&paths);
+            if geometry.placeholders().iter().any(|atom| {
+                atom.placeholder.state == crate::renderers::AtomPlaceholderState::Pending
+                    && on_screen(rect.min, atom.rect).intersects(visible)
+            }) {
+                ui.ctx()
+                    .request_repaint_after(std::time::Duration::from_millis(50));
+            }
+        }
         let response = ui.interact(rect, session.options.id, Sense::click_and_drag());
         if response.hovered() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
@@ -798,6 +817,63 @@ impl CanvasState {
                     on_screen(canvas.min, tile.rect),
                     Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
                     Color32::WHITE,
+                );
+            }
+        }
+        for pending in geometry.placeholders() {
+            let bounds = on_screen(canvas.min, pending.rect);
+            if !bounds.intersects(visible) {
+                continue;
+            }
+            let painter = ui
+                .painter()
+                .with_clip_rect(bounds.intersect(ui.clip_rect()));
+            let failed =
+                pending.placeholder.state == crate::renderers::AtomPlaceholderState::Failed;
+            let border = if failed {
+                style.foreground
+            } else {
+                style.table_border
+            };
+            painter.rect_filled(bounds, 4.0, style.table_header.gamma_multiply(0.65));
+            painter.rect_stroke(
+                bounds,
+                4.0,
+                egui::Stroke::new(1.0, border),
+                egui::StrokeKind::Inside,
+            );
+            let compact = bounds.height() < 48.0;
+            let inset = if compact { 5.0 } else { 12.0 };
+            let font_size = (style.font_size * 0.72).clamp(11.0, 14.0);
+            let label = painter.layout(
+                pending.placeholder.label,
+                egui::FontId::proportional(font_size),
+                style.foreground,
+                (bounds.width() - inset * 2.0).max(1.0),
+            );
+            let top = bounds.top()
+                + if compact {
+                    (bounds.height() - label.size().y) * 0.5
+                } else {
+                    inset
+                };
+            let detail_top = top + label.size().y + 6.0;
+            painter.galley(
+                egui::pos2(bounds.left() + inset, top),
+                label,
+                style.foreground,
+            );
+            if !compact && !pending.placeholder.detail.is_empty() {
+                let detail = painter.layout(
+                    pending.placeholder.detail,
+                    egui::FontId::monospace((font_size - 1.0).max(10.0)),
+                    style.foreground,
+                    (bounds.width() - inset * 2.0).max(1.0),
+                );
+                painter.galley(
+                    egui::pos2(bounds.left() + inset, detail_top),
+                    detail,
+                    style.foreground,
                 );
             }
         }

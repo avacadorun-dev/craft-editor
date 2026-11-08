@@ -161,6 +161,17 @@ pub struct NodeGeometry {
     pub rect: GeometryRect,
 }
 
+/// Measured native bounds and host-localized status for one nonfinal opaque atom.
+#[derive(Debug, Clone)]
+pub struct AtomPlaceholderGeometry {
+    /// Exact unchanged canonical atom location.
+    pub canonical_path: NodePath,
+    /// Actual native object rectangle; inline atoms still occupy one canonical scalar.
+    pub rect: GeometryRect,
+    /// Explicit pending/failure status; never a replacement for canonical source.
+    pub placeholder: crate::renderers::AtomPlaceholder,
+}
+
 /// Actual grammar availability for one code block in the unchanged canonical document.
 #[derive(Debug, Clone)]
 pub struct SyntaxReport {
@@ -197,6 +208,7 @@ pub struct FlowGeometry {
     atom_paths: HashMap<String, NodePath>,
     node_paths: HashMap<Path, NodePath>,
     syntax_reports: Vec<SyntaxReport>,
+    placeholders: BTreeMap<String, crate::renderers::AtomPlaceholder>,
 }
 
 impl FlowGeometry {
@@ -266,6 +278,7 @@ impl FlowGeometry {
             atom_paths: HashMap::new(),
             node_paths: HashMap::new(),
             syntax_reports: vec![],
+            placeholders: BTreeMap::new(),
         };
         // Web flow reserves 18 points on each side; tracks occupy the actual text column.
         let body = builder.blocks(
@@ -309,6 +322,7 @@ impl FlowGeometry {
             atom_paths: builder.atom_paths,
             node_paths: builder.node_paths,
             syntax_reports: builder.syntax_reports,
+            placeholders: builder.placeholders,
         })
     }
 
@@ -619,6 +633,28 @@ impl FlowGeometry {
         }
         output
     }
+    /// Nonfinal atom status boxes at their actual native object bounds.
+    /// The canvas paints these over transparent reservation pixels without changing source text.
+    pub fn placeholders(&self) -> Vec<AtomPlaceholderGeometry> {
+        use wordcraft_layout::display::{DisplayOptions, Draw, page_display};
+        let mut output = Vec::new();
+        for (page, layout) in self.measured.pages.iter().enumerate() {
+            for draw in page_display(&self.upstream, layout, &DisplayOptions::default()) {
+                if let Draw::Image { rect, media, .. } = draw
+                    && let Some(placeholder) = self.placeholders.get(&media)
+                    && let Some(path) = self.atom_paths.get(&media)
+                {
+                    output.push(AtomPlaceholderGeometry {
+                        canonical_path: path.clone(),
+                        rect: GeometryRect::from_rect(page, rect),
+                        placeholder: placeholder.clone(),
+                    });
+                }
+            }
+        }
+        output
+    }
+
     /// Resolve a pointer inside a real atom/caption/separator to its exact canonical tree path.
     pub fn hit_node(&self, page: usize, x: f32, y: f32) -> Option<NodePath> {
         self.nodes()
@@ -719,6 +755,7 @@ struct Builder<'a, F> {
     atom_paths: HashMap<String, NodePath>,
     node_paths: HashMap<Path, NodePath>,
     syntax_reports: Vec<SyntaxReport>,
+    placeholders: BTreeMap<String, crate::renderers::AtomPlaceholder>,
 }
 impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
     fn blocks(
@@ -945,13 +982,7 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
                 "inlineMath" => {
                     let media = format!("craft-geometry-atom:{}:{}", id, paragraph.len());
                     let size = if let Some(resolver) = self.resolver {
-                        let resolved =
-                            resolver
-                                .resolve(inline, width)
-                                .map_err(|error| match error {
-                                    crate::Error::AtomRendering(code) => Error::AtomRendering(code),
-                                    _ => Error::AtomRendering("atom_resolution_failed".into()),
-                                })?;
+                        let resolved = self.resolve_atom(resolver, inline, width, &media)?;
                         if resolved.encoded.is_empty() || resolved.encoded.len() > 16 * 1024 * 1024
                         {
                             return Err(Error::AtomRendering("atom_encoded_size".into()));
@@ -1059,10 +1090,8 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
             let resolver = self
                 .resolver
                 .ok_or_else(|| Error::UnsupportedNode("unresolved_block_atom".into()))?;
-            let resolved = resolver.resolve(node, width).map_err(|error| match error {
-                crate::Error::AtomRendering(code) => Error::AtomRendering(code),
-                _ => Error::AtomRendering("atom_resolution_failed".into()),
-            })?;
+            let media = format!("craft-geometry-atom:block:{:?}", canonical.0);
+            let resolved = self.resolve_atom(resolver, node, width, &media)?;
             if !resolved.size.width.is_finite()
                 || !resolved.size.height.is_finite()
                 || resolved.size.width <= 0.0
@@ -1072,7 +1101,6 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
             {
                 return Err(Error::InvalidSize);
             }
-            let media = format!("craft-geometry-atom:block:{:?}", canonical.0);
             self.media.insert(media.clone(), resolved.encoded);
             self.atom_paths.insert(media.clone(), canonical.clone());
             paragraph.props.align = Some(wordcraft_doc::props::Align::Center);
@@ -1120,6 +1148,30 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
             output.push(para_block(paragraph));
         }
         Ok(())
+    }
+
+    fn resolve_atom(
+        &mut self,
+        resolver: &dyn crate::renderers::AtomResolver,
+        node: &Node,
+        width: f32,
+        media: &str,
+    ) -> Result<crate::renderers::ResolvedAtom> {
+        match resolver.resolve(node, width) {
+            Ok(resolved) => Ok(resolved),
+            Err(error) => {
+                if let Some(placeholder) = resolver.placeholder(node, width) {
+                    let image = placeholder.reserved_image();
+                    self.placeholders.insert(media.into(), placeholder);
+                    Ok(image)
+                } else {
+                    Err(match error {
+                        crate::Error::AtomRendering(code) => Error::AtomRendering(code),
+                        _ => Error::AtomRendering("atom_resolution_failed".into()),
+                    })
+                }
+            }
+        }
     }
 
     fn table(
