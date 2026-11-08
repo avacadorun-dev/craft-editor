@@ -693,14 +693,29 @@ pub(crate) fn fit_node<F: FnMut() -> Result<String>>(
     open_end: usize,
     allocate: &mut F,
 ) -> Result<(Document, FittedMap)> {
-    fit_at(
-        document,
-        node_range(document, target)?,
-        content,
-        open_start,
-        open_end,
-        allocate,
-    )
+    let range = node_range(document, target)?;
+    if open_start == 0
+        && open_end == 0
+        && !content.is_empty()
+        && target.expected.node_type != "inlineMath"
+        && content
+            .iter()
+            .all(|node| matches!(node.node_type.as_str(), "text" | "hardBreak" | "inlineMath"))
+    {
+        // The pinned native fitter cannot synthesize the source's default textblock
+        // when bare inline content replaces a whole block. Make that proven source
+        // wrapper explicit, retaining each original inline envelope and fresh ID.
+        let paragraph = Node::block(
+            "paragraph",
+            serde_json::Map::from_iter([
+                ("blockId".into(), json!(allocate()?)),
+                ("sourceRefs".into(), json!([])),
+            ]),
+            content.to_vec(),
+        );
+        return fit_at(document, range, &[paragraph], 0, 0, allocate);
+    }
+    fit_at(document, range, content, open_start, open_end, allocate)
 }
 fn edge_depth(nodes: &[Node], last: bool) -> usize {
     let node = if last { nodes.last() } else { nodes.first() };
