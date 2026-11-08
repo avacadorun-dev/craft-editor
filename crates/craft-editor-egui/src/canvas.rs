@@ -902,13 +902,17 @@ mod tests {
         assert!(
             raster
                 .pixels
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .any(|pixel| pixel[..3] != [29, 34, 42])
         );
         assert!(
             raster
                 .pixels
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .all(|pixel| pixel[0] <= pixel[3] && pixel[1] <= pixel[3] && pixel[2] <= pixel[3])
         );
         Ok(())

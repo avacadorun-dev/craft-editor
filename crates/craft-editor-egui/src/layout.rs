@@ -799,8 +799,23 @@ fn integer_attr(node: &Node, key: &str) -> usize {
     node.attrs
         .as_ref()
         .and_then(|attrs| attrs.get(key))
-        .and_then(Value::as_u64)
-        .unwrap_or(1) as usize
+        .and_then(|value| {
+            value
+                .as_u64()
+                .and_then(|value| usize::try_from(value).ok())
+                .or_else(|| {
+                    value
+                        .as_f64()
+                        .filter(|value| {
+                            value.is_finite()
+                                && value.fract() == 0.0
+                                && *value >= 1.0
+                                && *value <= 100.0
+                        })
+                        .map(|value| value as usize)
+                })
+        })
+        .unwrap_or(1)
 }
 
 fn point(id: &str, offset: usize) -> DocPoint {
@@ -958,6 +973,33 @@ mod tests {
             FlowGeometry::new(&source, 500.0),
             Err(Error::UnsupportedNode(_))
         ));
+        assert_eq!(source.to_json()?, before);
+        Ok(())
+    }
+    #[test]
+    fn legacy_integral_json_spans_keep_their_real_geometry() -> Result<()> {
+        let mut fixture = qualification_fixture();
+        fixture["content"][1]["content"][0]["content"][0]["attrs"]["colspan"] = json!(2.0);
+        fixture["content"][1]["content"][0]["content"][0]["attrs"]["rowspan"] = json!(2.0);
+        let source = Document::from_json(fixture)?;
+        let before = source.to_json()?;
+        let geometry = FlowGeometry::with_atom_sizes(&source, 600.0, &|_| {
+            Some(AtomSize {
+                width: 48.0,
+                height: 24.0,
+            })
+        })?;
+        let cells = geometry.cells()?;
+        let merged = cells
+            .iter()
+            .find(|cell| cell.canonical_path == NodePath(vec![1, 0, 0]) && !cell.covered)
+            .ok_or(Error::InvalidGrid)?;
+        let right = cells
+            .iter()
+            .find(|cell| cell.canonical_path == NodePath(vec![1, 0, 1]))
+            .ok_or(Error::InvalidGrid)?;
+        assert!(merged.rect.width > right.rect.width * 1.8);
+        assert!(merged.rect.height > right.rect.height * 1.5);
         assert_eq!(source.to_json()?, before);
         Ok(())
     }
