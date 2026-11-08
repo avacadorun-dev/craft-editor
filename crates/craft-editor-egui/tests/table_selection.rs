@@ -520,7 +520,7 @@ fn selection_forms_stay_exclusive_through_setters_history_guard_cancel_and_reloa
     };
     assert!(
         session
-            .finish_paste(guard, context.prepare(1_000_000)?)
+            .finish_prepared_paste(guard, context.prepare(1_000_000)?)
             .is_err()
     );
     assert_eq!(session.document(), &original);
