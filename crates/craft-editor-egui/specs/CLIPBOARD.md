@@ -17,7 +17,7 @@ Private data is untrusted. Decode checks the host's explicit byte budget, envelo
 - `set_clipboard_provider(Option<Arc<dyn ClipboardProvider>>)` installs a shared long-lived host service.
 - `cut_to_clipboard()` acknowledges a complete native write before deleting selected content. A write failure leaves content, revision, selection, history and pending changes intact. A later deletion rejection can leave a useful copy on the clipboard, but does not lose manuscript data.
 - `paste_bundle(bundle, max_bytes)` and `paste_from_clipboard()` use the same canonical selection/history and never fetch assets. Pasted identities are new; source references and selected opaque content remain canonical.
-- `RichSlice::asset_references()` exposes image sources/IDs to host ownership and media-acquisition policy. Neither transport nor parsers authorize cross-project assets. The host's asset resolver must remain project scoped.
+- `ClipboardBundle::canonical_slice(max_bytes)` performs source-priority parsing without mutation; `RichSlice::asset_references()` exposes image sources/IDs to host ownership and media-acquisition policy. Neither transport nor parsers authorize cross-project assets. The host's asset resolver must remain project scoped.
 
 Open text-edge insertion joins first/last fragments into the destination with exact Split/Text/Join maps, preserves the existing rich tail and records the result caret in the same Undo/Redo entry. Target context wins for the first open wrapper, as in native rich paste; selected inner nodes/marks stay exact. Source references are merged explicitly. Closed fragments retain their wrappers and opaque fields.
 

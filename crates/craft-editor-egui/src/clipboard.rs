@@ -51,6 +51,23 @@ pub struct ClipboardBundle {
     pub plain: String,
 }
 impl ClipboardBundle {
+    /// Inspect canonical paste content before mutation, for host asset/project authorization.
+    ///
+    /// Precedence matches paste: private canonical bytes, complete source fence/formula rules,
+    /// then sanitized HTML. Ordinary plain text returns None. No resource is opened or fetched.
+    pub fn canonical_slice(&self, max_bytes: usize) -> Result<Option<RichSlice>> {
+        self.check_budget(max_bytes)?;
+        if let Some(bytes) = &self.rich {
+            return RichSlice::decode(bytes, max_bytes).map(Some);
+        }
+        if let Some(slice) = plain::special_slice(&self.plain)? {
+            return Ok(Some(slice));
+        }
+        if let Some(html) = self.html.as_deref().filter(|html| !html.is_empty()) {
+            return html::parse(html).map(Some);
+        }
+        Ok(None)
+    }
     /// Refuse oversized external input before decoding; the host owns the selected budget.
     pub fn check_budget(&self, max_bytes: usize) -> ClipboardResult<()> {
         let count = self
@@ -355,15 +372,8 @@ impl EditorSession {
     }
     /// Parse and apply a bounded bundle through one canonical transaction and rich history.
     pub fn paste_bundle(&mut self, bundle: &ClipboardBundle, max_bytes: usize) -> Result<Change> {
-        bundle.check_budget(max_bytes)?;
-        if let Some(bytes) = &bundle.rich {
-            return self.paste_rich_slice(RichSlice::decode(bytes, max_bytes)?);
-        }
-        if let Some(slice) = plain::special_slice(&bundle.plain)? {
+        if let Some(slice) = bundle.canonical_slice(max_bytes)? {
             return self.paste_rich_slice(slice);
-        }
-        if let Some(html) = bundle.html.as_deref().filter(|html| !html.is_empty()) {
-            return self.paste_rich_slice(html::parse(html)?);
         }
         self.insert_plain_text(&bundle.plain.replace("\r\n", "\n"))
     }
