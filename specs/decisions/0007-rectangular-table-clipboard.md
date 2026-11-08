@@ -1,0 +1,13 @@
+# Rectangular table clipboard and selection
+
+Status: implementation in progress; no alpha.2 parity or owner acceptance claim. WriterCraft issues4/7 remain open.
+
+The actual original editor enables prosemirror-tables1.8.5 handlePaste, separately from ordinary replaceSelection. Its table path recognizes table/row/cell slices, fits open row edges, fills ragged input, tiles/clips to an explicit CellSelection rectangle, grows a caret-target table when needed, isolates crossing rowspans/colspans, replaces affected cells and creates a new CellSelection. A generic text-slice fitter alone cannot provide this behavior. Preserve the upstream MIT notice with the native algorithm implementation.
+
+Freeze actual-source synthetic cases for recognition and complete destination behavior. Source fixtures contain no owner manuscripts. Source node identity appendTransaction is not mounted in the headless probes, so repeated incoming IDs are renewed explicitly by the native implementation. Canonical unknown/null/opaque fields remain authoritative, including row/cell envelopes, marks, source references and unaffected text IDs. Destination replacement is scoped to the guarded table; unaffected cells' note positions survive, selected writing detaches explicitly, and one transaction provides exact Undo/Redo.
+
+Use a directional session TableSelection separate from its normalized rectangular CellSelection. It contains paths/logical endpoints rather than another full table JSON snapshot. Include it in the same history and one-shot clipboard/session guards as text and opaque-node selection. Native pointer/key/controller paths must expose actual rectangular selection and copy/cut/paste/deletion; a model builder is an internal checkpoint only.
+
+Generic table parsing retains its existing capacity. An optional host-native edit limit refuses a growing paste before mutation; WriterCraft sets the approved63-column limit and preserves wider imported tables read-only. Validate complete candidates, spans, identities and incremental resource limits before committing. No ambient image/file/network acquisition belongs in the table engine.
+
+The first source corpus has twelve noncrashing plugin cases, including reversed rectangular selection, cell/header repetition, colspan clipping/growth, upper/lower rowspan isolation, right-edge colspan isolation, ragged rows, ordinary prose and partial open rows. An additional original case with a wholly covered added rowspan row throws during the plugin's final selection resolution. The native implementation must preserve a valid originating-cell selection rather than reproduce that crash; this is a source bug fix with its own regression, not a feature cut.

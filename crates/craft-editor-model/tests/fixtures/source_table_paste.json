@@ -1,0 +1,3680 @@
+{
+  "provenance": "Actual original editorExtensions schema and installed prosemirror-tables handlePaste/__pastedCells; synthetic source fixtures, no owner data. Raw BlockIdentity appendTransaction is not mounted.",
+  "cases": [
+    {
+      "name": "table-row-paste-at-cell-caret",
+      "target": [
+        {
+          "type": "table",
+          "attrs": {
+            "blockId": "targettable"
+          },
+          "content": [
+            {
+              "type": "tableRow",
+              "content": [
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "target",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "old"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "second",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "B"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "from": [
+        "target",
+        1
+      ],
+      "slice": [
+        {
+          "type": "tableRow",
+          "content": [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "a",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "A"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "b",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "B"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "openStart": 1,
+      "openEnd": 1,
+      "pastedCells": {
+        "width": 2,
+        "height": 1,
+        "rows": [
+          [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "a",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "A"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "b",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "B"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        ]
+      },
+      "output": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "targettable"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "a",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "A"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "b",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "B"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "cell",
+        "anchor": 2,
+        "head": 7
+      },
+      "maps": [
+        {
+          "ranges": [
+            2,
+            12,
+            10
+          ],
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "name": "cell-selection-repeat-one-cell",
+      "target": [
+        {
+          "type": "table",
+          "attrs": {
+            "blockId": "targettable"
+          },
+          "content": [
+            {
+              "type": "tableRow",
+              "content": [
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "target",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "A"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "b",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "B"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "tableRow",
+              "content": [
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "c",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "C"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "end",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "D"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "from": [
+        "target",
+        0
+      ],
+      "to": [
+        "end",
+        0
+      ],
+      "cellSelection": true,
+      "slice": [
+        {
+          "type": "tableRow",
+          "content": [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "source",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "X"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "openStart": 1,
+      "openEnd": 1,
+      "pastedCells": {
+        "width": 1,
+        "height": 1,
+        "rows": [
+          [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "source",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "X"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        ]
+      },
+      "output": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "targettable"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "source",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "X"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "source",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "X"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "source",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "X"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "source",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "X"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "cell",
+        "anchor": 2,
+        "head": 19
+      },
+      "maps": [
+        {
+          "ranges": [
+            2,
+            10,
+            10
+          ],
+          "inverted": false
+        },
+        {
+          "ranges": [
+            14,
+            10,
+            10
+          ],
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "name": "spanning-cell-paste-expands-table",
+      "target": [
+        {
+          "type": "table",
+          "attrs": {
+            "blockId": "targettable"
+          },
+          "content": [
+            {
+              "type": "tableRow",
+              "content": [
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "target",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "A"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "b",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "B"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "from": [
+        "target",
+        0
+      ],
+      "slice": [
+        {
+          "type": "tableRow",
+          "content": [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 2,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "a",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Wide"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "b2",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "New"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "openStart": 1,
+      "openEnd": 1,
+      "pastedCells": {
+        "width": 3,
+        "height": 1,
+        "rows": [
+          [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 2,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "a",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Wide"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "b2",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "New"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        ]
+      },
+      "output": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "targettable"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 2,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "a",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Wide"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "b2",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "New"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "cell",
+        "anchor": 2,
+        "head": 10
+      },
+      "maps": [
+        {
+          "ranges": [
+            12,
+            0,
+            4
+          ],
+          "inverted": false
+        },
+        {
+          "ranges": [
+            2,
+            14,
+            15
+          ],
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "name": "cell-selection-plain-prose",
+      "target": [
+        {
+          "type": "table",
+          "attrs": {
+            "blockId": "targettable"
+          },
+          "content": [
+            {
+              "type": "tableRow",
+              "content": [
+                {
+                  "type": "tableHeader",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "target",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "A"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "tableHeader",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "b",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "B"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "tableRow",
+              "content": [
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "c",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "C"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "end",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "D"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "from": [
+        "target",
+        0
+      ],
+      "to": [
+        "end",
+        0
+      ],
+      "cellSelection": true,
+      "slice": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "blockId": "source",
+            "sourceRefs": []
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "New"
+            }
+          ]
+        }
+      ],
+      "openStart": 1,
+      "openEnd": 1,
+      "pastedCells": null,
+      "output": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "targettable"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "source",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "New"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "source",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "New"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "source",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "New"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "source",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "New"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "cell",
+        "anchor": 2,
+        "head": 25
+      },
+      "maps": [
+        {
+          "ranges": [
+            2,
+            10,
+            14
+          ],
+          "inverted": false
+        },
+        {
+          "ranges": [
+            18,
+            10,
+            14
+          ],
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "name": "reverse-cell-selection-repeat",
+      "target": [
+        {
+          "type": "table",
+          "attrs": {
+            "blockId": "targettable"
+          },
+          "content": [
+            {
+              "type": "tableRow",
+              "content": [
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "first",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "A"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "b",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "B"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "tableRow",
+              "content": [
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "c",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "C"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "target",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "D"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "from": [
+        "target",
+        0
+      ],
+      "to": [
+        "first",
+        0
+      ],
+      "cellSelection": true,
+      "slice": [
+        {
+          "type": "tableRow",
+          "content": [
+            {
+              "type": "tableHeader",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "source",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "X"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "openStart": 1,
+      "openEnd": 1,
+      "pastedCells": {
+        "width": 1,
+        "height": 1,
+        "rows": [
+          [
+            {
+              "type": "tableHeader",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "source",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "X"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        ]
+      },
+      "output": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "targettable"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableHeader",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "source",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "X"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableHeader",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "source",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "X"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableHeader",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "source",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "X"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableHeader",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "source",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "X"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "cell",
+        "anchor": 2,
+        "head": 19
+      },
+      "maps": [
+        {
+          "ranges": [
+            2,
+            10,
+            10
+          ],
+          "inverted": false
+        },
+        {
+          "ranges": [
+            14,
+            10,
+            10
+          ],
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "name": "table-paste-isolates-right-colspan",
+      "target": [
+        {
+          "type": "table",
+          "attrs": {
+            "blockId": "targettable"
+          },
+          "content": [
+            {
+              "type": "tableRow",
+              "content": [
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "target",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "A"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 2,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "wide",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "Old wide"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "from": [
+        "target",
+        0
+      ],
+      "slice": [
+        {
+          "type": "tableRow",
+          "content": [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "one",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "X"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "two",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Y"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "openStart": 1,
+      "openEnd": 1,
+      "pastedCells": {
+        "width": 2,
+        "height": 1,
+        "rows": [
+          [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "one",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "X"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "two",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Y"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        ]
+      },
+      "output": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "targettable"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "one",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "X"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "two",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Y"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": null,
+                          "sourceRefs": []
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "cell",
+        "anchor": 2,
+        "head": 7
+      },
+      "maps": [
+        {
+          "ranges": [
+            7,
+            1,
+            1,
+            18,
+            1,
+            1
+          ],
+          "inverted": false
+        },
+        {
+          "ranges": [
+            19,
+            0,
+            4
+          ],
+          "inverted": false
+        },
+        {
+          "ranges": [
+            2,
+            17,
+            10
+          ],
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "name": "table-paste-isolates-lower-rowspan",
+      "target": [
+        {
+          "type": "table",
+          "attrs": {
+            "blockId": "targettable"
+          },
+          "content": [
+            {
+              "type": "tableRow",
+              "content": [
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "target",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "A"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 2,
+                    "colwidth": null,
+                    "align": "right"
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "span",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "Old span"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "tableRow",
+              "content": [
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "c",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "C"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "from": [
+        "target",
+        0
+      ],
+      "slice": [
+        {
+          "type": "tableRow",
+          "content": [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "one",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "X"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "two",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Y"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "openStart": 1,
+      "openEnd": 1,
+      "pastedCells": {
+        "width": 2,
+        "height": 1,
+        "rows": [
+          [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "one",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "X"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "two",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Y"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        ]
+      },
+      "output": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "targettable"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "one",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "X"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "two",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Y"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "c",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "C"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": "right"
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": null,
+                          "sourceRefs": []
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "cell",
+        "anchor": 2,
+        "head": 7
+      },
+      "maps": [
+        {
+          "ranges": [
+            7,
+            1,
+            1,
+            18,
+            1,
+            1
+          ],
+          "inverted": false
+        },
+        {
+          "ranges": [
+            25,
+            1,
+            5
+          ],
+          "inverted": false
+        },
+        {
+          "ranges": [
+            2,
+            17,
+            10
+          ],
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "name": "table-paste-isolates-upper-rowspan",
+      "target": [
+        {
+          "type": "table",
+          "attrs": {
+            "blockId": "targettable"
+          },
+          "content": [
+            {
+              "type": "tableRow",
+              "content": [
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "a",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "A"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 2,
+                    "colwidth": null,
+                    "align": "right"
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "span",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "Keep span"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "tableRow",
+              "content": [
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "target",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "C"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "from": [
+        "target",
+        0
+      ],
+      "slice": [
+        {
+          "type": "tableRow",
+          "content": [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "one",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "X"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "two",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Y"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "openStart": 1,
+      "openEnd": 1,
+      "pastedCells": {
+        "width": 2,
+        "height": 1,
+        "rows": [
+          [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "one",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "X"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "two",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Y"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        ]
+      },
+      "output": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "targettable"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "a",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "A"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": "right"
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "span",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Keep span"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "one",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "X"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "two",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Y"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "cell",
+        "anchor": 22,
+        "head": 27
+      },
+      "maps": [
+        {
+          "ranges": [
+            7,
+            1,
+            1,
+            19,
+            1,
+            1
+          ],
+          "inverted": false
+        },
+        {
+          "ranges": [
+            26,
+            1,
+            5
+          ],
+          "inverted": false
+        },
+        {
+          "ranges": [
+            22,
+            9,
+            10
+          ],
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "name": "cell-selection-clips-colspan",
+      "target": [
+        {
+          "type": "table",
+          "attrs": {
+            "blockId": "targettable"
+          },
+          "content": [
+            {
+              "type": "tableRow",
+              "content": [
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "target",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "A"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "tableRow",
+              "content": [
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "end",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "B"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "from": [
+        "target",
+        0
+      ],
+      "to": [
+        "end",
+        0
+      ],
+      "cellSelection": true,
+      "slice": [
+        {
+          "type": "tableRow",
+          "content": [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 2,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "source",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Wide"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "openStart": 1,
+      "openEnd": 1,
+      "pastedCells": {
+        "width": 2,
+        "height": 1,
+        "rows": [
+          [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 2,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "source",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Wide"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        ]
+      },
+      "output": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "targettable"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "source",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Wide"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "source",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Wide"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "cell",
+        "anchor": 2,
+        "head": 12
+      },
+      "maps": [
+        {
+          "ranges": [
+            2,
+            5,
+            8
+          ],
+          "inverted": false
+        },
+        {
+          "ranges": [
+            12,
+            5,
+            8
+          ],
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "name": "partial-open-cell-row",
+      "target": [
+        {
+          "type": "table",
+          "attrs": {
+            "blockId": "targettable"
+          },
+          "content": [
+            {
+              "type": "tableRow",
+              "content": [
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "target",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "Old"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "other",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "Other"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "from": [
+        "target",
+        0
+      ],
+      "slice": [
+        {
+          "type": "tableRow",
+          "content": [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 2,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "source",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Partial"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "openStart": 3,
+      "openEnd": 3,
+      "pastedCells": null,
+      "output": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "targettable"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "target",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "PartialOld"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "other",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Other"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "text",
+        "anchor": 11,
+        "head": 11
+      },
+      "maps": [
+        {
+          "ranges": [
+            4,
+            0,
+            7
+          ],
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "name": "ragged-source-rows-filled",
+      "target": [
+        {
+          "type": "table",
+          "attrs": {
+            "blockId": "targettable"
+          },
+          "content": [
+            {
+              "type": "tableRow",
+              "content": [
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "target",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "Old"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "from": [
+        "target",
+        0
+      ],
+      "slice": [
+        {
+          "type": "tableRow",
+          "content": [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "one",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "A"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "two",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "B"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tableRow",
+          "content": [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "three",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "C"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "openStart": 1,
+      "openEnd": 1,
+      "pastedCells": {
+        "width": 2,
+        "height": 2,
+        "rows": [
+          [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "one",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "A"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "two",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "B"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "three",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "C"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": null,
+                    "sourceRefs": []
+                  }
+                }
+              ]
+            }
+          ]
+        ]
+      },
+      "output": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "targettable"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "one",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "A"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "two",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "B"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "three",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "C"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": null,
+                          "sourceRefs": []
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "cell",
+        "anchor": 2,
+        "head": 19
+      },
+      "maps": [
+        {
+          "ranges": [
+            9,
+            0,
+            4
+          ],
+          "inverted": false
+        },
+        {
+          "ranges": [
+            14,
+            0,
+            10
+          ],
+          "inverted": false
+        },
+        {
+          "ranges": [
+            2,
+            11,
+            10
+          ],
+          "inverted": false
+        },
+        {
+          "ranges": [
+            14,
+            8,
+            9
+          ],
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "name": "partial-multiple-open-cell-rows",
+      "target": [
+        {
+          "type": "table",
+          "attrs": {
+            "blockId": "targettable"
+          },
+          "content": [
+            {
+              "type": "tableRow",
+              "content": [
+                {
+                  "type": "tableCell",
+                  "attrs": {
+                    "colspan": 1,
+                    "rowspan": 1,
+                    "colwidth": null,
+                    "align": null
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "target",
+                        "sourceRefs": []
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "Old"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "from": [
+        "target",
+        0
+      ],
+      "slice": [
+        {
+          "type": "tableRow",
+          "content": [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 2,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "one",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "First"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tableRow",
+          "content": [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "two",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Last"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "openStart": 3,
+      "openEnd": 3,
+      "pastedCells": {
+        "width": 2,
+        "height": 2,
+        "rows": [
+          [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 2,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "one",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "First"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "two",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Last"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": null,
+                    "sourceRefs": []
+                  }
+                }
+              ]
+            }
+          ]
+        ]
+      },
+      "output": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "targettable"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 2,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "one",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "First"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "two",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Last"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": null,
+                          "sourceRefs": []
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "cell",
+        "anchor": 2,
+        "head": 21
+      },
+      "maps": [
+        {
+          "ranges": [
+            9,
+            0,
+            4
+          ],
+          "inverted": false
+        },
+        {
+          "ranges": [
+            14,
+            0,
+            10
+          ],
+          "inverted": false
+        },
+        {
+          "ranges": [
+            2,
+            11,
+            9
+          ],
+          "inverted": false
+        },
+        {
+          "ranges": [
+            13,
+            8,
+            12
+          ],
+          "inverted": false
+        }
+      ]
+    }
+  ]
+}

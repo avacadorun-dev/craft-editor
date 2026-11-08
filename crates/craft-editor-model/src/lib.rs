@@ -11,6 +11,7 @@ mod fitting;
 mod lists;
 mod position;
 mod structural;
+mod table_paste;
 mod tables;
 mod text_projection;
 mod transaction;
@@ -27,6 +28,7 @@ pub use position::{
     scalar_to_utf16, utf16_to_scalar,
 };
 pub use structural::{NodePath, NodeRef};
+pub use table_paste::{PastedCells, table_cells_from_slice};
 pub use tables::{
     CellAlignment, CellRect, CellSelection, TableGrid, delete_table_column, delete_table_row,
     empty_table_cell, insert_table_column, insert_table_row, merge_table_cells,

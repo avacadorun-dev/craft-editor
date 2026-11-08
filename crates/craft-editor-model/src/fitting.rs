@@ -4,7 +4,7 @@ use crate::{
 };
 use prosemirror::{
     dynamic::{DynamicSchema, schema::SchemaSpec, types::Dyn},
-    model::{Fragment, Slice},
+    model::{Fragment, Node as _, NodeType as _, Slice},
     transform::{Mappable, StepMap, Transform},
 };
 use serde::{Deserialize, Serialize};
@@ -322,6 +322,23 @@ impl<'a> Bridge<'a> {
             mark_groups: HashMap::new(),
             node_tokens: Vec::new(),
         })
+    }
+    fn schema(&self, top_node: &str) -> Result<DynamicSchema> {
+        // Filler preference follows the actual source's ordered schema, not Value's
+        // lexicographically sorted map. Paragraph is the source's default block.
+        let mut spec: SchemaSpec = serde_json::from_str(include_str!("fitting_schema.json"))?;
+        spec.top_node = top_node.into();
+        for (name, node) in &mut spec.nodes {
+            *node = serde_json::from_value(self.spec["nodes"][name].clone())?;
+        }
+        for (name, mark) in &mut spec.marks {
+            *mark = serde_json::from_value(self.spec["marks"][name].clone())?;
+        }
+        spec.marks.insert(
+            LEAF_TOKEN.into(),
+            serde_json::from_value(self.spec["marks"][LEAF_TOKEN].clone())?,
+        );
+        DynamicSchema::from_spec(spec).map_err(|_| Error::InvalidDocument("fitting_schema".into()))
     }
     fn encode(
         &mut self,
@@ -717,7 +734,7 @@ pub(crate) fn fit_node<F: FnMut() -> Result<String>>(
     }
     fit_at(document, range, content, open_start, open_end, allocate)
 }
-fn edge_depth(nodes: &[Node], last: bool) -> usize {
+pub(crate) fn edge_depth(nodes: &[Node], last: bool) -> usize {
     let node = if last { nodes.last() } else { nodes.first() };
     match node {
         Some(node) if node.node_type != "text" && !is_atom(node) => {
@@ -788,21 +805,7 @@ fn fit_at<F: FnMut() -> Result<String>>(
     for node in content {
         native_content.push(bridge.encode(node, None, 0, true)?);
     }
-    // Schema node order decides filler/wrapping preference. Value's sorted object map
-    // cannot replace the original ordered schema (whose default block is paragraph).
-    let mut spec: SchemaSpec = serde_json::from_str(include_str!("fitting_schema.json"))?;
-    for (name, node) in &mut spec.nodes {
-        *node = serde_json::from_value(bridge.spec["nodes"][name].clone())?;
-    }
-    for (name, mark) in &mut spec.marks {
-        *mark = serde_json::from_value(bridge.spec["marks"][name].clone())?;
-    }
-    spec.marks.insert(
-        LEAF_TOKEN.into(),
-        serde_json::from_value(bridge.spec["marks"][LEAF_TOKEN].clone())?,
-    );
-    let schema = DynamicSchema::from_spec(spec)
-        .map_err(|_| Error::InvalidDocument("fitting_schema".into()))?;
+    let schema = bridge.schema("doc")?;
     let (value, steps, incoming_size) = schema.with_types(|| -> Result<_> {
         let native = schema
             .node_from_json(&native_doc)
@@ -1009,6 +1012,95 @@ fn fit_at<F: FnMut() -> Result<String>>(
     candidate.validate()?;
     map.paths.retain(|(before,after)|matches!((document.node(before),candidate.node(after)),(Ok(left),Ok(right)) if left==right));
     Ok((candidate, map))
+}
+
+/// Source table paste fits open fragments into a row/cell independently of the destination.
+/// This private planner returns canonical envelopes; no native serialization becomes authority.
+pub(crate) fn fit_clipboard_container<F: FnMut() -> Result<String>>(
+    kind: &str,
+    content: &[Node],
+    open_start: usize,
+    open_end: usize,
+    allocate: &mut F,
+) -> Result<Node> {
+    if !matches!(kind, "tableRow" | "tableCell")
+        || open_start > edge_depth(content, false)
+        || open_end > edge_depth(content, true)
+    {
+        return Err(Error::InvalidPosition);
+    }
+    Node::decode_open_fragment(serde_json::to_value(content)?)?;
+    let mut bridge = Bridge::new()?;
+    let incoming = content
+        .iter()
+        .map(|node| bridge.encode(node, None, 0, true))
+        .collect::<Result<Vec<_>>>()?;
+    let schema = bridge.schema(kind)?;
+    let value = schema.with_types(|| -> Result<Value> {
+        let root = schema
+            .node_type(kind)
+            .and_then(|node_type| node_type.create_and_fill(Value::Null, None, None))
+            .ok_or(Error::UnsupportedEdit)?;
+        let end = root.content().map_or(0, Fragment::size);
+        let nodes = incoming
+            .iter()
+            .map(|node| {
+                schema
+                    .node_from_json(node)
+                    .map_err(|_| Error::UnsupportedEdit)
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let slice = Slice::new(Fragment::from(nodes), open_start, open_end);
+        let mut transform = Transform::<Dyn>::new(root);
+        transform.replace(0, Some(end), Some(slice));
+        Ok(serde_json::to_value(&transform.doc)?)
+    })?;
+    let mut reserved = HashSet::new();
+    for entry in &bridge.nodes {
+        if let Some(id) = entry.node.block_id() {
+            reserved.insert(id.to_owned());
+        }
+    }
+    let mut rebuilt = Reconstruct {
+        bridge: &bridge,
+        allocate,
+        used: HashSet::new(),
+        reserved,
+        seen: vec![0; bridge.nodes.len()],
+        text: HashMap::new(),
+        paths: Vec::new(),
+        atoms: Vec::new(),
+    };
+    let root = rebuilt.node(&value, NodePath::root(), 0)?;
+    for (index, entry) in bridge.nodes.iter().enumerate() {
+        if entry.node.node_type == "text" {
+            if rebuilt
+                .text
+                .get(&index)
+                .map(String::as_str)
+                .unwrap_or_default()
+                != entry.node.text.as_deref().unwrap_or_default()
+            {
+                return Err(Error::UnsupportedEdit);
+            }
+        } else if is_atom(entry.node) && rebuilt.seen[index] != 1 {
+            return Err(Error::UnsupportedEdit);
+        } else if rebuilt.seen[bridge.node_tokens[index]] == 0
+            && (!entry.node.extra.is_empty()
+                || entry.node.attrs.as_ref().is_some_and(|attrs| {
+                    attrs.keys().any(|key| {
+                        !matches!(key.as_str(), "blockId" | "sourceRefs")
+                            && bridge.spec["nodes"][&entry.node.node_type]["attrs"]
+                                .get(key)
+                                .is_none()
+                    })
+                }))
+        {
+            return Err(Error::UnsupportedEdit);
+        }
+    }
+    crate::structural::check_subtree_bounds(&root)?;
+    Ok(root)
 }
 
 fn merge_refs(node: &mut Node, id: &str, refs: &[Value]) -> Result<()> {
