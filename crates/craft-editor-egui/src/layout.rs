@@ -80,6 +80,16 @@ pub struct AtomSize {
     pub height: f32,
 }
 
+/// Reference used by a host-supplied line-height multiple.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum LineHeightBasis {
+    /// Preserve the layout backend's single-line font-metric multiple.
+    #[default]
+    FontMetrics,
+    /// Multiply the paragraph's nominal font size, matching a CSS unitless line height.
+    FontSize,
+}
+
 /// Host presentation applied only to the disposable layout projection.
 #[derive(Debug, Clone, PartialEq)]
 pub struct GeometryStyle {
@@ -95,6 +105,12 @@ pub struct GeometryStyle {
     pub table_header: [u8; 3],
     /// Multiple of single line spacing.
     pub line_height: f32,
+    /// Whether the line-height multiple uses font metrics or the nominal font size.
+    pub line_height_basis: LineHeightBasis,
+    /// Optional independent gap between list items; None preserves inherited paragraph spacing.
+    pub list_item_spacing: Option<f32>,
+    /// Override standard ligatures without changing contextual/required shaping.
+    pub standard_ligatures: Option<bool>,
     /// Space after a paragraph, in logical document points.
     pub paragraph_spacing: f32,
     /// Optional host syntax colors. None keeps code plain while preserving its language/source.
@@ -109,6 +125,9 @@ impl Default for GeometryStyle {
             table_border: [139, 148, 163],
             table_header: [234, 238, 244],
             line_height: 1.5,
+            line_height_basis: LineHeightBasis::FontMetrics,
+            list_item_spacing: None,
+            standard_ligatures: None,
             paragraph_spacing: 10.0,
             syntax_palette: Some(syntax::Palette::for_surface([35, 39, 47], [250, 250, 248])),
         }
@@ -266,6 +285,8 @@ impl FlowGeometry {
                 || s.line_height <= 0.0
                 || !s.paragraph_spacing.is_finite()
                 || s.paragraph_spacing < 0.0
+                || s.list_item_spacing
+                    .is_some_and(|gap| !gap.is_finite() || gap < 0.0)
         }) {
             return Err(Error::InvalidSize);
         }
@@ -304,9 +325,22 @@ impl FlowGeometry {
                     style.text_color[2],
                 ),
             ));
-            sheet.default_para.line_spacing = Some(wordcraft_doc::props::LineSpacing::Multiple(
-                style.line_height,
-            ));
+            sheet.default_para.line_spacing = Some(match style.line_height_basis {
+                LineHeightBasis::FontMetrics => {
+                    wordcraft_doc::props::LineSpacing::Multiple(style.line_height)
+                }
+                LineHeightBasis::FontSize => {
+                    wordcraft_doc::props::LineSpacing::Exactly(style.font_size * style.line_height)
+                }
+            });
+            if let Some(standard) = style.standard_ligatures {
+                sheet.default_chr.ligatures = Some(wordcraft_doc::props::Ligatures {
+                    standard,
+                    contextual: true,
+                    historical: false,
+                    discretional: false,
+                });
+            }
             sheet.default_para.space_after = Some(style.paragraph_spacing);
         }
         let options = LayoutOptions {
@@ -762,6 +796,7 @@ impl FlowGeometry {
 struct ParagraphContext {
     indent: f32,
     list_depth: usize,
+    list_space_before: f32,
     label: Option<String>,
     quote: bool,
     callout: bool,
@@ -815,6 +850,7 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
             let mut current = context.clone();
             if index > 0 {
                 current.label = None;
+                current.list_space_before = 0.0;
             }
             match node.node_type.as_str() {
                 "blockquote" | "callout" => {
@@ -846,6 +882,14 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
                         let mut item_context = current.clone();
                         item_context.indent += 24.0;
                         item_context.list_depth += 1;
+                        if let Some(gap) = self.style.and_then(|style| style.list_item_spacing) {
+                            item_context.list_space_before =
+                                if item_index > 0 || current.list_depth > 0 {
+                                    gap
+                                } else {
+                                    current.list_space_before
+                                };
+                        }
                         item_context.label = Some(if node.node_type == "bulletList" {
                             wordcraft_doc::numbering::default_bullet(current.list_depth).to_string()
                         } else {
@@ -903,6 +947,16 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
         let id = node.block_id().ok_or(Error::MissingIdentity)?.to_owned();
         let mut paragraph = Paragraph::new();
         let body_size = self.style.map_or(18.0, |style| style.font_size);
+        if context.list_depth > 0
+            && self
+                .style
+                .is_some_and(|style| style.list_item_spacing.is_some())
+        {
+            paragraph.props.space_after = Some(0.0);
+            if context.list_space_before > 0.0 {
+                paragraph.props.space_before = Some(context.list_space_before);
+            }
+        }
         if context.indent > 0.0 {
             paragraph.props.indent_left = Some(context.indent);
         }
@@ -1576,6 +1630,112 @@ fn apply_syntax_colors(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn font_size_line_height_uses_nominal_advance_without_mutating_source() -> Result<()> {
+        let source = Document::from_json(
+            json!({"type":"doc","attrs":{"schemaVersion":1},"content":[
+                {"type":"paragraph","attrs":{"blockId":"p"},"content":[
+                    {"type":"text","text":"first"},{"type":"hardBreak"},{"type":"text","text":"second"}
+                ]}
+            ]}),
+        )?;
+        let before = source.to_json()?;
+        let style = GeometryStyle {
+            font_size: 20.0,
+            line_height: 1.75,
+            line_height_basis: LineHeightBasis::FontSize,
+            standard_ligatures: Some(false),
+            ..Default::default()
+        };
+        let geometry = FlowGeometry::with_style(&source, 800.0, &|_| None, Some(&style))?;
+        assert_eq!(
+            geometry.upstream.styles.default_para.line_spacing,
+            Some(wordcraft_doc::props::LineSpacing::Exactly(35.0))
+        );
+        let first = geometry
+            .caret(&point("p", 0))?
+            .ok_or(Error::UnmappedPosition)?;
+        let second = geometry
+            .caret(&point("p", 6))?
+            .ok_or(Error::UnmappedPosition)?;
+        assert!(
+            (second.y - first.y - 35.0).abs() < 0.05,
+            "actual line advance differs from 35 points"
+        );
+        assert_eq!(
+            geometry.upstream.styles.default_chr.ligatures,
+            Some(wordcraft_doc::props::Ligatures {
+                standard: false,
+                contextual: true,
+                historical: false,
+                discretional: false,
+            })
+        );
+        assert_eq!(source.to_json()?, before);
+        Ok(())
+    }
+
+    #[test]
+    fn list_item_gap_is_independent_from_ordinary_paragraph_gap() -> Result<()> {
+        let paragraph = |id: &str, text: &str| json!({"type":"paragraph","attrs":{"blockId":id},"content":[{"type":"text","text":text}]});
+        let source =
+            Document::from_json(json!({"type":"doc","attrs":{"schemaVersion":1},"content":[
+                {"type":"bulletList","attrs":{"blockId":"list"},"content":[
+                    {"type":"listItem","attrs":{"blockId":"one"},"content":[paragraph("p1","one")]},
+                    {"type":"listItem","attrs":{"blockId":"two"},"content":[paragraph("p2","two")]}
+                ]}, paragraph("after","after list")
+            ]}))?;
+        let mut style = GeometryStyle {
+            paragraph_spacing: 40.0,
+            list_item_spacing: Some(0.0),
+            ..Default::default()
+        };
+        let tight = FlowGeometry::with_style(&source, 800.0, &|_| None, Some(&style))?;
+        style.list_item_spacing = Some(8.0);
+        let loose = FlowGeometry::with_style(&source, 800.0, &|_| None, Some(&style))?;
+        let first = loose
+            .upstream
+            .para_at(&Pos::body(0, 0))
+            .ok_or(Error::UnmappedPosition)?;
+        let second = loose
+            .upstream
+            .para_at(&Pos::body(1, 0))
+            .ok_or(Error::UnmappedPosition)?;
+        assert_eq!(first.props.space_after, Some(0.0));
+        assert_eq!(first.props.space_before, None);
+        assert_eq!(second.props.space_after, Some(0.0));
+        assert_eq!(second.props.space_before, Some(8.0));
+        let tight_y = tight
+            .caret(&point("p2", 0))?
+            .ok_or(Error::UnmappedPosition)?
+            .y;
+        let loose_y = loose
+            .caret(&point("p2", 0))?
+            .ok_or(Error::UnmappedPosition)?
+            .y;
+        assert!((loose_y - tight_y - 8.0).abs() < 0.05);
+        assert_eq!(loose.upstream.styles.default_para.space_after, Some(40.0));
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_list_gap_never_changes_the_canonical_document() -> Result<()> {
+        let source = Document::plain("p", "unchanged")?;
+        let before = source.to_json()?;
+        for gap in [-1.0, f32::NAN, f32::INFINITY] {
+            let style = GeometryStyle {
+                list_item_spacing: Some(gap),
+                ..Default::default()
+            };
+            assert!(matches!(
+                FlowGeometry::with_style(&source, 600.0, &|_| None, Some(&style)),
+                Err(Error::InvalidSize)
+            ));
+        }
+        assert_eq!(source.to_json()?, before);
+        Ok(())
+    }
 
     #[test]
     fn native_web_grid_and_canonical_position_invariants() -> Result<()> {

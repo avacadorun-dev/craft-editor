@@ -20,6 +20,9 @@ pub enum Error {
     /// Coverage requires an explicitly loaded family, not an unrelated implicit fallback.
     #[error("native_font_family_not_loaded")]
     FamilyNotLoaded,
+    /// A metric was requested at an invalid size or the exact face lacks its zero glyph.
+    #[error("native_font_invalid_metric")]
+    InvalidMetric,
 }
 /// Native font registration or coverage result.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -107,6 +110,31 @@ pub fn register_font(bytes: Vec<u8>) -> Result<Registration> {
     })
 }
 
+/// Advance of the actual loaded face's zero glyph, in logical points.
+/// This is the `ch` reference metric; it is not an average-character approximation.
+///
+/// # Errors
+/// Rejects unknown/fallback faces, missing exact styles, invalid sizes and missing glyphs.
+pub fn zero_advance(family: &str, style: &str, size: f32) -> Result<f32> {
+    if !size.is_finite() || size <= 0.0 {
+        return Err(Error::InvalidMetric);
+    }
+    let database = FontDb::global();
+    if !database.is_loaded(family) {
+        return Err(Error::FamilyNotLoaded);
+    }
+    let face = database.face(family, style);
+    if !face.named(family) || !face.style.eq_ignore_ascii_case(style) {
+        return Err(Error::FamilyNotLoaded);
+    }
+    let glyph = face.glyph_for('0');
+    let advance = face.advance(glyph) / face.upem * f64::from(size);
+    if glyph == 0 || !advance.is_finite() || advance <= 0.0 {
+        return Err(Error::InvalidMetric);
+    }
+    Ok(advance as f32)
+}
+
 /// Current shared native font generation. Include this in geometry/raster cache keys.
 pub fn generation() -> u64 {
     FontDb::global().generation()
@@ -144,6 +172,26 @@ pub fn coverage(family: &str, style: &str, text: &str) -> Result<GlyphCoverage> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn zero_metric_uses_an_exact_face_and_scales_linearly() -> Result<()> {
+        let small = zero_advance("Source Serif 4", "Regular", 17.0)?;
+        let large = zero_advance("Source Serif 4", "Regular", 34.0)?;
+        assert!(small > 0.0 && (large - small * 2.0).abs() < 0.001);
+        assert!(matches!(
+            zero_advance("Source Serif 4", "Imaginary", 17.0),
+            Err(Error::FamilyNotLoaded)
+        ));
+        assert!(matches!(
+            zero_advance("missing-family", "Regular", 17.0),
+            Err(Error::FamilyNotLoaded)
+        ));
+        assert!(matches!(
+            zero_advance("Source Serif 4", "Regular", f32::NAN),
+            Err(Error::InvalidMetric)
+        ));
+        Ok(())
+    }
+
     #[test]
     fn invalid_font_never_changes_native_generation() {
         let before = generation();

@@ -14,6 +14,8 @@ use crate::{
     projection::Projection,
 };
 
+pub use crate::layout::LineHeightBasis;
+
 /// Host-owned canvas colors and typography, independent of canonical document attributes.
 #[derive(Debug, Clone)]
 pub struct CanvasStyle {
@@ -35,6 +37,12 @@ pub struct CanvasStyle {
     pub font_family: Option<String>,
     /// Line-height multiple.
     pub line_height: f32,
+    /// Reference used by the line-height multiple; the default retains backend metrics.
+    pub line_height_basis: LineHeightBasis,
+    /// Optional spacing between list items in logical points.
+    pub list_item_spacing: Option<f32>,
+    /// Optional standard-ligature override, independent of canonical marks.
+    pub standard_ligatures: Option<bool>,
     /// Space following paragraphs in logical points.
     pub paragraph_spacing: f32,
     /// Minimum allocated canvas height; the host owns the enclosing scroll area.
@@ -54,6 +62,9 @@ impl Default for CanvasStyle {
             font_size: 18.0,
             font_family: None,
             line_height: 1.5,
+            line_height_basis: LineHeightBasis::FontMetrics,
+            list_item_spacing: None,
+            standard_ligatures: None,
             paragraph_spacing: 10.0,
             min_height: 320.0,
             read_only: false,
@@ -69,6 +80,9 @@ impl CanvasStyle {
             table_border: rgb(self.table_border),
             table_header: rgb(self.table_header),
             line_height: self.line_height,
+            line_height_basis: self.line_height_basis,
+            list_item_spacing: self.list_item_spacing,
+            standard_ligatures: self.standard_ligatures,
             paragraph_spacing: self.paragraph_spacing,
             syntax_palette: Some(crate::syntax::Palette::for_surface(
                 rgb(self.foreground),
