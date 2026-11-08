@@ -13,7 +13,7 @@ Private data is untrusted. Decode checks the host's explicit byte budget, envelo
 ## Session and transport API
 
 - `copy_selection() -> Result<Option<ClipboardBundle>>`: None means a caret with no selection; leave the clipboard untouched.
-- `ClipboardBundle { rich, html, plain }`: advertise canonical JSON, interoperable HTML and meaningful text concurrently. Atom text uses formula/diagram/image source forms; synthesized U+FFFC is never published as an object fallback.
+- `ClipboardBundle { rich, html, plain, formats }`: advertise canonical JSON, interoperable HTML and meaningful text concurrently. Atom text uses formula/diagram/image source forms; synthesized U+FFFC is never published as an object fallback.
 - `set_clipboard_provider(Option<Arc<dyn ClipboardProvider>>)` installs a shared long-lived host service.
 - `cut_to_clipboard()` acknowledges a complete native write before deleting selected content. A write failure leaves content, revision, selection, history and pending changes intact. A later deletion rejection can leave a useful copy on the clipboard, but does not lose manuscript data.
 - `paste_bundle(bundle, max_bytes)` and `paste_from_clipboard()` use the same canonical selection/history and never fetch assets. Pasted identities are new; source references and selected opaque content remain canonical.
@@ -35,7 +35,7 @@ The shared `is_allowed_link_uri` model function matches the installed original L
 
 ## Required remaining acceptance
 
-This checkpoint covers exact selection export, closed/ordinary open text fragments, explicit fence/formula rules, basic sanitized rich HTML, safe native ownership seam and history. It does **not** establish full clipboard parity. Complex open list/table/wrapper fitting, rectangular cell selections, matching inline mark/Markdown-link/autolink rules, selected-URL link application, image clipboard/drop acquisition, original source references across owned projects, real OS round trips and multi-app HTML interoperability remain required. Unsupported complex fitting refuses atomically with the clipboard intact. No such gap is permission to reduce alpha.2 scope.
+This checkpoint covers exact selection export, closed/ordinary open text fragments, explicit fence/formula rules, basic sanitized rich HTML, safe native ownership seam and history. It does **not** establish full clipboard parity. Complex open list/table/wrapper fitting, rectangular cell selections, matching inline mark/autolink rules, selected-URL link application, image clipboard/drop acquisition, original source references across owned projects, native app interaction and multi-app HTML interoperability remain required. Unsupported complex fitting refuses atomically with the clipboard intact. No such gap is permission to reduce alpha.2 scope.
 
 Native macOS Copy/Cut/Paste, platform menu shortcuts, clipboard-manager behavior, external Word/Docs/browser input and X11/Wayland ownership need compiled observation before issue closure. Synthetic tests cannot supply that evidence.
 
@@ -46,3 +46,9 @@ Native macOS Copy/Cut/Paste, platform menu shortcuts, clipboard-manager behavior
 `WriteTicket::write` produces a sealed `WriteAck` only after the real provider acknowledges all advertised formats. The host may add registered opaque attachment formats but cannot replace captured canonical/plain source content. Cut and Paste completion consume one-shot session/revision/exact-selection guards; composition, stale state, cancellation and mismatched acknowledgements preserve canonical writing. Copy completion never mutates writing. Hosts own bounded worker queues and cancellation on project/document close.
 
 `ClipboardBundle::formats` carries explicitly registered host formats inside the same combined input budget. `NativeClipboard::with_formats` reads no unregistered OS type and maps each portable MIME to a validated reverse-DNS macOS UTI. Private payloads remain untrusted. The hosted native probe publishes a fresh nonce in one additional opaque format as well as canonical JSON, HTML and Unicode plain text; no local author clipboard is accessed.
+
+## Installed source paste-rule audit
+
+The frozen app configures Link `openOnClick:false`, `autolink:true` and HTML `rel`; it does not enable the installed extension's `markdownLinks` option. `@tiptap/extension-link/src/link.ts` defaults that option to false. Converting `[label](url)` syntax is therefore not part of this source's enabled behavior and is not added as a new product feature. Required active rules include bold/italic/strike/inline-code paste conversion, plain-URL discovery, whole-URL link-on-paste over selected text, and typing autolink. The custom complete code-fence and formula rules are separate. Original ProseMirror `parseFromClipboard` returns no slice when HTML and text are both empty; an empty native clipboard must preserve selected writing and history.
+
+Baseline hosted run42464487302 at48c1ff8 passed actual isolated X11 and macOS pasteboard canonical JSON/HTML/Unicode-plain roundtrips using fresh synthetic nonces. The new registered attachment-format probe, deferred app worker and cross-project image capsule require their own qualified source evidence; earlier transport results do not establish them.
