@@ -66,8 +66,8 @@ impl Renderer {
         } else {
             self.svg_image(&bytes)?
         };
-        let width = positive_attr(node, "width");
-        let height = positive_attr(node, "height");
+        let width = positive_attr(node, "width")?;
+        let height = positive_attr(node, "height")?;
         image.size = match (width, height) {
             (Some(width), Some(height)) => AtomSize { width, height },
             (Some(width), None) => AtomSize {
@@ -225,13 +225,18 @@ impl Renderer {
     }
 }
 
-fn positive_attr(node: &Node, key: &str) -> Option<f32> {
-    node.attrs
-        .as_ref()?
-        .get(key)?
+fn positive_attr(node: &Node, key: &str) -> Result<Option<f32>> {
+    let Some(value) = node.attrs.as_ref().and_then(|attrs| attrs.get(key)) else {
+        return Ok(None);
+    };
+    if value.is_null() {
+        return Ok(None);
+    }
+    let number = value
         .as_f64()
         .filter(|value| value.is_finite() && *value > 0.0 && *value <= 20_000.0)
-        .map(|value| value as f32)
+        .ok_or(Error::InvalidOptions)?;
+    Ok(Some(number as f32))
 }
 
 fn raster_dimensions(bytes: &[u8], limits: &RenderLimits) -> Result<(u32, u32)> {

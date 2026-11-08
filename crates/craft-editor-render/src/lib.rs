@@ -234,6 +234,7 @@ pub struct PreparedCatalog {
     generation: u64,
     images: HashMap<String, PreparedImage>,
     failures: Vec<RenderFailure>,
+    errors: HashMap<String, Error>,
 }
 impl PreparedCatalog {
     /// Per-node failures, including the explicit source fallback entries.
@@ -345,6 +346,7 @@ impl Renderer {
             generation,
             images: HashMap::new(),
             failures: vec![],
+            errors: HashMap::new(),
         };
         let mut total = 0;
         self.visit(
@@ -377,12 +379,7 @@ impl Renderer {
                 let image = match self.render_atom(node, assets) {
                     Ok(image) => image,
                     Err(error) => {
-                        catalog.failures.push(RenderFailure {
-                            path: path.clone(),
-                            node_type: node.node_type.clone(),
-                            block_id: node.block_id().map(str::to_owned),
-                            error,
-                        });
+                        catalog.errors.insert(key.clone(), error);
                         self.fallback(node)?
                     }
                 };
@@ -392,7 +389,15 @@ impl Renderer {
                 if *total > self.options.limits.catalog_bytes {
                     return Err(Error::ResourceLimit);
                 }
-                catalog.images.insert(key, image);
+                catalog.images.insert(key.clone(), image);
+            }
+            if let Some(error) = catalog.errors.get(&key) {
+                catalog.failures.push(RenderFailure {
+                    path: path.clone(),
+                    node_type: node.node_type.clone(),
+                    block_id: node.block_id().map(str::to_owned),
+                    error: error.clone(),
+                });
             }
         }
         for (index, child) in node.children().iter().enumerate() {
@@ -427,6 +432,9 @@ impl Renderer {
         let source = node.string_attr("latex").ok_or(Error::FormulaRender)?;
         if source.len() > self.options.limits.formula_bytes {
             return Err(Error::ResourceLimit);
+        }
+        if source.trim().is_empty() {
+            return Err(Error::FormulaRender);
         }
         let ast = ratex_parser::parser::parse(source).map_err(|_| Error::FormulaRender)?;
         let [r, g, b, a] = self

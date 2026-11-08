@@ -194,3 +194,18 @@ fn raster_png_decode_keeps_source_bytes_owned_by_host_and_renders_visible_pixels
         image::ImageFormat::Png
     );
 }
+
+#[test]
+fn repeated_invalid_inline_formulas_keep_separate_failure_paths() {
+    let document = Document::from_json(json!({"type":"doc","attrs":{"schemaVersion":4},"content":[
+        {"type":"paragraph","attrs":{"blockId":"a"},"content":[{"type":"inlineMath","attrs":{"latex":"\\frac{"}}]},
+        {"type":"paragraph","attrs":{"blockId":"b"},"content":[{"type":"inlineMath","attrs":{"latex":"\\frac{"}}]}
+    ]})).expect("repeated source document");
+    let catalog = renderer()
+        .prepare_document(&document, &AssetMap::default(), 8)
+        .expect("two exact failure occurrences");
+    assert_eq!(catalog.len(), 1);
+    assert_eq!(catalog.failures().len(), 2);
+    assert_eq!(catalog.failures()[0].path, vec![0, 0]);
+    assert_eq!(catalog.failures()[1].path, vec![1, 0]);
+}
