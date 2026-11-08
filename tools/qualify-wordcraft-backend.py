@@ -9,9 +9,14 @@ REVISION = "82ace77a17d71f8fce770227624319203e74cc7b"
 metadata = json.loads(subprocess.check_output([
     "cargo", "metadata", "--all-features", "--locked", "--format-version", "1"
 ], text=True))
-package = next(package for package in metadata["packages"] if package["name"] == "wordcraft-layout")
-if not package["source"].startswith("git+https://github.com/avacadorun-dev/wordcraft?") or not package["source"].endswith("#" + REVISION):
-    raise SystemExit("The backend regression must use the exact qualified maintained fork")
+backend = [package for package in metadata["packages"] if package["name"].startswith("wordcraft-")]
+for package in backend:
+    source = package.get("source") or ""
+    if not source.startswith("git+https://github.com/avacadorun-dev/wordcraft?") or not source.endswith("#" + REVISION):
+        raise SystemExit("Every backend package must share the exact maintained source; mixed font globals are invalid")
+if len({package["name"] for package in backend}) != len(backend):
+    raise SystemExit("Duplicate backend package identities would split shared font/layout state")
+package = next(package for package in backend if package["name"] == "wordcraft-layout")
 manifest = Path(package["manifest_path"])
 root = manifest.parent.parent.parent
 actual = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
@@ -24,6 +29,7 @@ report = {
     "repository": "https://github.com/avacadorun-dev/wordcraft",
     "revision": REVISION,
     "upstream_base": "da914ce674f18ebc4e08cca425cc8f8acca3372f",
+    "packages": {package["name"]: package["source"] for package in backend},
     "scope": "Three standard nested nonfloating table-margin regressions; not upstream full-app acceptance",
     "source_hashes": {
         path: hashlib.sha256((root / path).read_bytes()).hexdigest()

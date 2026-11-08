@@ -24,7 +24,7 @@ resvg = { version = "=0.47.0", default-features = false, features = ["text", "ra
 usvg = { version = "=0.47.0", default-features = false, features = ["text"] }
 image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 roxmltree = "=0.21.2"
-wordcraft-fonts = { git = "https://github.com/storytold/wordcraft", rev = "da914ce674f18ebc4e08cca425cc8f8acca3372f" }
+wordcraft-fonts = { git = "https://github.com/avacadorun-dev/wordcraft", rev = "82ace77a17d71f8fce770227624319203e74cc7b" }
 
 [lints]
 workspace = true

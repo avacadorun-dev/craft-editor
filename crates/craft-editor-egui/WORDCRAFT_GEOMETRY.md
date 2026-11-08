@@ -4,7 +4,9 @@ This is an optional hosted experiment, not an accepted editor or renderer. The d
 
 ## Exact dependency boundary
 
-The `wordcraft-geometry` feature pins `wordcraft-doc`, `wordcraft-layout`, and `wordcraft-geom` to WordCraft **`da914ce674f18ebc4e08cca425cc8f8acca3372f`**, upstream package version **0.15.1**. No WordCraft application/UI/Office-format crates are imported and no source is copied. The upstream root declares **MIT OR Apache-2.0**; the Git dependency keeps upstream license files and font notices. Repackaging or extracting fonts must retain their separate notices.
+The current `wordcraft-geometry`/`wordcraft-canvas` boundary and native atom fonts pin the maintained [avacadorun-dev/wordcraft fork](https://github.com/avacadorun-dev/wordcraft) at **`82ace77a17d71f8fce770227624319203e74cc7b`**, directly based on original WordCraft **`da914ce674f18ebc4e08cca425cc8f8acca3372f`**, package version **0.15.1**. The fork contains only a standard nested nonfloating table-margin fix and regressions; see [ADR 0008](../../specs/decisions/0008-bounded-table-viewports-and-backend-margins.md) for the exact source and qualification boundary. All existing WordCraft packages share that one source, including both native text layout and atom font dependencies, so process-global font registration cannot split between duplicate backends. No WordCraft application/UI/Office-format crates are imported. The upstream root declares **MIT OR Apache-2.0**; the Git dependency retains all original history, license files and unchanged font assets/notices. Repackaging or extracting fonts must retain their separate notices.
+
+The original-base API/dependency findings below remain provenance for the unchanged backend surface; they are not a replacement for current exact-fork qualification.
 
 Primary pinned sources:
 

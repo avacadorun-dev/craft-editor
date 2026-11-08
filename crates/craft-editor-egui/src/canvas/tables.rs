@@ -306,11 +306,6 @@ mod tests {
                 .map(|selection| selection.head.block_id.as_str()),
             Some("cell-62")
         );
-        frame(
-            &mut session,
-            &ctx,
-            vec![Event::Ime(egui::ImeEvent::Enabled)],
-        );
         let (preedit, output) = frame(
             &mut session,
             &ctx,
@@ -338,10 +333,7 @@ mod tests {
         let (commit, _) = frame(
             &mut session,
             &ctx,
-            vec![
-                Event::Ime(egui::ImeEvent::Commit("界".into())),
-                Event::Ime(egui::ImeEvent::Disabled),
-            ],
+            vec![Event::Ime(egui::ImeEvent::Commit("界".into()))],
         );
         assert!(commit.errors.is_empty(), "{:?}", commit.errors);
         assert!(session.document().block_text("cell-62")?.contains('界'));
