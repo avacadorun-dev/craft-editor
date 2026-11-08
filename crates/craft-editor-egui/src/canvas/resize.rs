@@ -177,7 +177,7 @@ mod tests {
         style: &CanvasStyle,
     ) -> ViewResponse {
         let mut response = None;
-        let _ = ctx.run_ui(
+        let mut output = ctx.run_ui(
             egui::RawInput {
                 screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(700.0, 650.0))),
                 events,
@@ -190,6 +190,8 @@ mod tests {
                 });
             },
         );
+        // This event harness has no GPU backend; explicitly acknowledge discarded texture work.
+        output.textures_delta.clear();
         match response {
             Some(response) => response,
             None => panic!("native canvas frame"),
