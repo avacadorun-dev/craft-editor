@@ -2,7 +2,8 @@
 //!
 //! This optional module is a layout experiment, not an editor or accepted renderer. The
 //! canonical model remains authoritative; the upstream document is a disposable projection.
-//! Source: WordCraft `da914ce674f18ebc4e08cca425cc8f8acca3372f` (MIT OR Apache-2.0).
+//! Source: WordCraft `da914ce674f18ebc4e08cca425cc8f8acca3372f` (MIT OR Apache-2.0),
+//! with the maintained generic nested-table margin repair pinned below.
 //! No upstream source is copied here. Git dependencies retain their own font/license files.
 
 use std::{
@@ -25,7 +26,11 @@ mod table_viewport;
 pub use table_viewport::{TABLE_SCROLL_GUTTER, TableViewport};
 
 /// Upstream revision used by the hosted geometry experiment.
-pub const UPSTREAM_REVISION: &str = "da914ce674f18ebc4e08cca425cc8f8acca3372f";
+pub const UPSTREAM_REVISION: &str = "82ace77a17d71f8fce770227624319203e74cc7b";
+/// Original upstream base retained by the minimal maintained backend fork.
+pub const UPSTREAM_BASE_REVISION: &str = "da914ce674f18ebc4e08cca425cc8f8acca3372f";
+/// Repository carrying only the generic bounded nested-table margin repair.
+pub const BACKEND_REPOSITORY: &str = "https://github.com/avacadorun-dev/wordcraft";
 
 /// Content-free geometry diagnostic. A failure never rewrites the canonical document.
 #[derive(Debug, thiserror::Error)]
@@ -517,10 +522,28 @@ impl FlowGeometry {
         goal_x: Option<f32>,
         direction: i32,
     ) -> Result<Option<(DocPoint, f32)>> {
-        self.measured
-            .vertical(&self.to_native(point)?, goal_x, direction, 0)
-            .map(|(pos, x)| Ok((self.resolve_native(&pos)?, x)))
-            .transpose()
+        let native = self.to_native(point)?;
+        let block = self
+            .blocks
+            .iter()
+            .find(|block| block.id == point.block_id)
+            .ok_or(Error::UnmappedPosition)?;
+        let shift = self.viewports.shift(&block.canonical);
+        let Some((candidate, x)) =
+            self.measured
+                .vertical(&native, goal_x.map(|x| x + shift), direction, 0)
+        else {
+            return Ok(None);
+        };
+        let goal = goal_x.unwrap_or(x - shift);
+        let resolved = self.resolve_native(&candidate)?;
+        let target = if let Some(caret) = self.measured.caret(&candidate) {
+            self.hit(caret.page, goal, caret.top + caret.height * 0.5)?
+                .unwrap_or(resolved)
+        } else {
+            resolved
+        };
+        Ok(Some((target, goal)))
     }
 
     /// Beginning or end of the physical line containing the caret.

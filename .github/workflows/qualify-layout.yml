@@ -43,6 +43,7 @@ jobs:
         run: |
           python3 tools/verify-syntax-assets.py
           cargo fmt --all -- --check
+          python3 tools/qualify-wordcraft-backend.py
           cargo test -p craft-editor-egui --test progressive_atoms --all-features --locked
           cargo test -p craft-editor-render --test progressive_atoms --locked
           cargo test --workspace --all-features --locked --no-fail-fast

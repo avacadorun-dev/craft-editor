@@ -12,6 +12,7 @@ pub(super) struct ColumnDrag {
     pointer_x: f32,
     width: u64,
     track: GeometryRect,
+    clip: Option<GeometryRect>,
     moved: bool,
 }
 impl CanvasState {
@@ -22,7 +23,12 @@ impl CanvasState {
             .columns(session.document())?
             .into_iter()
             .filter(|column| {
-                cells.iter().any(|cell| {
+                column.clip.is_none_or(|clip| {
+                    local.x >= clip.x
+                        && local.x <= clip.x + clip.width
+                        && local.y >= clip.y
+                        && local.y <= clip.y + clip.height
+                }) && cells.iter().any(|cell| {
                     if cell.canonical_path.0.len() != column.table_path.0.len() + 2
                         || !cell.canonical_path.0.starts_with(&column.table_path.0)
                     {
@@ -128,6 +134,7 @@ impl CanvasState {
                     pointer_x: pointer.x - response.rect.left(),
                     width: column.rect.width.round().clamp(25.0, 20_000.0) as u64,
                     track: column.rect,
+                    clip: column.clip,
                     moved: false,
                 });
                 self.cell_drag = None;
@@ -140,7 +147,13 @@ impl CanvasState {
     pub(super) fn paint_resize(&self, ui: &egui::Ui, origin: Pos2, color: Color32) {
         if let Some(drag) = &self.column_resize {
             let x = origin.x + drag.track.x + drag.width as f32;
-            ui.painter().line_segment(
+            let painter = if let Some(clip) = drag.clip {
+                ui.painter()
+                    .with_clip_rect(on_screen(origin, clip).intersect(ui.clip_rect()))
+            } else {
+                ui.painter().clone()
+            };
+            painter.line_segment(
                 [
                     egui::pos2(x, origin.y + drag.track.y),
                     egui::pos2(x, origin.y + drag.track.y + drag.track.height),

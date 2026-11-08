@@ -16,6 +16,7 @@ use crate::{
 
 mod cells;
 mod resize;
+mod tables;
 
 pub use crate::layout::LineHeightBasis;
 
@@ -34,6 +35,8 @@ pub struct CanvasStyle {
     pub table_border: Color32,
     /// Header-cell fill color.
     pub table_header: Color32,
+    /// Host-localized accessible label/tooltip for table-local horizontal controls.
+    pub table_scroll_label: String,
     /// Body text size in logical points.
     pub font_size: f32,
     /// Font family registered with the layout backend, not an egui family identifier.
@@ -62,6 +65,7 @@ impl Default for CanvasStyle {
             caret: Color32::from_rgb(35, 39, 47),
             table_border: Color32::from_rgb(139, 148, 163),
             table_header: Color32::from_rgb(234, 238, 244),
+            table_scroll_label: "Scroll table horizontally".into(),
             font_size: 18.0,
             font_family: None,
             line_height: 1.5,
@@ -130,6 +134,9 @@ pub(crate) struct CanvasState {
     scroll_to_caret: bool,
     cell_drag: Option<crate::TableSelection>,
     column_resize: Option<resize::ColumnDrag>,
+    table_offsets: std::collections::HashMap<String, f32>,
+    table_bar_dragging: bool,
+    table_scroll_pending: bool,
 }
 
 impl CanvasState {
@@ -183,11 +190,13 @@ impl CanvasState {
                 .preedit
                 .as_ref()
                 .map_or_else(|| session.document(), |p| &p.document);
-            let geometry = if let Some(resolver) = resolver {
+            let mut geometry = if let Some(resolver) = resolver {
                 FlowGeometry::with_resolver(document, width, &key.style, resolver)?
             } else {
                 FlowGeometry::with_style(document, width, &|_| None, Some(&key.style))?
             };
+            geometry.restore_table_offsets(&self.table_offsets);
+            self.table_offsets = geometry.table_offsets();
             self.geometry = Some(geometry);
             self.measured = Some(key);
             self.tiles.clear();
@@ -266,6 +275,13 @@ impl CanvasState {
         if response.hovered() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
         }
+        let scroll_owned = match self.table_scroll_input(ui, rect) {
+            Ok(owned) => owned,
+            Err(error) => {
+                errors.push(error);
+                false
+            }
+        };
         let resize_owned = match self.resize_input(session, ui, &response, style.read_only) {
             Ok(owned) => owned,
             Err(error) => {
@@ -276,6 +292,7 @@ impl CanvasState {
         let pressed = response.hovered()
             && ui.input(|input| input.pointer.button_pressed(egui::PointerButton::Primary));
         if !resize_owned
+            && !scroll_owned
             && (pressed || response.clicked() || response.drag_started() || response.dragged())
             && let Some(pointer) = response.interact_pointer_pos()
         {
@@ -336,8 +353,14 @@ impl CanvasState {
         if let Err(error) = self.measure_with_resolver(session, width, style, resolver) {
             errors.push(error);
         }
+        if let Err(error) = self.reveal_table_target(session) {
+            errors.push(error);
+        }
         ui.painter().rect_filled(rect, 0.0, style.background);
         if let Err(error) = self.paint(ui, rect, style, &response) {
+            errors.push(error);
+        }
+        if let Err(error) = self.table_scrollbars(ui, rect, style) {
             errors.push(error);
         }
         self.paint_resize(ui, rect.min, style.caret);

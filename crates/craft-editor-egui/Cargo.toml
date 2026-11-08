@@ -25,11 +25,11 @@ linkify = "=0.11.0"
 clipboard-rs = { version = "=0.3.5", default-features = false, optional = true }
 syntect = { version = "=5.3.0", default-features = false, features = ["parsing", "regex-onig", "yaml-load"] }
 two-face = { version = "=0.5.2", default-features = false, features = ["syntect-onig"] }
-wordcraft-doc = { git = "https://github.com/storytold/wordcraft", rev = "da914ce674f18ebc4e08cca425cc8f8acca3372f", optional = true }
-wordcraft-layout = { git = "https://github.com/storytold/wordcraft", rev = "da914ce674f18ebc4e08cca425cc8f8acca3372f", optional = true }
-wordcraft-geom = { git = "https://github.com/storytold/wordcraft", rev = "da914ce674f18ebc4e08cca425cc8f8acca3372f", optional = true }
-wordcraft-render = { git = "https://github.com/storytold/wordcraft", rev = "da914ce674f18ebc4e08cca425cc8f8acca3372f", optional = true }
-wordcraft-fonts = { git = "https://github.com/storytold/wordcraft", rev = "da914ce674f18ebc4e08cca425cc8f8acca3372f", optional = true }
+wordcraft-doc = { git = "https://github.com/avacadorun-dev/wordcraft", rev = "82ace77a17d71f8fce770227624319203e74cc7b", optional = true }
+wordcraft-layout = { git = "https://github.com/avacadorun-dev/wordcraft", rev = "82ace77a17d71f8fce770227624319203e74cc7b", optional = true }
+wordcraft-geom = { git = "https://github.com/avacadorun-dev/wordcraft", rev = "82ace77a17d71f8fce770227624319203e74cc7b", optional = true }
+wordcraft-render = { git = "https://github.com/avacadorun-dev/wordcraft", rev = "82ace77a17d71f8fce770227624319203e74cc7b", optional = true }
+wordcraft-fonts = { git = "https://github.com/avacadorun-dev/wordcraft", rev = "82ace77a17d71f8fce770227624319203e74cc7b", optional = true }
 skrifa = { version = "=0.47.0", optional = true }
 
 [lints]
