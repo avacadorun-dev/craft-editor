@@ -7,16 +7,28 @@
 #![deny(missing_docs)]
 
 mod document;
+mod lists;
 mod position;
 mod structural;
+mod tables;
 mod transaction;
 
 pub use document::{Document, Mark, Node};
+pub use lists::{
+    ListKind, ListStyle, exit_empty_list_item, indent_list_items, join_adjacent_lists,
+    lift_list_items, lift_list_items_with_ids, outdent_list_items, outdent_list_items_with_ids,
+    split_list_item, toggle_list, toggle_list_with_ids, wrap_list,
+};
 pub use position::{
     ByteOffset, ScalarOffset, TextRange, Utf16Offset, byte_to_scalar, scalar_to_byte,
     scalar_to_utf16, utf16_to_scalar,
 };
 pub use structural::{NodePath, NodeRef};
+pub use tables::{
+    CellAlignment, CellRect, CellSelection, TableGrid, delete_table_column, delete_table_row,
+    empty_table_cell, insert_table_column, insert_table_row, merge_table_cells,
+    set_table_cell_alignment, set_table_column_width, split_table_cell,
+};
 pub use transaction::{Change, Command, Editor, MarkMode, PositionMap, Revision, Transaction};
 
 /// A stable, content-free model diagnostic. Hosts provide localized UI messages.

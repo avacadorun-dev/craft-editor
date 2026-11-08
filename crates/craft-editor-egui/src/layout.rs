@@ -71,6 +71,38 @@ pub struct AtomSize {
     pub height: f32,
 }
 
+/// Host presentation applied only to the disposable layout projection.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GeometryStyle {
+    /// Body text size in logical document points.
+    pub font_size: f32,
+    /// Backend-registered font family; an absent value uses the backend's font defaults.
+    pub font_family: Option<String>,
+    /// Text color for source marks without their own color, as RGB bytes.
+    pub text_color: [u8; 3],
+    /// Host table grid color.
+    pub table_border: [u8; 3],
+    /// Host header-cell fill.
+    pub table_header: [u8; 3],
+    /// Multiple of single line spacing.
+    pub line_height: f32,
+    /// Space after a paragraph, in logical document points.
+    pub paragraph_spacing: f32,
+}
+impl Default for GeometryStyle {
+    fn default() -> Self {
+        Self {
+            font_size: 18.0,
+            font_family: None,
+            text_color: [35, 39, 47],
+            table_border: [139, 148, 163],
+            table_header: [234, 238, 244],
+            line_height: 1.5,
+            paragraph_spacing: 10.0,
+        }
+    }
+}
+
 /// A native geometry rectangle in document points, with continuous-flow page identity.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GeometryRect {
@@ -145,17 +177,60 @@ impl FlowGeometry {
         width: f32,
         atom_size: &impl Fn(&Node) -> Option<AtomSize>,
     ) -> Result<Self> {
+        Self::with_style(source, width, atom_size, None)
+    }
+
+    /// Measure a disposable view with host typography, never changing canonical attributes.
+    pub fn with_style(
+        source: &Document,
+        width: f32,
+        atom_size: &impl Fn(&Node) -> Option<AtomSize>,
+        style: Option<&GeometryStyle>,
+    ) -> Result<Self> {
         if !width.is_finite() || width <= 0.0 {
+            return Err(Error::InvalidSize);
+        }
+        if style.is_some_and(|s| {
+            !s.font_size.is_finite()
+                || s.font_size <= 0.0
+                || !s.line_height.is_finite()
+                || s.line_height <= 0.0
+                || !s.paragraph_spacing.is_finite()
+                || s.paragraph_spacing < 0.0
+        }) {
             return Err(Error::InvalidSize);
         }
         let mut builder = Builder {
             blocks: Vec::new(),
             cell_paths: HashMap::new(),
             atom_size,
+            style,
         };
-        let body = builder.blocks(source.root().children(), &[], &[], width)?;
+        // Web flow reserves 18 points on each side; tracks occupy the actual text column.
+        let body = builder.blocks(
+            source.root().children(),
+            &[],
+            &[],
+            (width.clamp(144.0, 20000.0) - 36.0).max(1.0),
+        )?;
         let mut upstream = wordcraft_doc::Document::new();
         upstream.body = body;
+        if let Some(style) = style {
+            let sheet = Arc::make_mut(&mut upstream.styles);
+            sheet.default_chr.size = Some(style.font_size);
+            sheet.default_chr.font.clone_from(&style.font_family);
+            sheet.default_chr.color = Some(wordcraft_doc::props::TextColor::Rgb(
+                wordcraft_doc::props::Rgb(
+                    style.text_color[0],
+                    style.text_color[1],
+                    style.text_color[2],
+                ),
+            ));
+            sheet.default_para.line_spacing = Some(wordcraft_doc::props::LineSpacing::Multiple(
+                style.line_height,
+            ));
+            sheet.default_para.space_after = Some(style.paragraph_spacing);
+        }
         let options = LayoutOptions {
             view: ViewMode::Web,
             web_width: width,
@@ -169,6 +244,192 @@ impl FlowGeometry {
             blocks: builder.blocks,
             cell_paths: builder.cell_paths,
         })
+    }
+
+    /// Complete continuous-flow extent in document points.
+    pub fn extent(&self) -> Option<GeometryRect> {
+        self.measured.pages.first().map(|page| GeometryRect {
+            page: 0,
+            x: 0.0,
+            y: 0.0,
+            width: page.w,
+            height: page.h,
+        })
+    }
+
+    /// First or last exact canonical text position in document order.
+    pub fn edge(&self, end: bool) -> Result<DocPoint> {
+        let native = if end {
+            self.upstream.end_of(StoryRef::Body)
+        } else {
+            self.upstream.start_of(StoryRef::Body)
+        };
+        self.resolve_native(&native)
+    }
+
+    /// Logical grapheme/word motion with shaped visual movement inside a line.
+    pub fn horizontal(&self, point: &DocPoint, left: bool, word: bool) -> Result<DocPoint> {
+        let mut pos = self.to_native(point)?;
+        let paragraph = self.upstream.para_at(&pos).ok_or(Error::UnmappedPosition)?;
+        if !word
+            && let Some(wordcraft_layout::hit::VisualStep::Moved(moved)) =
+                self.measured.visual_step(&pos, left, 0)
+        {
+            return self.resolve_native(&moved);
+        }
+        let next = if word {
+            if left {
+                paragraph.word_start(pos.off)
+            } else {
+                paragraph.word_end(pos.off)
+            }
+        } else if left {
+            paragraph.prev_boundary(pos.off)
+        } else {
+            paragraph.next_boundary(pos.off)
+        };
+        if next == pos.off {
+            let neighbor = if left {
+                self.upstream.prev_para(pos.story, &pos.path)
+            } else {
+                self.upstream.next_para(pos.story, &pos.path)
+            };
+            if let Some(path) = neighbor {
+                pos.path = path;
+                pos.off = if left {
+                    self.upstream
+                        .para_at(&pos)
+                        .ok_or(Error::UnmappedPosition)?
+                        .len()
+                } else {
+                    0
+                };
+            }
+        } else {
+            pos.off = next;
+        }
+        self.resolve_native(&pos)
+    }
+
+    /// Previous native Backspace or next Delete boundary, respecting shaped grapheme stops.
+    pub fn deletion_boundary(&self, point: &DocPoint, backward: bool) -> Result<DocPoint> {
+        let mut pos = self.to_native(point)?;
+        let paragraph = self.upstream.para_at(&pos).ok_or(Error::UnmappedPosition)?;
+        let off = if backward {
+            paragraph.backspace_from(pos.off)
+        } else {
+            paragraph.next_boundary(pos.off)
+        };
+        if off == pos.off {
+            return self.horizontal(point, backward, false);
+        }
+        pos.off = off;
+        self.resolve_native(&pos)
+    }
+
+    /// Physical previous/next line, preserving a goal x across table-cell geometry.
+    pub fn vertical(
+        &self,
+        point: &DocPoint,
+        goal_x: Option<f32>,
+        direction: i32,
+    ) -> Result<Option<(DocPoint, f32)>> {
+        self.measured
+            .vertical(&self.to_native(point)?, goal_x, direction, 0)
+            .map(|(pos, x)| Ok((self.resolve_native(&pos)?, x)))
+            .transpose()
+    }
+
+    /// Beginning or end of the physical line containing the caret.
+    pub fn line_edge(&self, point: &DocPoint, end: bool) -> Result<DocPoint> {
+        let (first, last) = self
+            .measured
+            .line_bounds(&self.to_native(point)?, 0)
+            .ok_or(Error::UnmappedPosition)?;
+        self.resolve_native(if end { &last } else { &first })
+    }
+
+    /// Word under a point, used for a native double-click selection.
+    pub fn word_at(&self, point: &DocPoint) -> Result<Selection> {
+        let pos = self.to_native(point)?;
+        let paragraph = self.upstream.para_at(&pos).ok_or(Error::UnmappedPosition)?;
+        let (start, end) = paragraph.word_at(pos.off);
+        Ok(Selection {
+            anchor: self.resolve_native(&Pos {
+                off: start,
+                ..pos.clone()
+            })?,
+            head: self.resolve_native(&Pos { off: end, ..pos })?,
+        })
+    }
+
+    /// Start of the previous/next distinct table cell, skipping covered continuations.
+    pub fn adjacent_cell(&self, point: &DocPoint, previous: bool) -> Result<Option<DocPoint>> {
+        let pos = self.to_native(point)?;
+        if pos.path.0.len() < 4 {
+            return Ok(None);
+        }
+        let cell = &pos.path.0[..3];
+        let index = self
+            .blocks
+            .iter()
+            .position(|block| block.path == pos.path)
+            .ok_or(Error::UnmappedPosition)?;
+        let block = if previous {
+            self.blocks[..index].iter().rev().find(|block| {
+                block.path.0.len() >= 4 && block.path.0[0] == cell[0] && block.path.0[..3] != *cell
+            })
+        } else {
+            self.blocks[index + 1..].iter().find(|block| {
+                block.path.0.len() >= 4 && block.path.0[0] == cell[0] && block.path.0[..3] != *cell
+            })
+        };
+        Ok(block.map(|block| DocPoint {
+            block_id: block.id.clone(),
+            offset: ScalarOffset(0),
+        }))
+    }
+
+    /// Rasterize only a bounded viewport using the same measured glyphs and table geometry.
+    #[cfg(feature = "wordcraft-canvas")]
+    pub fn rasterize(
+        &self,
+        area: GeometryRect,
+        scale: f32,
+        paper: [u8; 3],
+    ) -> Result<wordcraft_render::Rendered> {
+        if area.page >= self.measured.pages.len()
+            || !area.x.is_finite()
+            || !area.y.is_finite()
+            || !area.width.is_finite()
+            || !area.height.is_finite()
+            || area.width <= 0.0
+            || area.height <= 0.0
+            || !scale.is_finite()
+            || scale <= 0.0
+            || area.width * scale > 4096.0
+            || area.height * scale > 4096.0
+        {
+            return Err(Error::InvalidSize);
+        }
+        let options = wordcraft_render::RenderOptions {
+            paper: wordcraft_doc::props::Rgb(paper[0], paper[1], paper[2]),
+            ..Default::default()
+        };
+        let rendered = wordcraft_render::render_area(
+            &self.upstream,
+            &self.measured.pages[area.page],
+            wordcraft_geom::Rect::new(area.x, area.y, area.width, area.height),
+            scale,
+            &options,
+        );
+        if rendered.width == 0
+            || rendered.height == 0
+            || rendered.pixels.len() != rendered.width as usize * rendered.height as usize * 4
+        {
+            return Err(Error::Qualification("raster_buffer"));
+        }
+        Ok(rendered)
     }
 
     /// Number of upstream pages; continuous Web flow is qualified as one page.
@@ -294,6 +555,7 @@ struct Builder<'a, F> {
     blocks: Vec<BlockMap>,
     cell_paths: HashMap<(Path, usize, usize), NodePath>,
     atom_size: &'a F,
+    style: Option<&'a GeometryStyle>,
 }
 impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
     fn blocks(
@@ -449,6 +711,11 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
                 word_path.extend([row_index as u32, cells.len() as u32]);
                 let mut cell = wordcraft_doc::Cell::empty();
                 cell.props.span = span as u32;
+                if source_cell.node_type == "tableHeader"
+                    && let Some(style) = self.style
+                {
+                    cell.props.shading = Some(rgb(style.table_header));
+                }
                 cell.blocks =
                     self.blocks(source_cell.children(), &word_path, &source_path, width)?;
                 if rowspan > 1 {
@@ -479,8 +746,18 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
         table.rows = rows;
         table.props.fixed = true;
         table.props.width = Some(width);
+        if let Some(style) = self.style {
+            let mut border = wordcraft_doc::props::Border::single(0.75);
+            border.color = Some(rgb(style.table_border));
+            table.props.borders = Some(wordcraft_doc::props::Borders::all(border));
+            table.props.cell_margins = Some([7.0, 9.0, 7.0, 9.0]);
+        }
         Ok(table)
     }
+}
+
+fn rgb(value: [u8; 3]) -> wordcraft_doc::props::Rgb {
+    wordcraft_doc::props::Rgb(value[0], value[1], value[2])
 }
 
 fn integer_attr(node: &Node, key: &str) -> usize {
@@ -591,7 +868,7 @@ pub fn qualification_report() -> Result<Value> {
         "covered_cell_boxes":cells.iter().filter(|cell| cell.covered).count(),
         "cross_table_selection_rectangles":selected.len(), "inline_object_boxes":atoms.len(),
         "canonical_json_preserved":true, "unicode_caret_hit_roundtrips":4,
-        "colspan_100":{"supported":false,"backend_limit":wordcraft_doc::table::MAX_COLS,"blocks_full_parity":true},
+        "colspan_100":{"supported":false,"backend_limit":wordcraft_doc::table::MAX_COLS,"exceeds_backend_capacity":true,"requires_read_only":true},
         "editor_acceptance":false,"native_input_acceptance":false,"rendering_acceptance":false
     }))
 }

@@ -7,7 +7,7 @@ use serde_json::{Map, Value, json};
 use crate::{Error, Result};
 
 /// A canonical mark. Unknown attributes and fields survive round trips.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Mark {
     /// Canonical mark name.
     pub mark_type: String,
@@ -16,6 +16,16 @@ pub struct Mark {
     /// Opaque metadata outside the known fields.
     pub extra: Map<String, Value>,
     null_fields: HashSet<String>,
+}
+
+impl PartialEq for Mark {
+    fn eq(&self, other: &Self) -> bool {
+        self.mark_type == other.mark_type
+            && self.attrs == other.attrs
+            && self.extra == other.extra
+            && null_presence(&self.attrs, &self.null_fields, "attrs")
+                == null_presence(&other.attrs, &other.null_fields, "attrs")
+    }
 }
 
 impl Mark {
@@ -31,7 +41,7 @@ impl Mark {
 }
 
 /// A lossless ProseMirror-shaped node, independent of rendering and storage.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Node {
     /// Canonical node name.
     pub node_type: String,
@@ -48,7 +58,100 @@ pub struct Node {
     null_fields: HashSet<String>,
 }
 
+impl PartialEq for Node {
+    fn eq(&self, other: &Self) -> bool {
+        self.node_type == other.node_type
+            && self.attrs == other.attrs
+            && self.marks == other.marks
+            && self.text == other.text
+            && self.content == other.content
+            && self.extra == other.extra
+            && self.same_null_presence(other)
+    }
+}
+
+// Public Option fields may replace a decoded null with a concrete value. The
+// remembered null only affects serialization while that Option remains None.
+fn null_presence<T>(value: &Option<T>, null_fields: &HashSet<String>, field: &str) -> bool {
+    value.is_none() && null_fields.contains(field)
+}
+
 impl Node {
+    pub(crate) fn same_null_presence(&self, other: &Self) -> bool {
+        null_presence(&self.attrs, &self.null_fields, "attrs")
+            == null_presence(&other.attrs, &other.null_fields, "attrs")
+            && null_presence(&self.marks, &self.null_fields, "marks")
+                == null_presence(&other.marks, &other.null_fields, "marks")
+            && null_presence(&self.text, &self.null_fields, "text")
+                == null_presence(&other.text, &other.null_fields, "text")
+            && null_presence(&self.content, &self.null_fields, "content")
+                == null_presence(&other.content, &other.null_fields, "content")
+    }
+
+    /// Compare metadata that a content merge would otherwise discard.
+    pub(crate) fn compatible_envelope(&self, other: &Self, ignored_attrs: &[&str]) -> bool {
+        let stripped_attrs = |node: &Self| {
+            let mut attrs = node.attrs.clone();
+            if let Some(attrs) = &mut attrs {
+                attrs.retain(|key, _| !ignored_attrs.contains(&key.as_str()));
+            }
+            attrs
+        };
+        stripped_attrs(self) == stripped_attrs(other)
+            && self.marks == other.marks
+            && self.text == other.text
+            && self.extra == other.extra
+            && null_presence(&self.attrs, &self.null_fields, "attrs")
+                == null_presence(&other.attrs, &other.null_fields, "attrs")
+            && null_presence(&self.marks, &self.null_fields, "marks")
+                == null_presence(&other.marks, &other.null_fields, "marks")
+            && null_presence(&self.text, &self.null_fields, "text")
+                == null_presence(&other.text, &other.null_fields, "text")
+    }
+
+    /// Inherit unspecified leaf fields, retaining explicit template envelopes.
+    pub(crate) fn merge_template_leaf_fields(&mut self, template: &Self) -> Result<()> {
+        fn merge<T: Clone + PartialEq>(
+            destination: &mut Option<T>,
+            destination_nulls: &mut HashSet<String>,
+            source: &Option<T>,
+            source_nulls: &HashSet<String>,
+            field: &str,
+        ) -> Result<()> {
+            let source_null = null_presence(source, source_nulls, field);
+            if source.is_none() && !source_null {
+                return Ok(());
+            }
+            let destination_null = null_presence(destination, destination_nulls, field);
+            if (destination.is_some() || destination_null)
+                && (destination.as_ref() != source.as_ref() || destination_null != source_null)
+            {
+                return Err(Error::UnsupportedEdit);
+            }
+            *destination = source.clone();
+            if source_null {
+                destination_nulls.insert(field.to_owned());
+            } else {
+                destination_nulls.remove(field);
+            }
+            Ok(())
+        }
+        merge(
+            &mut self.marks,
+            &mut self.null_fields,
+            &template.marks,
+            &template.null_fields,
+            "marks",
+        )?;
+        merge(
+            &mut self.text,
+            &mut self.null_fields,
+            &template.text,
+            &template.null_fields,
+            "text",
+        )
+    }
+
     /// Construct a literal text leaf. Validation rejects empty leaves.
     pub fn text(text: impl Into<String>) -> Self {
         Self {
@@ -115,7 +218,7 @@ impl Node {
             && self.marks == other.marks
             && self.content == other.content
             && self.extra == other.extra
-            && self.null_fields == other.null_fields
+            && self.same_null_presence(other)
     }
     /// The shared inline projection: hard breaks are newlines; inline atoms are U+FFFC.
     pub fn inline_text(&self) -> String {
@@ -186,6 +289,7 @@ impl Document {
         find_node_mut(&mut self.root, block_id).ok_or(Error::BlockNotFound)
     }
     pub(crate) fn validate(&self) -> Result<()> {
+        crate::structural::check_subtree_bounds(&self.root)?;
         if self.root.node_type != "doc" {
             return invalid("root_type");
         }
@@ -207,6 +311,7 @@ impl Document {
         })
     }
     pub(crate) fn promote_schema(&mut self) -> Result<()> {
+        crate::structural::check_subtree_bounds(&self.root)?;
         let required = required_version(&self.root);
         if schema_version(&self.root)? < required {
             self.root
@@ -228,8 +333,7 @@ fn schema_version(root: &Node) -> Result<u64> {
         .and_then(|attrs| attrs.get("schemaVersion"))
     {
         None => Ok(1),
-        Some(value) => value
-            .as_u64()
+        Some(value) => integer(value)
             .filter(|version| (1..=4).contains(version))
             .ok_or_else(|| Error::InvalidDocument("schema_version".into())),
     }
@@ -290,6 +394,7 @@ fn validate_node(
         .attrs
         .as_ref()
         .and_then(|attrs| attrs.get("sourceRefs"))
+        && !refs.is_null()
         && !refs
             .as_array()
             .is_some_and(|refs| refs.iter().all(Value::is_string))
@@ -313,7 +418,7 @@ fn validate_node(
             .attrs
             .as_ref()
             .and_then(|attrs| attrs.get("level"))
-            .and_then(Value::as_u64)
+            .and_then(integer)
             .is_some_and(|level| (1..=6).contains(&level))
     {
         return invalid("heading_level");
@@ -340,9 +445,7 @@ fn validate_node(
     if ["tableCell", "tableHeader"].contains(&node.node_type.as_str()) {
         for attr in ["colspan", "rowspan"] {
             if let Some(value) = node.attrs.as_ref().and_then(|attrs| attrs.get(attr))
-                && !value
-                    .as_u64()
-                    .is_some_and(|number| (1..=100).contains(&number))
+                && !integer(value).is_some_and(|number| (1..=100).contains(&number))
             {
                 return invalid("table_span");
             }
@@ -360,11 +463,14 @@ fn validate_node(
             && !value.as_array().is_some_and(|widths| {
                 widths
                     .iter()
-                    .all(|width| width.as_u64().is_some_and(|width| width <= 20_000))
+                    .all(|width| integer(width).is_some_and(|width| width <= 20_000))
             })
         {
             return invalid("table_width");
         }
+    }
+    if node.node_type == "table" {
+        crate::tables::TableGrid::new(node)?;
     }
     if node.node_type == "imageBlock" {
         validate_string(node, "src", 2_000, true)?;
@@ -374,9 +480,7 @@ fn validate_node(
         for attr in ["width", "height"] {
             if let Some(value) = node.attrs.as_ref().and_then(|attrs| attrs.get(attr))
                 && !value.is_null()
-                && !value
-                    .as_u64()
-                    .is_some_and(|dimension| (1..=20_000).contains(&dimension))
+                && !integer(value).is_some_and(|dimension| (1..=20_000).contains(&dimension))
             {
                 return invalid("image_dimension");
             }
@@ -387,7 +491,15 @@ fn validate_node(
         validate_string(node, "caption", 1_000, false)?;
     }
     if ["inlineMath", "mathBlock"].contains(&node.node_type.as_str()) {
-        validate_string(node, "latex", 10_000, true)?;
+        if !node
+            .attrs
+            .as_ref()
+            .and_then(|attrs| attrs.get("latex"))
+            .is_some_and(Value::is_string)
+        {
+            return invalid("formula_source");
+        }
+        validate_string(node, "latex", 10_000, false)?;
         validate_string(node, "description", 1_000, false)?;
     }
     if let Some(marks) = &node.marks {
@@ -455,7 +567,7 @@ fn required_version(node: &Node) -> u64 {
                 .attrs
                 .as_ref()
                 .and_then(|attrs| attrs.get("level"))
-                .and_then(Value::as_u64)
+                .and_then(integer)
                 .is_some_and(|level| level >= 4) =>
         {
             3
@@ -530,7 +642,7 @@ fn schema_spec(root: &Node) -> Value {
         "text":{"group":"inline"},
         "codeBlock":{"content":"text*","group":"block","marks":""},
         "table":{"content":"tableRow+","group":"block"},
-        "tableRow":{"content":"(tableCell | tableHeader)+"},
+        "tableRow":{"content":"(tableCell | tableHeader)*"},
         "tableHeader":{"content":"block+"},"tableCell":{"content":"block+"},
         "imageBlock":{"group":"block","atom":true},
         "mermaidBlock":{"group":"block","atom":true},
@@ -698,4 +810,18 @@ fn project_for_validation(value: &mut Value) {
             project_for_validation(child);
         }
     }
+}
+
+pub(crate) fn integer(value: &Value) -> Option<u64> {
+    value.as_u64().or_else(|| {
+        value
+            .as_f64()
+            .filter(|number| {
+                number.is_finite()
+                    && *number >= 0.0
+                    && number.fract() == 0.0
+                    && *number < u64::MAX as f64
+            })
+            .map(|number| number as u64)
+    })
 }

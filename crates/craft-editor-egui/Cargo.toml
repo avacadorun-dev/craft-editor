@@ -9,6 +9,7 @@ repository.workspace = true
 [features]
 default = []
 wordcraft-geometry = ["dep:wordcraft-doc", "dep:wordcraft-layout", "dep:wordcraft-geom"]
+wordcraft-canvas = ["wordcraft-geometry", "dep:wordcraft-render"]
 
 [dependencies]
 egui.workspace = true
@@ -18,6 +19,7 @@ thiserror.workspace = true
 wordcraft-doc = { git = "https://github.com/storytold/wordcraft", rev = "da914ce674f18ebc4e08cca425cc8f8acca3372f", optional = true }
 wordcraft-layout = { git = "https://github.com/storytold/wordcraft", rev = "da914ce674f18ebc4e08cca425cc8f8acca3372f", optional = true }
 wordcraft-geom = { git = "https://github.com/storytold/wordcraft", rev = "da914ce674f18ebc4e08cca425cc8f8acca3372f", optional = true }
+wordcraft-render = { git = "https://github.com/storytold/wordcraft", rev = "da914ce674f18ebc4e08cca425cc8f8acca3372f", optional = true }
 
 [lints]
 workspace = true

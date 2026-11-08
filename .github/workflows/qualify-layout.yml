@@ -37,6 +37,8 @@ jobs:
             ~/.cargo/git
             target
           key: layout-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            layout-${{ runner.os }}-
       - name: Check the actual pinned geometry integration
         run: |
           cargo fmt --all -- --check

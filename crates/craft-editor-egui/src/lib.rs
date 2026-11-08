@@ -9,6 +9,10 @@
 #[cfg(feature = "wordcraft-geometry")]
 pub mod layout;
 
+/// Native raster canvas with a single semantic caret and selection.
+#[cfg(feature = "wordcraft-canvas")]
+pub mod canvas;
+
 mod projection;
 use craft_editor_model::{
     Change, Command, Document, Editor, Mark, MarkMode, Revision, ScalarOffset, TextRange,
@@ -24,6 +28,10 @@ use std::ops::Range;
 /// Content-free view diagnostic; hosts localize the error code.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The native flow backend rejected a geometry or raster operation.
+    #[cfg(feature = "wordcraft-geometry")]
+    #[error(transparent)]
+    Geometry(#[from] layout::Error),
     /// The semantic model refused the requested operation.
     #[error(transparent)]
     Model(#[from] craft_editor_model::Error),
@@ -117,6 +125,10 @@ pub struct EditorSession {
     restore_cursor: bool,
     next_id: u64,
     composition: Option<Composition>,
+    #[cfg(feature = "wordcraft-canvas")]
+    canvas_state: canvas::CanvasState,
+    #[cfg(feature = "wordcraft-canvas")]
+    canvas_composing: bool,
     /// Host-owned presentation configuration.
     pub options: ViewOptions,
 }
@@ -132,6 +144,10 @@ impl EditorSession {
             restore_cursor: false,
             next_id: 0,
             composition: None,
+            #[cfg(feature = "wordcraft-canvas")]
+            canvas_state: canvas::CanvasState::default(),
+            #[cfg(feature = "wordcraft-canvas")]
+            canvas_composing: false,
             options: ViewOptions::default(),
         }
     }
@@ -145,7 +161,15 @@ impl EditorSession {
     }
     /// Whether the native IME has an uncommitted display-only composition.
     pub fn is_composing(&self) -> bool {
-        self.composition.is_some()
+        self.composition.is_some() || self.canvas_is_composing()
+    }
+    #[cfg(feature = "wordcraft-canvas")]
+    fn canvas_is_composing(&self) -> bool {
+        self.canvas_composing
+    }
+    #[cfg(not(feature = "wordcraft-canvas"))]
+    fn canvas_is_composing(&self) -> bool {
+        false
     }
     /// Borrow the directed document selection.
     pub fn selection(&self) -> Option<&Selection> {
@@ -284,6 +308,17 @@ impl EditorSession {
         self.pending.push(change.clone());
         self.restore_cursor = true;
         Ok(change)
+    }
+    /// Display a real continuous-flow raster canvas with one document-level selection/history.
+    ///
+    /// The host supplies its colors and places this widget inside a vertical scroll area.
+    /// Unsupported document kinds return a diagnostic without modifying canonical content.
+    #[cfg(feature = "wordcraft-canvas")]
+    pub fn show_canvas(&mut self, ui: &mut egui::Ui, style: &canvas::CanvasStyle) -> ViewResponse {
+        let mut state = std::mem::take(&mut self.canvas_state);
+        let response = state.show(self, ui, style);
+        self.canvas_state = state;
+        response
     }
     /// Display one native input surface for the complete editable traversal.
     ///

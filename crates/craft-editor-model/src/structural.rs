@@ -2,7 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Document, Error, Node, PositionMap, Result};
+use crate::{Command, Document, Error, Node, PositionMap, Result, ScalarOffset};
+use serde_json::{Map, Value};
+use std::collections::BTreeMap;
 
 /// A path of child ordinals from the document root; an empty path is the root.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -37,6 +39,54 @@ pub struct NodeRef {
 }
 
 impl Document {
+    /// Build one guarded replacement after validating the complete resulting tree.
+    /// The caller still supplies the expected document revision when applying it.
+    pub fn replace_node(&self, target: &NodeRef, replacement: Node) -> Result<Command> {
+        check_subtree_bounds(&replacement)?;
+        let mut candidate = self.clone();
+        replace_node(
+            &mut candidate,
+            target.clone(),
+            replacement.clone(),
+            &mut vec![],
+        )?;
+        candidate.promote_schema()?;
+        candidate.validate()?;
+        Ok(Command::ReplaceNode {
+            target: target.clone(),
+            replacement: Box::new(replacement),
+        })
+    }
+    /// Patch known or extension attributes without rebuilding or dropping fields.
+    pub fn patch_node_attrs(&self, target: &NodeRef, attrs: Map<String, Value>) -> Result<Command> {
+        check_ref(self, target)?;
+        let mut replacement = target.expected.as_ref().clone();
+        replacement.attrs.get_or_insert_default().extend(attrs);
+        self.replace_node(target, replacement)
+    }
+    /// Build a schema-checked inline rich slice replacement against an exact node.
+    pub fn replace_inline(
+        &self,
+        target: &NodeRef,
+        from: ScalarOffset,
+        to: ScalarOffset,
+        children: Vec<Node>,
+    ) -> Result<Command> {
+        block_ids(&children)?;
+        let command = Command::ReplaceInline {
+            target: target.clone(),
+            from,
+            to,
+            children,
+        };
+        let mut editor = crate::Editor::new(self.clone(), crate::Revision(0));
+        editor.apply(crate::Transaction {
+            base_revision: crate::Revision(0),
+            commands: vec![command.clone()],
+        })?;
+        Ok(command)
+    }
+
     /// Read a node by revision-local path, with checked bounds at every level.
     pub fn node(&self, path: &NodePath) -> Result<&Node> {
         at_path(&self.root, path).ok_or(Error::InvalidPosition)
@@ -149,7 +199,7 @@ pub(crate) fn move_children(
     Ok(())
 }
 
-fn check_ref(document: &Document, reference: &NodeRef) -> Result<()> {
+pub(crate) fn check_ref(document: &Document, reference: &NodeRef) -> Result<()> {
     if document.node(&reference.path)? == reference.expected.as_ref() {
         Ok(())
     } else {
@@ -163,14 +213,14 @@ fn at_path<'a>(root: &'a Node, path: &NodePath) -> Option<&'a Node> {
     }
     Some(node)
 }
-fn at_path_mut<'a>(root: &'a mut Node, path: &NodePath) -> Option<&'a mut Node> {
+pub(crate) fn at_path_mut<'a>(root: &'a mut Node, path: &NodePath) -> Option<&'a mut Node> {
     let mut node = root;
     for index in &path.0 {
         node = node.content.as_mut()?.get_mut(*index)?;
     }
     Some(node)
 }
-fn block_ids(nodes: &[Node]) -> Result<Vec<String>> {
+pub(crate) fn block_ids(nodes: &[Node]) -> Result<Vec<String>> {
     let mut stack = nodes.iter().map(|node| (node, 0)).collect::<Vec<_>>();
     let mut ids = Vec::new();
     let mut count = 0;
@@ -250,4 +300,65 @@ pub(crate) fn map_move_path(
         adjusted_index,
         to - from,
     )
+}
+
+pub(crate) fn replace_node(
+    document: &mut Document,
+    target: NodeRef,
+    replacement: Node,
+    mappings: &mut Vec<PositionMap>,
+) -> Result<()> {
+    check_ref(document, &target)?;
+    let before = document.node(&target.path)?;
+    if before == &replacement {
+        return Ok(());
+    }
+    check_subtree_bounds(&replacement)?;
+    let mut old = BTreeMap::new();
+    let mut new = BTreeMap::new();
+    collect_texts(before, &mut old);
+    collect_texts(&replacement, &mut new);
+    let removed_ids = old
+        .keys()
+        .filter(|id| !new.contains_key(*id))
+        .cloned()
+        .collect();
+    let inserted_ids = new
+        .keys()
+        .filter(|id| !old.contains_key(*id))
+        .cloned()
+        .collect();
+    let invalidated_ids = old
+        .iter()
+        .filter(|(id, text)| new.get(*id).is_some_and(|new| new != *text))
+        .map(|(id, _)| id.clone())
+        .collect();
+    *at_path_mut(&mut document.root, &target.path).ok_or(Error::InvalidPosition)? = replacement;
+    mappings.push(PositionMap::NodeReplacement {
+        path: target.path,
+        removed_ids,
+        inserted_ids,
+        invalidated_ids,
+    });
+    Ok(())
+}
+pub(crate) fn check_subtree_bounds(node: &Node) -> Result<()> {
+    let mut stack = vec![(node, 0)];
+    let mut count = 0;
+    while let Some((node, depth)) = stack.pop() {
+        count += 1;
+        if depth > 64 || count > 100_000 {
+            return Err(Error::ResourceLimit);
+        }
+        stack.extend(node.children().iter().map(|child| (child, depth + 1)));
+    }
+    Ok(())
+}
+fn collect_texts(node: &Node, result: &mut BTreeMap<String, String>) {
+    if let Some(id) = node.block_id() {
+        result.insert(id.into(), node.inline_text());
+    }
+    for child in node.children() {
+        collect_texts(child, result);
+    }
 }

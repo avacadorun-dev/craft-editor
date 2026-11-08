@@ -28,6 +28,24 @@ pub enum MarkMode {
 /// A generic operation applied through one atomic canonical engine.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Command {
+    /// Replace one exact guarded node, including the root, as one canonical edit.
+    ReplaceNode {
+        /// Complete expected node at its current path.
+        target: NodeRef,
+        /// Complete replacement retaining every host-required field.
+        replacement: Box<Node>,
+    },
+    /// Replace an inline scalar range with canonical inline nodes, not Markdown.
+    ReplaceInline {
+        /// Exact paragraph/heading/code-block snapshot.
+        target: NodeRef,
+        /// Inclusive scalar boundary in the shared inline projection.
+        from: ScalarOffset,
+        /// Exclusive scalar boundary.
+        to: ScalarOffset,
+        /// Canonical inline slice, with explicit marks and atom attributes.
+        children: Vec<Node>,
+    },
     /// Insert complete children at a guarded parent, including nested/inline atoms.
     InsertChildren {
         /// Exact expected parent in the sequential intermediate state.
@@ -132,6 +150,17 @@ pub struct Transaction {
 /// A scalar-space mapping produced by an actual successful operation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PositionMap {
+    /// Whole-node replacement invalidates paths and reports exact block survival.
+    NodeReplacement {
+        /// Replaced node path; paths inside this subtree require recapture.
+        path: NodePath,
+        /// Stable IDs no longer present in the replaced subtree.
+        removed_ids: Vec<String>,
+        /// Newly present stable IDs.
+        inserted_ids: Vec<String>,
+        /// Retained IDs whose inline text changed without an exact scalar map.
+        invalidated_ids: Vec<String>,
+    },
     /// Inline runs were rebuilt without changing scalar positions.
     InlineRebuild {
         /// Identified text block whose marks/run boundaries changed.
@@ -204,6 +233,13 @@ impl PositionMap {
     /// Block-local scalar carets use map_existing_caret instead.
     pub fn map_path(&self, path: &NodePath) -> Option<NodePath> {
         match self {
+            Self::NodeReplacement { path: replaced, .. } => {
+                if path.0.starts_with(&replaced.0) {
+                    None
+                } else {
+                    Some(path.clone())
+                }
+            }
             Self::Children {
                 parent,
                 from,
@@ -237,6 +273,16 @@ impl PositionMap {
         offset: ScalarOffset,
         right_bias: bool,
     ) -> Option<(String, ScalarOffset)> {
+        if let Self::NodeReplacement {
+            removed_ids,
+            invalidated_ids,
+            ..
+        } = self
+            && (removed_ids.iter().any(|id| id == block_id)
+                || invalidated_ids.iter().any(|id| id == block_id))
+        {
+            return None;
+        }
         if let Self::Children { removed_ids, .. } = self
             && removed_ids.iter().any(|id| id == block_id)
         {
@@ -437,6 +483,66 @@ fn apply_command(
     mappings: &mut Vec<PositionMap>,
 ) -> Result<()> {
     match command {
+        Command::ReplaceNode {
+            target,
+            replacement,
+        } => crate::structural::replace_node(document, target, *replacement, mappings)?,
+        Command::ReplaceInline {
+            target,
+            from,
+            to,
+            children,
+        } => {
+            crate::structural::check_ref(document, &target)?;
+            let node = crate::structural::at_path_mut(&mut document.root, &target.path)
+                .ok_or(Error::InvalidPosition)?;
+            require_text_block(node)?;
+            if from > to {
+                return Err(Error::InvalidPosition);
+            }
+            let old_ids = crate::structural::block_ids(node.children())?;
+            let (prefix, rest) = split_inline(node.children(), from.0)?;
+            let (_, suffix) = split_inline(&rest, to.0 - from.0)?;
+            let new_len = children.iter().try_fold(0usize, |length, node| {
+                length
+                    .checked_add(inline_len(node)?)
+                    .ok_or(Error::ResourceLimit)
+            })?;
+            node.content = Some(coalesce_text(
+                prefix.into_iter().chain(children).chain(suffix).collect(),
+            ));
+            let new_ids = crate::structural::block_ids(node.children())?;
+            let removed_ids = old_ids
+                .iter()
+                .filter(|id| !new_ids.contains(id))
+                .cloned()
+                .collect::<Vec<_>>();
+            let inserted_ids = new_ids
+                .iter()
+                .filter(|id| !old_ids.contains(id))
+                .cloned()
+                .collect::<Vec<_>>();
+            if let Some(id) = node.block_id() {
+                mappings.push(PositionMap::Text {
+                    block_id: id.into(),
+                    start: from.0,
+                    old_len: to.0 - from.0,
+                    new_len,
+                });
+            } else {
+                mappings.push(PositionMap::InlineRebuild {
+                    block_id: String::new(),
+                });
+            }
+            if !removed_ids.is_empty() || !inserted_ids.is_empty() {
+                mappings.push(PositionMap::NodeReplacement {
+                    path: target.path,
+                    removed_ids,
+                    inserted_ids,
+                    invalidated_ids: vec![],
+                });
+            }
+        }
         Command::InsertChildren {
             parent,
             index,
@@ -725,16 +831,7 @@ fn sibling_children<'a>(node: &'a mut Node, id: &str) -> Option<&'a mut Vec<Node
         .find_map(|child| sibling_children(child, id))
 }
 fn join_compatible(left: &Node, right: &Node) -> bool {
-    if left.node_type != right.node_type || left.extra != right.extra || left.marks != right.marks {
-        return false;
-    }
-    let stripped = |attrs: &Option<Map<String, Value>>| {
-        let mut result = attrs.clone().unwrap_or_default();
-        result.remove("blockId");
-        result.remove("sourceRefs");
-        result
-    };
-    stripped(&left.attrs) == stripped(&right.attrs)
+    left.node_type == right.node_type && left.compatible_envelope(right, &["blockId", "sourceRefs"])
 }
 
 fn coalesce_text(nodes: Vec<Node>) -> Vec<Node> {
