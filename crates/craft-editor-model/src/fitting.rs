@@ -1023,13 +1023,15 @@ pub(crate) fn fit_clipboard_container<F: FnMut() -> Result<String>>(
     open_end: usize,
     allocate: &mut F,
 ) -> Result<Node> {
+    Node::decode_open_fragment(serde_json::to_value(content)?)?;
     if !matches!(kind, "tableRow" | "tableCell")
+        || open_start > 64
+        || open_end > 64
         || open_start > edge_depth(content, false)
         || open_end > edge_depth(content, true)
     {
         return Err(Error::InvalidPosition);
     }
-    Node::decode_open_fragment(serde_json::to_value(content)?)?;
     let mut bridge = Bridge::new()?;
     let incoming = content
         .iter()
@@ -1083,9 +1085,10 @@ pub(crate) fn fit_clipboard_container<F: FnMut() -> Result<String>>(
             {
                 return Err(Error::UnsupportedEdit);
             }
-        } else if is_atom(entry.node) && rebuilt.seen[index] != 1 {
-            return Err(Error::UnsupportedEdit);
-        } else if rebuilt.seen[bridge.node_tokens[index]] == 0
+            continue;
+        }
+        let missing_atom = is_atom(entry.node) && rebuilt.seen[index] != 1;
+        let missing_context = rebuilt.seen[bridge.node_tokens[index]] == 0
             && (!entry.node.extra.is_empty()
                 || entry.node.attrs.as_ref().is_some_and(|attrs| {
                     attrs.keys().any(|key| {
@@ -1094,8 +1097,8 @@ pub(crate) fn fit_clipboard_container<F: FnMut() -> Result<String>>(
                                 .get(key)
                                 .is_none()
                     })
-                }))
-        {
+                }));
+        if missing_atom || missing_context {
             return Err(Error::UnsupportedEdit);
         }
     }
