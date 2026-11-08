@@ -314,7 +314,10 @@ mod tests {
         let (preedit, output) = frame(
             &mut session,
             &ctx,
-            vec![Event::Ime(egui::ImeEvent::Preedit("界".into()))],
+            vec![Event::Ime(egui::ImeEvent::Preedit {
+                text: "界".into(),
+                active_range_chars: Some(0..1),
+            })],
         );
         assert!(preedit.errors.is_empty(), "{:?}", preedit.errors);
         assert_eq!(session.document(), &original);
