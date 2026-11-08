@@ -227,3 +227,30 @@ fn svg_anchor_url_is_not_confused_with_a_resource_fetch() {
         .expect("a non-fetching SVG anchor");
     assert!(ink_count(&image.encoded) > 100);
 }
+
+#[test]
+fn source_editor_disabled_math_commands_remain_disabled_in_native_rendering() {
+    let renderer = renderer();
+    for source in [
+        r"\href{https://example.invalid}{click}",
+        r"\includegraphics{https://example.invalid/image.png}",
+        r"\htmlClass{x}{content}",
+        r"\def\x{boom}\x",
+        r"\newcommand{\x}{boom}",
+        r"\input{outside}",
+        r"\write18{command}",
+    ] {
+        let node = atom(json!({"type":"inlineMath","attrs":{"latex":source}}));
+        let before = serde_json::to_value(&node).expect("canonical source");
+        assert_eq!(
+            renderer
+                .render_atom(&node, &AssetMap::default())
+                .expect_err("source contract rejects capability"),
+            Error::FormulaCommandDisabled
+        );
+        assert_eq!(
+            serde_json::to_value(&node).expect("unchanged source"),
+            before
+        );
+    }
+}

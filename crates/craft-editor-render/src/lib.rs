@@ -44,6 +44,9 @@ pub enum Error {
     /// The source has no diagram after parsing.
     #[error("diagram_missing")]
     DiagramMissing,
+    /// The source requests HTML, external resources, TeX definitions or file/I/O commands.
+    #[error("formula_command_disabled")]
+    FormulaCommandDisabled,
     /// Formula parsing or layout failed.
     #[error("formula_render_failed")]
     FormulaRender,
@@ -436,6 +439,9 @@ impl Renderer {
         if source.trim().is_empty() {
             return Err(Error::FormulaRender);
         }
+        if has_disabled_math_command(source) {
+            return Err(Error::FormulaCommandDisabled);
+        }
         let ast = ratex_parser::parser::parse(source).map_err(|_| Error::FormulaRender)?;
         let [r, g, b, a] = self
             .options
@@ -492,4 +498,48 @@ fn identity(node: &Node) -> Result<String> {
 }
 fn view_error(error: Error) -> craft_editor_egui::Error {
     craft_editor_egui::Error::AtomRendering(error.to_string())
+}
+
+// The source editor rejects these untrusted TeX capabilities before its renderer. Preserve
+// that contract independently of whether a particular native parser supports the command.
+fn has_disabled_math_command(source: &str) -> bool {
+    const DISABLED: &[&str] = &[
+        "href",
+        "url",
+        "includegraphics",
+        "htmlclass",
+        "htmlid",
+        "htmlstyle",
+        "htmldata",
+        "def",
+        "edef",
+        "gdef",
+        "xdef",
+        "let",
+        "futurelet",
+        "newcommand",
+        "renewcommand",
+        "providecommand",
+        "input",
+        "include",
+        "openin",
+        "openout",
+        "read",
+        "write",
+        "usepackage",
+        "documentclass",
+        "csname",
+    ];
+    for (index, character) in source.char_indices() {
+        if character == '\\' {
+            let command: String = source[index + 1..]
+                .chars()
+                .take_while(char::is_ascii_alphabetic)
+                .collect();
+            if DISABLED.contains(&command.to_ascii_lowercase().as_str()) {
+                return true;
+            }
+        }
+    }
+    false
 }

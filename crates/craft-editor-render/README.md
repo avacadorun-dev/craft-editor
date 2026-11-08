@@ -4,6 +4,8 @@ Reusable native Mermaid, formula and image rendering for canonical structured at
 
 Prepare `Renderer::prepare_document` on a host-owned worker. The resulting immutable `PreparedCatalog` implements the editor's `AtomResolver`; frame measurement only looks up previously acknowledged real PNG output. The host supplies exact asset bytes with `AssetMap`/`AssetSource` and owns worker scheduling, stale-result cancellation and catalog generations. Source JSON, LaTeX, diagram code, media identity, descriptions and captions stay canonical and unchanged.
 
+Untrusted formulas reject HTML/resource, TeX definition and file/I/O commands before parsing. This preserves the source editor's rendering policy while retaining the complete authored source for correction.
+
 The catalog records each failed atom and provides an explicitly labelled source fallback, so one invalid diagram does not remove the surrounding document. The host supplies localized `FallbackLabels`. Fallback previews are bounded and visibly use an ellipsis when source continues; they never truncate canonical source. `render_atom` returns a typed failure instead of a fallback when the caller needs direct success/failure control.
 
 ## Dependency decisions
