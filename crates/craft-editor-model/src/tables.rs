@@ -515,7 +515,12 @@ pub fn split_table_cell(
         }
     }
     let mut additions = new_cells.into_iter();
-    for physical_row in rect.row..rect.bottom() {
+    for (physical_row, row_origins) in origins
+        .iter_mut()
+        .enumerate()
+        .take(rect.bottom())
+        .skip(rect.row)
+    {
         for offset in 0..rect.colspan {
             let mut part = if physical_row == rect.row && offset == 0 {
                 original.clone()
@@ -529,7 +534,7 @@ pub fn split_table_cell(
             if let Some(values) = &original_widths {
                 set_widths(&mut part, vec![values[offset]]);
             }
-            origins[physical_row].push((rect.column + offset, part));
+            row_origins.push((rect.column + offset, part));
         }
     }
     rebuild_rows(&mut table, origins)?;
