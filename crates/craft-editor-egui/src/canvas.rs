@@ -15,6 +15,7 @@ use crate::{
 };
 
 mod cells;
+mod resize;
 
 pub use crate::layout::LineHeightBasis;
 
@@ -128,6 +129,7 @@ pub(crate) struct CanvasState {
     preedit_epoch: u64,
     scroll_to_caret: bool,
     cell_drag: Option<crate::TableSelection>,
+    column_resize: Option<resize::ColumnDrag>,
 }
 
 impl CanvasState {
@@ -264,9 +266,17 @@ impl CanvasState {
         if response.hovered() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
         }
+        let resize_owned = match self.resize_input(session, ui, &response, style.read_only) {
+            Ok(owned) => owned,
+            Err(error) => {
+                errors.push(error);
+                true
+            }
+        };
         let pressed = response.hovered()
             && ui.input(|input| input.pointer.button_pressed(egui::PointerButton::Primary));
-        if (pressed || response.clicked() || response.drag_started() || response.dragged())
+        if !resize_owned
+            && (pressed || response.clicked() || response.drag_started() || response.dragged())
             && let Some(pointer) = response.interact_pointer_pos()
         {
             response.request_focus();
@@ -311,6 +321,9 @@ impl CanvasState {
                 accepted
             });
             for event in events {
+                if resize_owned {
+                    continue;
+                }
                 if let Err(error) = self.event(session, ui, event, style.read_only) {
                     errors.push(error);
                 }
@@ -327,6 +340,7 @@ impl CanvasState {
         if let Err(error) = self.paint(ui, rect, style, &response) {
             errors.push(error);
         }
+        self.paint_resize(ui, rect.min, style.caret);
         let mut activated_decorations = Vec::new();
         if let Some(source) = decorations {
             let proofs: Vec<_> = session
