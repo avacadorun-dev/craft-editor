@@ -21,6 +21,8 @@ pub struct Revision(#[doc = "Monotonic revision number."] pub u64);
 pub enum MarkMode {
     /// Add missing mark types, preserving existing same-type attributes.
     Add,
+    /// Merge supplied same-type attributes, preserving other marks and unmentioned fields.
+    Patch,
     /// Remove supplied mark types; their attributes are irrelevant.
     Remove,
     /// Replace the selected text's entire mark set.
@@ -749,7 +751,7 @@ fn apply_command(
                 return Err(Error::InvalidPosition);
             }
             for mark in &marks {
-                if mode != MarkMode::Remove {
+                if !matches!(mode, MarkMode::Remove | MarkMode::Patch) {
                     validate_mark(mark)?;
                 } else if !["bold", "italic", "underline", "strike", "link", "code"]
                     .contains(&mark.mark_type.as_str())
@@ -774,6 +776,19 @@ fn apply_command(
                                 .iter()
                                 .any(|existing| existing.mark_type == mark.mark_type)
                             {
+                                current.push(mark.clone());
+                            }
+                        }
+                    }
+                    MarkMode::Patch => {
+                        for mark in &marks {
+                            if let Some(existing) = current
+                                .iter_mut()
+                                .find(|existing| existing.mark_type == mark.mark_type)
+                            {
+                                *existing = existing.with_patched_attributes(mark)?;
+                            } else {
+                                validate_mark(mark)?;
                                 current.push(mark.clone());
                             }
                         }

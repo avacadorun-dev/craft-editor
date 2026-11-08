@@ -23,3 +23,9 @@ This tranche does not close issue #7 or the complete editor gate. Cross-wrapper 
 ## Original command probe
 
 On 2026-11-08, the installed original Tiptap command implementation was executed headlessly with synthetic JSON and equivalent identity attributes (the original BlockIdentity appendTransaction was not invoked). It confirmed that heading/code list toggles normalize to paragraphs, switching kind changes the whole active list, same-kind toggling lifts only selected items, and a paragraph inside a quote becomes a list within that quote. Generic model operations remain more explicit and need not discard metadata as upstream clearNodes/setNodeMarkup can. This probe is behavioral research, not full original-app or native UX acceptance.
+
+## Existing-link editing
+
+`set_mark_attributes(Mark)` applies the model's `MarkMode::Patch`: merge supplied attributes and opaque fields of that mark type, retain every other mark, and validate the complete result atomically. This changes an existing href without losing a title, unknown link attributes, bold/italic marks or source metadata. At a collapsed caret, it changes validated pending typing marks without inventing a content revision. Invalid patches preserve the document, typing marks, history and pending changes.
+
+`extend_mark_range("link")` expands a contained selection to contiguous runs carrying the same link attributes. It follows the installed source helper's boundary rule: prefer the right marked run, otherwise the left; a range crossing different links is not expanded. Expansion is transient selection, and the host can combine it with its explicit link edit dialog. It does not automatically open a URL or mutate manuscript content.

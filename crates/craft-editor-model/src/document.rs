@@ -38,6 +38,22 @@ impl Mark {
             null_fields: HashSet::new(),
         }
     }
+    /// Merge supplied same-type attributes and opaque fields, retaining all unmentioned data.
+    ///
+    /// The complete resulting mark is validated. A type mismatch or invalid href/metadata fails
+    /// without changing either input. Explicit supplied JSON null remains an explicit value.
+    pub fn with_patched_attributes(&self, patch: &Self) -> Result<Self> {
+        if self.mark_type != patch.mark_type {
+            return Err(Error::InvalidDocument("mark_type_mismatch".into()));
+        }
+        let mut updated = self.clone();
+        if let Some(attrs) = &patch.attrs {
+            updated.attrs.get_or_insert_default().extend(attrs.clone());
+        }
+        updated.extra.extend(patch.extra.clone());
+        validate_mark(&updated)?;
+        Ok(updated)
+    }
 }
 
 /// A lossless ProseMirror-shaped node, independent of rendering and storage.

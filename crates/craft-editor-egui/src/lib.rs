@@ -667,19 +667,22 @@ impl EditorSession {
         if a == b {
             // Validate pending marks through the same canonical validator, without changing
             // the actual document or creating an empty formatting history entry.
-            let mut validator = Editor::new(Document::plain("mark-validation", "x")?, Revision(0));
-            validator.apply(Transaction {
-                base_revision: Revision(0),
-                commands: vec![Command::ApplyMarks {
-                    range: TextRange {
-                        block_id: "mark-validation".into(),
-                        start: ScalarOffset(0),
-                        end: ScalarOffset(1),
-                    },
-                    marks: vec![mark.clone()],
-                    mode,
-                }],
-            })?;
+            if mode != MarkMode::Patch {
+                let mut validator =
+                    Editor::new(Document::plain("mark-validation", "x")?, Revision(0));
+                validator.apply(Transaction {
+                    base_revision: Revision(0),
+                    commands: vec![Command::ApplyMarks {
+                        range: TextRange {
+                            block_id: "mark-validation".into(),
+                            start: ScalarOffset(0),
+                            end: ScalarOffset(1),
+                        },
+                        marks: vec![mark.clone()],
+                        mode,
+                    }],
+                })?;
+            }
             let mut marks = self.typing_marks()?;
             match mode {
                 MarkMode::Add => {
@@ -690,9 +693,32 @@ impl EditorSession {
                         marks.push(mark);
                     }
                 }
+                MarkMode::Patch => {
+                    if let Some(existing) = marks
+                        .iter_mut()
+                        .find(|existing| existing.mark_type == mark.mark_type)
+                    {
+                        *existing = existing.with_patched_attributes(&mark)?;
+                    } else {
+                        marks.push(mark);
+                    }
+                }
                 MarkMode::Remove => marks.retain(|existing| existing.mark_type != mark.mark_type),
                 MarkMode::Replace => marks = vec![mark],
             }
+            let mut validator = Editor::new(Document::plain("mark-validation", "x")?, Revision(0));
+            validator.apply(Transaction {
+                base_revision: Revision(0),
+                commands: vec![Command::ApplyMarks {
+                    range: TextRange {
+                        block_id: "mark-validation".into(),
+                        start: ScalarOffset(0),
+                        end: ScalarOffset(1),
+                    },
+                    marks: marks.clone(),
+                    mode: MarkMode::Replace,
+                }],
+            })?;
             let change = self.apply_commands(Vec::new())?;
             self.stored_marks = Some(marks);
             return Ok(change);
@@ -714,6 +740,85 @@ impl EditorSession {
             }
         }
         self.apply_commands(commands)
+    }
+    /// Set or patch one mark type without removing unrelated marks or opaque mark attributes.
+    ///
+    /// At a collapsed caret, this updates validated pending insertion marks without creating an
+    /// empty revision. To edit the entire existing link, call `extend_mark_range("link")` first.
+    pub fn set_mark_attributes(&mut self, mark: Mark) -> Result<Change> {
+        self.format_selection(mark, MarkMode::Patch)
+    }
+    /// Expand a contained text selection to the contiguous same-attribute mark at its start.
+    ///
+    /// At a boundary the right marked run is preferred, then the left, matching the source
+    /// editor. This only changes transient selection; canonical content and history stay intact.
+    pub fn extend_mark_range(&mut self, kind: &str) -> Result<bool> {
+        if self.is_composing() {
+            return Err(Error::CompositionActive);
+        }
+        let selection = self.selection.as_ref().ok_or(Error::InvalidSelection)?;
+        if selection.anchor.block_id != selection.head.block_id {
+            return Ok(false);
+        }
+        let from = selection.anchor.offset.0.min(selection.head.offset.0);
+        let to = selection.anchor.offset.0.max(selection.head.offset.0);
+        let block = self.document().block(&selection.anchor.block_id)?;
+        let mut offset = 0;
+        let runs = block
+            .children()
+            .iter()
+            .map(|node| {
+                let start = offset;
+                offset += node.inline_text().chars().count();
+                (
+                    start,
+                    offset,
+                    node.marks
+                        .as_deref()
+                        .unwrap_or_default()
+                        .iter()
+                        .find(|mark| mark.mark_type == kind),
+                )
+            })
+            .collect::<Vec<_>>();
+        let right = runs
+            .iter()
+            .position(|(start, end, mark)| *start <= from && from < *end && mark.is_some());
+        let left = runs
+            .iter()
+            .rposition(|(start, end, mark)| *start < from && from <= *end && mark.is_some());
+        let Some(index) = right.or(left) else {
+            return Ok(false);
+        };
+        let mark = runs[index].2.ok_or(Error::InvalidSelection)?;
+        let matching = |candidate: Option<&Mark>| {
+            candidate.is_some_and(|candidate| candidate.attrs == mark.attrs)
+        };
+        let mut first = index;
+        let mut last = index;
+        while first > 0 && matching(runs[first - 1].2) {
+            first -= 1;
+        }
+        while last + 1 < runs.len() && matching(runs[last + 1].2) {
+            last += 1;
+        }
+        if runs[first].0 > from || runs[last].1 < to {
+            return Ok(false);
+        }
+        let id = selection.anchor.block_id.clone();
+        let expanded = Selection {
+            anchor: DocPoint {
+                block_id: id.clone(),
+                offset: ScalarOffset(runs[first].0),
+            },
+            head: DocPoint {
+                block_id: id,
+                offset: ScalarOffset(runs[last].1),
+            },
+        };
+        let changed = self.selection.as_ref() != Some(&expanded);
+        self.set_selection(expanded)?;
+        Ok(changed)
     }
     /// Undo a rich transaction and restore its semantic selection.
     pub fn undo(&mut self) -> Result<Change> {
