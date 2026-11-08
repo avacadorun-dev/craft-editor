@@ -19,7 +19,7 @@ use wordcraft_doc::{
 };
 use wordcraft_layout::{DocLayout, LayoutCache, LayoutOptions, Placed, ViewMode};
 
-use crate::{DocPoint, Selection};
+use crate::{DocPoint, Selection, syntax};
 
 /// Upstream revision used by the hosted geometry experiment.
 pub const UPSTREAM_REVISION: &str = "da914ce674f18ebc4e08cca425cc8f8acca3372f";
@@ -27,6 +27,9 @@ pub const UPSTREAM_REVISION: &str = "da914ce674f18ebc4e08cca425cc8f8acca3372f";
 /// Content-free geometry diagnostic. A failure never rewrites the canonical document.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// Native syntax tokenization failed without changing canonical source.
+    #[error(transparent)]
+    Syntax(#[from] syntax::Error),
     /// Host atom rendering failed with a content-free code.
     #[error("atom_rendering: {0}")]
     AtomRendering(String),
@@ -94,6 +97,8 @@ pub struct GeometryStyle {
     pub line_height: f32,
     /// Space after a paragraph, in logical document points.
     pub paragraph_spacing: f32,
+    /// Optional host syntax colors. None keeps code plain while preserving its language/source.
+    pub syntax_palette: Option<syntax::Palette>,
 }
 impl Default for GeometryStyle {
     fn default() -> Self {
@@ -105,6 +110,7 @@ impl Default for GeometryStyle {
             table_header: [234, 238, 244],
             line_height: 1.5,
             paragraph_spacing: 10.0,
+            syntax_palette: Some(syntax::Palette::for_surface([35, 39, 47], [250, 250, 248])),
         }
     }
 }
@@ -155,6 +161,17 @@ pub struct NodeGeometry {
     pub rect: GeometryRect,
 }
 
+/// Actual grammar availability for one code block in the unchanged canonical document.
+#[derive(Debug, Clone)]
+pub struct SyntaxReport {
+    /// Exact canonical code-block location.
+    pub canonical_path: NodePath,
+    /// Stored language attribute, retained exactly rather than normalized in canonical data.
+    pub language: String,
+    /// Actual native grammar selection; required gaps remain visible to acceptance tooling.
+    pub coverage: syntax::Coverage,
+}
+
 struct BlockMap {
     id: String,
     path: Path,
@@ -179,6 +196,7 @@ pub struct FlowGeometry {
     cell_paths: HashMap<(Path, usize, usize), NodePath>,
     atom_paths: HashMap<String, NodePath>,
     node_paths: HashMap<Path, NodePath>,
+    syntax_reports: Vec<SyntaxReport>,
 }
 
 impl FlowGeometry {
@@ -247,6 +265,7 @@ impl FlowGeometry {
             numbering: wordcraft_doc::numbering::Numbering::default(),
             atom_paths: HashMap::new(),
             node_paths: HashMap::new(),
+            syntax_reports: vec![],
         };
         // Web flow reserves 18 points on each side; tracks occupy the actual text column.
         let body = builder.blocks(
@@ -289,7 +308,13 @@ impl FlowGeometry {
             cell_paths: builder.cell_paths,
             atom_paths: builder.atom_paths,
             node_paths: builder.node_paths,
+            syntax_reports: builder.syntax_reports,
         })
+    }
+
+    /// Actual grammar coverage for projected code blocks, including explicit required gaps.
+    pub fn syntax_reports(&self) -> &[SyntaxReport] {
+        &self.syntax_reports
     }
 
     /// Complete continuous-flow extent in document points.
@@ -693,6 +718,7 @@ struct Builder<'a, F> {
     numbering: wordcraft_doc::numbering::Numbering,
     atom_paths: HashMap<String, NodePath>,
     node_paths: HashMap<Path, NodePath>,
+    syntax_reports: Vec<SyntaxReport>,
 }
 impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
     fn blocks(
@@ -969,6 +995,22 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
                     paragraph.insert_object(paragraph.len(), object, &props)?;
                 }
                 _ => return Err(Error::UnsupportedNode(inline.node_type.clone())),
+            }
+        }
+        if node.node_type == "codeBlock" {
+            let language = node.string_attr("language").unwrap_or_default();
+            let highlighted = syntax::highlight(&paragraph.text, language)?;
+            self.syntax_reports.push(SyntaxReport {
+                canonical_path: NodePath(canonical_path.to_vec()),
+                language: language.into(),
+                coverage: highlighted.coverage.clone(),
+            });
+            let palette = self.style.map_or_else(
+                || Some(syntax::Palette::for_surface([35, 39, 47], [250, 250, 248])),
+                |style| style.syntax_palette.clone(),
+            );
+            if let Some(palette) = palette {
+                apply_syntax_colors(&mut paragraph, &highlighted, &palette)?;
             }
         }
         self.blocks.push(BlockMap {
@@ -1411,6 +1453,51 @@ fn qualification_fixture() -> Value {
     ]})
 }
 
+/// Split disposable formatting runs against token boundaries in one linear pass. Applying only
+/// color preserves source bytes, inherited marks, shaping/font metrics and canonical caret maps.
+fn apply_syntax_colors(
+    paragraph: &mut Paragraph,
+    highlighted: &syntax::Highlighted,
+    palette: &syntax::Palette,
+) -> Result<()> {
+    highlighted.validate(&paragraph.text)?;
+    let mut runs = Vec::with_capacity(paragraph.runs.len() + highlighted.tokens.len());
+    let mut offset = 0;
+    let mut token_index = 0;
+    for original in &paragraph.runs {
+        let end = offset + original.len;
+        while offset < end {
+            let token = highlighted
+                .tokens
+                .get(token_index)
+                .ok_or(syntax::Error::InvalidTokenRange)?;
+            let to = end.min(token.to.0);
+            if offset < token.from.0 || to <= offset {
+                return Err(syntax::Error::InvalidTokenRange.into());
+            }
+            let mut props = original.props.clone();
+            props.color = Some(wordcraft_doc::props::TextColor::Rgb(rgb(
+                palette.color(token.kind)
+            )));
+            runs.push(wordcraft_doc::para::Run {
+                len: to - offset,
+                props,
+            });
+            offset = to;
+            if to == token.to.0 {
+                token_index += 1;
+            }
+        }
+    }
+    if offset != paragraph.text.len() {
+        return Err(syntax::Error::InvalidTokenRange.into());
+    }
+    paragraph.runs = runs;
+    paragraph.normalize();
+    paragraph.rev = wordcraft_doc::para::next_rev();
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1471,6 +1558,91 @@ mod tests {
         assert!(merged.rect.width > right.rect.width * 1.8);
         assert!(merged.rect.height > right.rect.height * 1.5);
         assert_eq!(source.to_json()?, before);
+        Ok(())
+    }
+    fn code_document(language: &str, text: &str) -> Result<Document> {
+        Ok(Document::from_json(
+            json!({"type":"doc","attrs":{"schemaVersion":4},"content":[
+                {"type":"codeBlock","attrs":{"blockId":"code","language":language,"vendor":{"preserve":true}},"content":[{"type":"text","text":text}]}
+            ]}),
+        )?)
+    }
+    #[test]
+    fn syntax_colors_leave_every_canonical_byte_mark_and_caret_position_unchanged() -> Result<()> {
+        let text = "// Русский 日本語 🪶\nlet 名 = \"e\u{301}\";\n\t名 += 42;";
+        let source = code_document("rust", text)?;
+        let canonical = source.to_json()?;
+        let highlighted_style = GeometryStyle::default();
+        let mut plain_style = highlighted_style.clone();
+        plain_style.syntax_palette = None;
+        let highlighted =
+            FlowGeometry::with_style(&source, 700.0, &|_| None, Some(&highlighted_style))?;
+        let plain = FlowGeometry::with_style(&source, 700.0, &|_| None, Some(&plain_style))?;
+        for offset in 0..=text.chars().count() {
+            let point = point("code", offset);
+            let a = highlighted.caret(&point)?.ok_or(Error::UnmappedPosition)?;
+            let b = plain.caret(&point)?.ok_or(Error::UnmappedPosition)?;
+            assert!(
+                (a.x - b.x).abs() < 0.001
+                    && (a.y - b.y).abs() < 0.001
+                    && (a.height - b.height).abs() < 0.001,
+                "syntax changed caret at {offset}"
+            );
+        }
+        let pos = Pos::body(0, 0);
+        let paragraph = highlighted
+            .upstream
+            .para_at(&pos)
+            .ok_or(Error::UnmappedPosition)?;
+        assert_eq!(paragraph.text, text);
+        assert!(
+            paragraph
+                .runs
+                .iter()
+                .filter_map(|run| run.props.color.as_ref())
+                .collect::<std::collections::HashSet<_>>()
+                .len()
+                > 2
+        );
+        assert_eq!(source.to_json()?, canonical);
+        Ok(())
+    }
+    #[test]
+    fn imported_unknown_code_language_is_preserved_and_reported_as_unknown() -> Result<()> {
+        let source = code_document("private-author-format", "unchanged source")?;
+        let before = source.to_json()?;
+        let geometry = FlowGeometry::new(&source, 600.0)?;
+        assert!(matches!(
+            geometry.syntax_reports()[0].coverage,
+            syntax::Coverage::UnknownLanguage { .. }
+        ));
+        assert_eq!(
+            geometry.syntax_reports()[0].language,
+            "private-author-format"
+        );
+        assert_eq!(source.to_json()?, before);
+        Ok(())
+    }
+    #[test]
+    fn host_token_palette_changes_colors_without_changing_font_or_source() -> Result<()> {
+        let source = code_document("rust", "let value = 42;")?;
+        let mut style = GeometryStyle::default();
+        let mut palette = syntax::Palette::for_surface([230, 234, 240], [29, 34, 42]);
+        palette.keyword = [190, 130, 240];
+        style.syntax_palette = Some(palette);
+        let geometry = FlowGeometry::with_style(&source, 600.0, &|_| None, Some(&style))?;
+        let paragraph = geometry
+            .upstream
+            .para_at(&Pos::body(0, 0))
+            .ok_or(Error::UnmappedPosition)?;
+        assert!(paragraph.runs.iter().any(|run| run.props.color
+            == Some(wordcraft_doc::props::TextColor::Rgb(rgb([190, 130, 240])))));
+        assert!(
+            paragraph
+                .runs
+                .iter()
+                .all(|run| run.props.font.as_deref() == Some("JetBrains Mono"))
+        );
         Ok(())
     }
 }

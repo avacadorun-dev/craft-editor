@@ -17,6 +17,9 @@ pub mod renderers;
 #[cfg(feature = "wordcraft-canvas")]
 pub mod canvas;
 
+/// Native syntax tokens with explicit UTF-8 ranges and audited grammar coverage.
+pub mod syntax;
+
 mod insertion;
 mod structure;
 pub use craft_editor_model::ListKind;

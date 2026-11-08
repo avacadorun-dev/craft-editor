@@ -70,6 +70,10 @@ impl CanvasStyle {
             table_header: rgb(self.table_header),
             line_height: self.line_height,
             paragraph_spacing: self.paragraph_spacing,
+            syntax_palette: Some(crate::syntax::Palette::for_surface(
+                rgb(self.foreground),
+                rgb(self.background),
+            )),
         }
     }
 }
