@@ -209,3 +209,16 @@ fn repeated_invalid_inline_formulas_keep_separate_failure_paths() {
     assert_eq!(catalog.failures()[0].path, vec![0, 0]);
     assert_eq!(catalog.failures()[1].path, vec![1, 0]);
 }
+
+#[test]
+fn svg_anchor_url_is_not_confused_with_a_resource_fetch() {
+    let mut assets = AssetMap::default();
+    assets.insert("linked", Arc::new(br##"<svg xmlns="http://www.w3.org/2000/svg" width="30" height="20"><a href="https://example.invalid/"><rect width="30" height="20" fill="#446688"/></a></svg>"##.to_vec()));
+    let image = renderer()
+        .render_atom(
+            &atom(json!({"type":"imageBlock","attrs":{"assetId":"linked"}})),
+            &assets,
+        )
+        .expect("a non-fetching SVG anchor");
+    assert!(ink_count(&image.encoded) > 100);
+}

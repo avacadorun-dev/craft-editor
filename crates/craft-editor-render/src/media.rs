@@ -112,6 +112,7 @@ impl Renderer {
             }
             for attr in element.attributes() {
                 if attr.name() == "href"
+                    && element.tag_name().name() != "a"
                     && !attr.value().starts_with('#')
                     && !attr.value().starts_with("data:")
                 {
@@ -216,7 +217,11 @@ impl Renderer {
         let height = 60 + lines.len().max(1) * 21;
         let foreground = rgba_css(self.options.foreground);
         let background = rgba_css(self.options.background);
-        let mut svg = format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="640" height="{height}"><rect x="0.5" y="0.5" width="639" height="{}" rx="5" fill="{background}" stroke="#a77c3f"/><text x="16" y="28" font-family="Source Sans 3" font-size="15" font-weight="600" fill="{foreground}">{}</text>"#, height - 1, escape_xml(label));
+        let mut svg = format!(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="640" height="{height}"><rect x="0.5" y="0.5" width="639" height="{}" rx="5" fill="{background}" stroke="#a77c3f"/><text x="16" y="28" font-family="Source Sans 3" font-size="15" font-weight="600" fill="{foreground}">{}</text>"##,
+            height - 1,
+            escape_xml(label)
+        );
         for (index, line) in lines.iter().enumerate() {
             svg.push_str(&format!(r#"<text xml:space="preserve" x="16" y="{}" font-family="JetBrains Mono" font-size="13" fill="{foreground}">{}</text>"#, 54 + index * 21, escape_xml(line)));
         }
