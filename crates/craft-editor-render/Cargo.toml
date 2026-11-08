@@ -7,6 +7,9 @@ license.workspace = true
 repository.workspace = true
 description = "Bounded native Mermaid, formula and media rendering for structured document atoms"
 
+[features]
+native-layout-evidence = ["craft-editor-egui/wordcraft-canvas"]
+
 [dependencies]
 craft-editor-model.workspace = true
 craft-editor-egui = { path = "../craft-editor-egui", features = ["wordcraft-geometry"] }
@@ -25,3 +28,7 @@ wordcraft-fonts = { git = "https://github.com/storytold/wordcraft", rev = "da914
 
 [lints]
 workspace = true
+
+[[example]]
+name = "mixed_block_flow"
+required-features = ["native-layout-evidence"]

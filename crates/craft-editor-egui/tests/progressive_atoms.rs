@@ -228,3 +228,68 @@ fn canvas_supplies_nonblocking_visible_atom_hints_for_lazy_host_caches() -> Test
     assert!(visible.contains(&NodePath(vec![1])));
     Ok(())
 }
+
+#[test]
+fn font_size_spacing_reserves_tall_pending_and_failed_objects_before_following_prose() -> TestResult
+{
+    struct TallPlaceholder(AtomPlaceholderState);
+    impl AtomResolver for TallPlaceholder {
+        fn resolve(&self, _: &Node, _: f32) -> craft_editor_egui::Result<ResolvedAtom> {
+            Err(craft_editor_egui::Error::AtomRendering(
+                "not_prepared".into(),
+            ))
+        }
+        fn placeholder(&self, node: &Node, width: f32) -> Option<AtomPlaceholder> {
+            Some(AtomPlaceholder {
+                size: AtomSize {
+                    width: width.min(240.0),
+                    height: if node.node_type == "inlineMath" {
+                        96.0
+                    } else {
+                        750.0
+                    },
+                },
+                state: self.0,
+                label: "Localized status".into(),
+                detail: "Preserved source".into(),
+            })
+        }
+        fn generation(&self) -> u64 {
+            1
+        }
+    }
+    for state in [AtomPlaceholderState::Pending, AtomPlaceholderState::Failed] {
+        let document = fixture()?;
+        let before = document.to_json()?;
+        let resolver = TallPlaceholder(state);
+        let style = GeometryStyle {
+            font_size: 19.0,
+            line_height: 1.75,
+            line_height_basis: craft_editor_egui::layout::LineHeightBasis::FontSize,
+            ..Default::default()
+        };
+        for width in [520.0, 820.0] {
+            let geometry = FlowGeometry::with_resolver(&document, width, &style, &resolver)?;
+            let nodes = geometry.nodes();
+            let inline = nodes
+                .iter()
+                .find(|node| node.canonical_path == NodePath(vec![0, 1]))
+                .ok_or("missing inline bounds")?;
+            let diagram = nodes
+                .iter()
+                .find(|node| node.canonical_path == NodePath(vec![1]))
+                .ok_or("missing block bounds")?;
+            assert!(diagram.rect.y >= inline.rect.y + inline.rect.height);
+            let after = geometry
+                .caret(&caret("last", 0).head)?
+                .ok_or("missing following caret")?;
+            assert!(
+                after.y >= diagram.rect.y + diagram.rect.height,
+                "pending/failed block overlaps following prose"
+            );
+            assert!(diagram.rect.height >= 750.0);
+        }
+        assert_eq!(document.to_json()?, before);
+    }
+    Ok(())
+}

@@ -1111,6 +1111,19 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
             inherited.size = Some(body_size * 0.9);
             paragraph.props.line_spacing = Some(wordcraft_doc::props::LineSpacing::Multiple(1.4));
         }
+        if node
+            .children()
+            .iter()
+            .any(|inline| inline.node_type == "inlineMath")
+            && let Some(style) = self
+                .style
+                .filter(|style| style.line_height_basis == LineHeightBasis::FontSize)
+        {
+            // Exact CSS prose advance must not clip replaced inline-object line boxes.
+            paragraph.props.line_spacing = Some(wordcraft_doc::props::LineSpacing::AtLeast(
+                style.font_size * style.line_height,
+            ));
+        }
         paragraph.props.align = match node.string_attr("textAlign") {
             Some("left") => Some(wordcraft_doc::props::Align::Left),
             Some("center") => Some(wordcraft_doc::props::Align::Center),
@@ -1270,6 +1283,16 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
                 || resolved.encoded.len() > 16 * 1024 * 1024
             {
                 return Err(Error::InvalidSize);
+            }
+            if let Some(style) = self
+                .style
+                .filter(|style| style.line_height_basis == LineHeightBasis::FontSize)
+            {
+                // WordCraft's Exactly deliberately ignores tall inline-object metrics. An
+                // opaque block is projected as an image paragraph and needs its full bounds.
+                paragraph.props.line_spacing = Some(wordcraft_doc::props::LineSpacing::AtLeast(
+                    style.font_size * style.line_height,
+                ));
             }
             self.media.insert(media.clone(), resolved.encoded);
             self.atom_paths.insert(media.clone(), canonical.clone());
