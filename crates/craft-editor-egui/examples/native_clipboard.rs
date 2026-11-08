@@ -43,7 +43,7 @@ fn main() -> ProbeResult<()> {
         (Ok(()), Ok(())) => {
             println!(
                 "{}",
-                json!({"native_clipboard":true,"backend":if cfg!(target_os="macos"){"macOS pasteboard"}else{"isolated X11"},"fresh_nonce_verified":true,"private_json":true,"html":true,"unicode_plain":true,"canonical_roundtrip":true,"registered_opaque_format":true,"synthetic_fixture_restored":true,"empty_plain_rich_cut_undo":true,"native_ui_acceptance":false})
+                json!({"native_clipboard":true,"backend":if cfg!(target_os="macos"){"macOS pasteboard"}else{"isolated X11"},"fresh_nonce_verified":true,"private_json":true,"html":true,"unicode_plain":true,"canonical_roundtrip":true,"registered_opaque_format":true,"synthetic_fixture_restored":true,"empty_plain_rich_cut_undo":true,"whole_table_node_cut_undo":true,"native_ui_acceptance":false})
             );
             Ok(())
         }
@@ -138,6 +138,86 @@ fn exercise(
     session.undo()?;
     if session.document() != &atom || session.node_selection() != Some(&selected) {
         return Err("native_empty_plain_cut_undo_mismatch".into());
+    }
+    exercise_table_node(nonce, writer, reader)?;
+    Ok(())
+}
+
+fn exercise_table_node(
+    nonce: &str,
+    writer: &Arc<NativeClipboard>,
+    reader: &NativeClipboard,
+) -> ProbeResult<()> {
+    let source = Document::from_json(json!({
+        "type":"doc","attrs":{"schemaVersion":4},"future":{"retained":true},"content":[
+            {"type":"paragraph","attrs":{"blockId":"table-before"},"content":[{"type":"text","text":"Before"}]},
+            {"type":"table","attrs":{"blockId":"native-table","future":{"retain":null}},"content":[
+                {"type":"tableRow","content":[{"type":"tableHeader","attrs":{"colspan":2,"rowspan":1,"colwidth":[120,90]},"content":[{"type":"paragraph","attrs":{"blockId":"native-table-title","sourceRefs":["synthetic-voice"]},"content":[{"type":"text","text":format!("{nonce} Автор 😀"),"marks":[{"type":"bold"}]}]}]}]},
+                {"type":"tableRow","content":[
+                    {"type":"tableCell","attrs":{"colspan":1,"rowspan":1,"colwidth":[120]},"content":[{"type":"paragraph","attrs":{"blockId":"native-table-left"},"content":[{"type":"text","text":"Left"}]}]},
+                    {"type":"tableCell","attrs":{"colspan":1,"rowspan":1,"colwidth":[90]},"content":[{"type":"table","attrs":{"blockId":"native-table-nested"},"content":[{"type":"tableRow","content":[{"type":"tableCell","attrs":{"colspan":1,"rowspan":1,"colwidth":[80]},"content":[{"type":"paragraph","attrs":{"blockId":"native-table-inner"},"content":[{"type":"text","text":"日本語 e\u{301}"}]}]}]}]}]}
+                ]}
+            ]},
+            {"type":"paragraph","attrs":{"blockId":"table-after"},"content":[{"type":"text","text":"After"}]}
+        ]
+    }))?;
+    let mut session = EditorSession::new(source.clone(), Revision(0));
+    let selected = session
+        .document()
+        .node_ref(&craft_editor_model::NodePath(vec![1]))?;
+    session.select_node(selected.clone())?;
+    let Some(craft_editor_egui::clipboard::ClipboardRequest::Cut {
+        bundle,
+        ticket,
+        guard,
+    }) = session.begin_cut()?
+    else {
+        return Err("native_table_missing_cut".into());
+    };
+    if !bundle.plain.contains(nonce)
+        || !bundle
+            .html
+            .as_deref()
+            .is_some_and(|html| html.contains("<table"))
+    {
+        return Err("native_table_missing_formats".into());
+    }
+    let ack = ticket.write(writer.as_ref(), &bundle)?;
+    let actual = reader.read()?;
+    if actual != *bundle {
+        return Err("native_table_os_format_roundtrip_mismatch".into());
+    }
+    let slice = RichSlice::decode(
+        actual
+            .rich
+            .as_deref()
+            .ok_or("native_table_missing_private")?,
+        32 * 1024 * 1024,
+    )?;
+    if slice.open_start != 0
+        || slice.open_end != 0
+        || slice.content.as_slice() != [selected.expected.as_ref().clone()]
+    {
+        return Err("native_table_canonical_roundtrip_mismatch".into());
+    }
+    if session.document() != &source {
+        return Err("native_table_removed_before_acknowledgement".into());
+    }
+    session.finish_cut(guard, ack)?;
+    let removed = session.document().clone();
+    if removed.blocks().len() != 2
+        || removed.blocks()[0] != source.blocks()[0]
+        || removed.blocks()[1] != source.blocks()[2]
+    {
+        return Err("native_table_cut_sibling_mismatch".into());
+    }
+    session.undo()?;
+    if session.document() != &source || session.node_selection() != Some(&selected) {
+        return Err("native_table_cut_undo_mismatch".into());
+    }
+    session.redo()?;
+    if session.document() != &removed {
+        return Err("native_table_cut_redo_mismatch".into());
     }
     Ok(())
 }

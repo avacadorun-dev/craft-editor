@@ -31,3 +31,7 @@ The second hosted run (`0d6598f`, run42510711374) passed native whole-node geome
 ## Whole-node Tab safety
 
 An actual `goToNextCell` source probe returns false without canonical mutation for standalone, sole and leading table NodeSelections. One nested case moves into the outer sibling cell because source `isInTable`/`cellNear` infers an ancestor cell; native whole-node selection does not imply a cell in either table. Native `advance_table_cell` therefore refuses the whole-table form without mutation. This must not append a row from an invented last-cell target. Explicit text/cell selections retain their normal Tab/Shift-Tab traversal.
+
+## Native clipboard transport qualification
+
+The hosted macOS pasteboard and isolated X11 probes must also publish a fresh synthetic selected table, read back exact private/HTML/plain formats, acknowledge Cut only after ownership, and Undo to the exact canonical tree and table NodeRef. The fixture includes merged header widths, nested content, Unicode and retained unknown/provenance attributes. This establishes actual OS format ownership and session history; it does not establish native window gestures, IME or accessibility acceptance. Ambient clipboard contents are never read or printed before a fresh synthetic fixture is installed.
