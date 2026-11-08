@@ -14,13 +14,37 @@ pub struct PastedCells {
     /// Consumed outer table/row context, retained for explicit destination metadata merging.
     pub context: Vec<Node>,
 }
-fn span(cell: &Node, name: &str) -> Result<usize> {
+pub(crate) fn span(cell: &Node, name: &str) -> Result<usize> {
     match cell.attrs.as_ref().and_then(|attrs| attrs.get(name)) {
         None => Ok(1),
         Some(value) => crate::document::integer(value)
             .filter(|value| (1..=100).contains(value))
             .map(|value| value as usize)
             .ok_or_else(|| Error::InvalidDocument("table_grid_span_limit".into())),
+    }
+}
+impl PastedCells {
+    /// Fit ordinary rich writing into the source plugin's one-body-cell clipboard form.
+    /// This is used only for an explicit cell rectangle, not for ordinary prose caret paste.
+    pub fn from_writing<F: FnMut() -> Result<String>>(
+        content: &[Node],
+        open_start: usize,
+        open_end: usize,
+        mut allocate: F,
+    ) -> Result<Self> {
+        let cell = crate::fitting::fit_clipboard_container(
+            "tableCell",
+            content,
+            open_start,
+            open_end,
+            &mut allocate,
+        )?;
+        Ok(Self {
+            width: 1,
+            height: 1,
+            rows: vec![Node::block("tableRow", Map::new(), vec![cell])],
+            context: vec![],
+        })
     }
 }
 fn empty_cell<F: FnMut() -> Result<String>>(allocate: &mut F) -> Result<Node> {
