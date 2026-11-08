@@ -641,11 +641,14 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
                     if text.contains('\u{fffc}') {
                         return Err(Error::UnsupportedNode("literal_object_scalar".into()));
                     }
-                    let display = text.replace('\n', "\u{000b}");
-                    paragraph.insert_text(paragraph.len(), &display, &props)?;
+                    paragraph.insert_text(paragraph.len(), text, &props)?;
                 }
                 "hardBreak" => {
-                    paragraph.insert_text(paragraph.len(), "\u{000b}", &props)?;
+                    paragraph.insert_text(
+                        paragraph.len(),
+                        &wordcraft_doc::para::LINE_BREAK.to_string(),
+                        &props,
+                    )?;
                 }
                 "inlineMath" => {
                     let size = (self.atom_size)(inline)

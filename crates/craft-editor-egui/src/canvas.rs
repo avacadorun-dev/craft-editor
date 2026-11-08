@@ -142,6 +142,18 @@ impl CanvasState {
                 errors: vec![error],
             };
         }
+        if session.selection.is_none()
+            && let Some(geometry) = &self.geometry
+        {
+            match geometry.edge(false) {
+                Ok(point) => {
+                    if let Err(error) = session.set_selection(collapsed(point)) {
+                        errors.push(error);
+                    }
+                }
+                Err(error) => errors.push(error.into()),
+            }
+        }
         let extent = self.geometry.as_ref().and_then(FlowGeometry::extent);
         let height = extent.map_or(style.min_height, |rect| rect.height.max(style.min_height));
         let (rect, _) = ui.allocate_exact_size(Vec2::new(width, height), Sense::hover());
@@ -435,16 +447,18 @@ impl CanvasState {
         if modifiers.command {
             match key {
                 Key::Z if !read_only => {
-                    if modifiers.shift {
+                    if modifiers.shift && session.can_redo() {
                         session.redo()?;
-                    } else {
+                    } else if !modifiers.shift && session.can_undo() {
                         session.undo()?;
                     }
                     self.scroll_to_caret = true;
                     return Ok(());
                 }
                 Key::Y if !read_only => {
-                    session.redo()?;
+                    if session.can_redo() {
+                        session.redo()?;
+                    }
                     self.scroll_to_caret = true;
                     return Ok(());
                 }
@@ -1187,6 +1201,52 @@ mod tests {
         );
         session.undo()?;
         assert_eq!(session.document(), &original);
+        Ok(())
+    }
+    #[test]
+    fn first_focus_command_b_and_typing_share_real_pending_mark_state() -> TestResult {
+        let mut session = EditorSession::new(Document::plain("p", "")?, Revision(1));
+        let context = egui::Context::default();
+        context.memory_mut(|memory| memory.request_focus(session.options.id));
+        let response = frame(
+            &mut session,
+            &context,
+            vec![key(Key::B, Modifiers::COMMAND), Event::Text("Bold".into())],
+            &CanvasStyle::default(),
+        );
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        assert_eq!(response.changes.len(), 1);
+        assert_eq!(session.document().block_text("p")?, "Bold");
+        assert_eq!(session.mark_state("bold")?, crate::MarkState::On);
+        session.undo()?;
+        assert_eq!(session.document().block_text("p")?, "");
+        let empty_undo = frame(
+            &mut session,
+            &context,
+            vec![key(Key::Z, Modifiers::COMMAND)],
+            &CanvasStyle::default(),
+        );
+        assert!(empty_undo.errors.is_empty(), "{:?}", empty_undo.errors);
+        Ok(())
+    }
+    #[test]
+    fn canonical_hard_break_uses_native_line_break_and_exact_unicode_positions() -> TestResult {
+        let source = Document::from_json(
+            serde_json::json!({"type":"doc","attrs":{"schemaVersion":4},"content":[{"type":"paragraph","attrs":{"blockId":"p"},"content":[{"type":"text","text":"Я"},{"type":"hardBreak"},{"type":"text","text":"😀Z"}]}]}),
+        )?;
+        let geometry = FlowGeometry::new(&source, 500.0)?;
+        let first = geometry
+            .caret(&point("p", 0))?
+            .ok_or(Error::InvalidSelection)?;
+        let after = geometry
+            .caret(&point("p", 3))?
+            .ok_or(Error::InvalidSelection)?;
+        assert!(after.y > first.y);
+        assert_eq!(
+            geometry.hit(0, after.x + 0.01, after.y + after.height / 2.0)?,
+            Some(point("p", 3))
+        );
+        assert_eq!(source.block_text("p")?, "Я\n😀Z");
         Ok(())
     }
 }
