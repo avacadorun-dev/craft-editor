@@ -69,6 +69,12 @@ impl CanvasState {
             let mut dragged = false;
             ui.push_id(("table-scroll", &viewport.identity), |ui| {
                 ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                    // Scrollbar anatomy is independent of a host's form-input height/text size.
+                    ui.set_clip_rect(rect.intersect(ui.clip_rect()));
+                    ui.spacing_mut().interact_size.y = 18.0;
+                    ui.style_mut()
+                        .text_styles
+                        .insert(egui::TextStyle::Body, egui::FontId::proportional(14.0));
                     ui.spacing_mut().slider_width = rect.width();
                     let thumb =
                         (viewport.rect.width / viewport.content_width * viewport.rect.width / 16.0)
@@ -83,6 +89,9 @@ impl CanvasState {
                     let response = ui.add_enabled(self.column_resize.is_none(), slider);
                     if response.drag_started() || response.is_pointer_button_down_on() {
                         response.request_focus();
+                    }
+                    if response.hovered() || response.dragged() {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::Default);
                     }
                     response.widget_info(|| {
                         egui::WidgetInfo::slider(
@@ -180,6 +189,11 @@ mod tests {
             },
             |root| {
                 egui::CentralPanel::default().show(root, |ui| {
+                    // A host may use much taller fields than the table scrollbar gutter.
+                    ui.spacing_mut().interact_size.y = 40.0;
+                    ui.style_mut()
+                        .text_styles
+                        .insert(egui::TextStyle::Body, egui::FontId::proportional(28.0));
                     if let Some(clip) = clip {
                         ui.set_clip_rect(clip.intersect(ui.clip_rect()));
                     }
@@ -271,6 +285,8 @@ mod tests {
             frame(&mut session, &ctx, vec![]);
         }
         let bar = on_screen(first.response.rect.min, viewport.scrollbar).center();
+        let (_, hover) = frame(&mut session, &ctx, vec![Event::PointerMoved(bar)]);
+        assert_eq!(hover.platform_output.cursor_icon, egui::CursorIcon::Default);
         frame(
             &mut session,
             &ctx,

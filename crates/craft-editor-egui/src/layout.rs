@@ -655,7 +655,7 @@ impl FlowGeometry {
         };
         if !self.viewports.is_empty() {
             // render_items is transparent. Composite its premultiplied pixels on the host paper.
-            for pixel in rendered.pixels.chunks_exact_mut(4) {
+            for pixel in rendered.pixels.as_chunks_mut::<4>().0 {
                 let remaining = 255 - u32::from(pixel[3]);
                 for channel in 0..3 {
                     pixel[channel] = (u32::from(pixel[channel])
