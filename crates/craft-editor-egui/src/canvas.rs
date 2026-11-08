@@ -427,25 +427,35 @@ impl CanvasState {
     ) -> Result<()> {
         match event {
             Event::Copy => {
-                ui.ctx().copy_text(session.selected_text()?);
+                if let Some(bundle) = session.copy_selection()? {
+                    if let Some(provider) = &session.clipboard_provider {
+                        provider.write(&bundle)?;
+                    } else {
+                        ui.ctx().copy_text(bundle.plain);
+                    }
+                }
             }
             Event::Cut if !read_only => {
-                let text = session.selected_text()?;
-                if session.node_selection.is_some() {
-                    session.delete_selected_node()?;
-                } else {
-                    replace(session, "")?;
-                }
-                ui.ctx().copy_text(text);
+                session.cut_to_clipboard()?;
                 self.scroll_to_caret = true;
             }
-            Event::Text(text) | Event::Paste(text) if !read_only && self.preedit.is_none() => {
-                let text = text.replace("\r\n", "\n");
-                if session.node_selection.is_some() {
-                    session.replace_selected_node(&text)?;
+            Event::Paste(text) if !read_only && self.preedit.is_none() => {
+                if session.clipboard_provider.is_some() {
+                    session.paste_from_clipboard()?;
                 } else {
-                    replace(session, &text)?;
+                    let max_bytes = text.len();
+                    session.paste_bundle(
+                        &crate::clipboard::ClipboardBundle {
+                            plain: text,
+                            ..Default::default()
+                        },
+                        max_bytes,
+                    )?;
                 }
+                self.scroll_to_caret = true;
+            }
+            Event::Text(text) if !read_only && self.preedit.is_none() => {
+                replace(session, &text.replace("\r\n", "\n"))?;
                 self.scroll_to_caret = true;
             }
             Event::Ime(egui::ImeEvent::Preedit { text, .. }) if !read_only => {
