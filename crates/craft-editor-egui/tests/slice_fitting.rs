@@ -73,9 +73,9 @@ fn unequal_open_edges_paste_preserves_source_and_existing_tail_metadata() -> Tes
     let mapped = change
         .mappings
         .iter()
-        .fold(
-            Some(("target".to_owned(), ScalarOffset(3))),
-            |point, map| point.and_then(|(id, offset)| map.map_existing_caret(&id, offset, true)),
+        .try_fold(
+            ("target".to_owned(), ScalarOffset(3)),
+            |(id, offset), map| map.map_existing_caret(&id, offset, true),
         )
         .ok_or("tail note detached")?;
     let block = editor.document().block(&mapped.0)?;
@@ -105,5 +105,92 @@ fn unequal_open_edges_paste_preserves_source_and_existing_tail_metadata() -> Tes
     editor.undo()?;
     assert_eq!(editor.document(), &original);
     assert_eq!(editor.selection(), Some(&caret(2)));
+    Ok(())
+}
+#[test]
+fn open_heading_and_code_keep_source_block_style_in_an_empty_document() -> TestResult {
+    for (kind, attrs, text) in [
+        (
+            "heading",
+            json!({"blockId":"source","level":5,"sourceRefs":[]}),
+            "Title",
+        ),
+        (
+            "codeBlock",
+            json!({"blockId":"source","language":"rust"}),
+            "one\ntwo",
+        ),
+    ] {
+        let mut editor = EditorSession::new(Document::plain("target", "")?, Revision(0));
+        editor.set_selection(caret(0))?;
+        let original = editor.document().clone();
+        let nodes = serde_json::from_value(
+            json!([{ "type":kind,"attrs":attrs,"content":[{"type":"text","text":text}]}]),
+        )?;
+        editor.paste_bundle(
+            &RichSlice {
+                content: nodes,
+                open_start: 1,
+                open_end: 1,
+            }
+            .bundle()?,
+            1_000_000,
+        )?;
+        assert_eq!(editor.document().blocks().len(), 1);
+        assert_eq!(editor.document().blocks()[0].node_type, kind);
+        assert_eq!(editor.document().blocks()[0].inline_text(), text);
+        let id = editor.document().blocks()[0]
+            .block_id()
+            .ok_or("missing inserted identity")?;
+        assert_eq!(
+            editor
+                .selection()
+                .map(|selection| (&selection.anchor.block_id, selection.anchor.offset.0)),
+            Some((&id.to_owned(), text.chars().count()))
+        );
+        editor.undo()?;
+        assert_eq!(editor.document(), &original);
+        assert_eq!(editor.selection(), Some(&caret(0)));
+    }
+    Ok(())
+}
+#[test]
+fn consumed_paragraph_context_merges_nonconflicting_opaque_fields_without_flattening_marks()
+-> TestResult {
+    let mut editor = EditorSession::new(Document::plain("target", "leftright")?, Revision(0));
+    editor.set_selection(caret(4))?;
+    let original = editor.document().clone();
+    let nodes = serde_json::from_value(
+        json!([{ "type":"paragraph","attrs":{"blockId":"source","sourceRefs":["voice"],"vendor":null},"vendorBlock":{"keep":1},"content":[{"type":"text","text":"X","vendorLeaf":null,"marks":[{"type":"bold","vendorMark":true}]}]}]),
+    )?;
+    editor.paste_bundle(
+        &RichSlice {
+            content: nodes,
+            open_start: 1,
+            open_end: 1,
+        }
+        .bundle()?,
+        1_000_000,
+    )?;
+    let target = editor.document().block("target")?;
+    assert_eq!(target.extra.get("vendorBlock"), Some(&json!({"keep":1})));
+    assert_eq!(
+        target.attrs.as_ref().and_then(|attrs| attrs.get("vendor")),
+        Some(&json!(null))
+    );
+    let inserted = target
+        .children()
+        .iter()
+        .find(|node| node.text.as_deref() == Some("X"))
+        .ok_or("missing rich inserted leaf")?;
+    assert_eq!(inserted.extra.get("vendorLeaf"), Some(&json!(null)));
+    assert_eq!(
+        inserted.marks.as_ref().ok_or("missing bold")?[0]
+            .extra
+            .get("vendorMark"),
+        Some(&json!(true))
+    );
+    editor.undo()?;
+    assert_eq!(editor.document(), &original);
     Ok(())
 }

@@ -92,7 +92,34 @@ fn generic_fitter_matches_actual_original_replace_selection_cases_and_native_map
             assert_eq!(editor.document(), &document);
             editor.redo(editor.revision())?;
             assert_eq!(editor.document(), &after);
-            assert!(map.inserted_caret().is_some() || map.inserted_node().is_some());
+            if let Some(caret) = map.inserted_caret() {
+                let encoded = serde_json::to_value(&map)?;
+                let block = encoded["after"]
+                    .as_array()
+                    .ok_or("missing after coordinates")?
+                    .iter()
+                    .find(|block| block["id"] == caret.block_id)
+                    .ok_or("missing mapped caret block")?;
+                let start = block["start"].as_u64().ok_or("missing mapped start")?;
+                let units = editor
+                    .document()
+                    .block(&caret.block_id)?
+                    .inline_text()
+                    .chars()
+                    .take(caret.offset.0)
+                    .map(char::len_utf16)
+                    .sum::<usize>();
+                assert_eq!(
+                    start + u64::try_from(units)?,
+                    case["selection"]["anchor"]
+                        .as_u64()
+                        .ok_or("missing expected caret")?,
+                    "{} reversed={reversed} caret",
+                    case["name"]
+                );
+            } else {
+                assert!(map.inserted_node().is_some());
+            }
         }
     }
     Ok(())
