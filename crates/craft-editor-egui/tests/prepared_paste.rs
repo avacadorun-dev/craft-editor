@@ -314,6 +314,10 @@ fn invalid_image_bindings_and_budget_expansion_leave_prepared_data_unchanged() -
     unused.original.source = "missing".into();
     assert!(prepared.bind_images(&[unused]).is_err());
     assert_eq!(prepared.rich_slice(), Some(&before));
+    let mut oversized_source = binding.clone();
+    oversized_source.original.source = "x".repeat(2049);
+    assert!(prepared.bind_images(&[oversized_source]).is_err());
+    assert_eq!(prepared.rich_slice(), Some(&before));
     let mut oversized = binding;
     oversized.destination.source = "x".repeat(2049);
     assert!(prepared.bind_images(&[oversized]).is_err());

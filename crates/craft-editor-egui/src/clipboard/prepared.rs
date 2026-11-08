@@ -249,6 +249,23 @@ impl PreparedPaste {
         if bindings.is_empty() {
             return Ok(());
         }
+        if bindings.len() > 100_000 {
+            return Err(ClipboardError::ResourceLimit.into());
+        }
+        let mut binding_bytes = 0usize;
+        for binding in bindings {
+            for bytes in [
+                binding.original.source.len(),
+                binding.original.asset_id.as_ref().map_or(0, String::len),
+                binding.destination.source.len(),
+                binding.destination.asset_id.as_ref().map_or(0, String::len),
+            ] {
+                binding_bytes = binding_bytes
+                    .checked_add(bytes)
+                    .filter(|sum| *sum <= self.max_bytes)
+                    .ok_or(ClipboardError::ResourceLimit)?;
+            }
+        }
         let mut by_source = HashMap::with_capacity(bindings.len());
         for (index, binding) in bindings.iter().enumerate() {
             if binding.destination.source.len() > self.max_bytes

@@ -120,7 +120,7 @@ impl Node {
     /// Clone only a text leaf's canonical envelope, without copying its writing payload.
     /// Omitted/null metadata stays exact. The returned template needs text before insertion.
     pub fn text_envelope(&self) -> Result<Self> {
-        if self.node_type != "text" {
+        if self.node_type != "text" || !self.children().is_empty() {
             return Err(Error::UnsupportedEdit);
         }
         Ok(Self {
