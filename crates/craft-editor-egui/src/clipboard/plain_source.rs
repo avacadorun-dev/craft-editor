@@ -186,7 +186,7 @@ mod tests {
         assert_eq!(corpus["serializers"], serde_json::json!(["hardBreak"]));
         assert_eq!(corpus["nodes"].as_array().ok_or("missing nodes")?.len(), 21);
         for case in corpus["cases"].as_array().ok_or("missing cases")? {
-            let document = Document::from_json(case["input"].clone())?;
+            let document = Document::from_json(corpus["input"].clone())?;
             let index = Index::new(document.blocks())?;
             let actual = case["ranges"]
                 .as_array()

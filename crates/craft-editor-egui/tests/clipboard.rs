@@ -466,9 +466,10 @@ fn empty_native_clipboard_never_deletes_the_current_selection_or_creates_history
 #[test]
 fn copy_bundle_matches_all_actual_enabled_source_plain_ranges_without_markdown_conversion()
 -> TestResult {
-    let corpus: Value = serde_json::from_str(include_str!("fixtures/source-plain-copy.json"))?;
+    let corpus: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/source-plain-copy.json"))?;
     for case in corpus["cases"].as_array().ok_or("missing source cases")? {
-        let document = Document::from_json(case["input"].clone())?;
+        let document = Document::from_json(corpus["input"].clone())?;
         let mut editor = EditorSession::new(document.clone(), Revision(0));
         let bundle = if let Some(index) = case["node"].as_u64() {
             RichSlice {
