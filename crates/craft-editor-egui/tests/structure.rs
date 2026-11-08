@@ -64,7 +64,7 @@ fn toolbar_list_toggle_preserves_rich_blocks_and_directed_selection_through_hist
 }
 
 #[test]
-fn list_toggle_does_not_include_the_paragraph_at_an_exclusive_end_boundary() -> TestResult {
+fn list_toggle_includes_the_final_block_at_offset_zero_like_the_original_toolbar() -> TestResult {
     let source = document(vec![p("a", "A"), p("b", "B")])?;
     let mut session = EditorSession::new(source.clone(), Revision(0));
     session.set_selection(Selection {
@@ -72,9 +72,12 @@ fn list_toggle_does_not_include_the_paragraph_at_an_exclusive_end_boundary() -> 
         head: point("b", 0),
     })?;
     session.toggle_list(ListKind::Bullet)?;
-    assert_eq!(session.document().blocks().len(), 2);
-    assert_eq!(session.document().blocks()[0].children().len(), 1);
-    assert_eq!(session.document().blocks()[1], source.blocks()[1]);
+    assert_eq!(session.document().blocks().len(), 1);
+    assert_eq!(session.document().blocks()[0].children().len(), 2);
+    assert_eq!(
+        session.document().blocks()[0].children()[1].children()[0],
+        source.blocks()[1]
+    );
     Ok(())
 }
 

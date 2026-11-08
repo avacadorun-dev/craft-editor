@@ -42,7 +42,8 @@ impl Bounds {
                         }
             })
             .ok_or(Error::InvalidSelection)?;
-        // A range ending at another text block's start does not include that block.
+        // Original block-format commands include the block containing the final text point,
+        // even at its offset zero. Clipboard character ranges remain end-exclusive.
         let last = projection
             .spans
             .iter()
@@ -51,7 +52,7 @@ impl Bounds {
                 if start == end {
                     span.path == first.path
                 } else {
-                    span.start < end && span.end >= start
+                    span.start <= end && span.end >= start
                 }
             })
             .ok_or(Error::InvalidSelection)?;
