@@ -94,7 +94,7 @@ fn list_state_is_mixed_for_a_range_spanning_a_list_and_plain_paragraph() -> Test
 }
 
 #[test]
-fn switching_a_partial_identified_list_allocates_only_additional_wrapper_ids() -> TestResult {
+fn switching_list_kind_changes_the_whole_active_list_without_rewriting_item_ids() -> TestResult {
     let source = document(vec![
         json!({"type":"orderedList","attrs":{"blockId":"list","start":5,"vendor":null},"content":[item("a","A"),item("b","B"),item("c","C")]}),
     ])?;
@@ -102,11 +102,31 @@ fn switching_a_partial_identified_list_allocates_only_additional_wrapper_ids() -
     session.set_selection(caret("b", 1))?;
     session.toggle_list(ListKind::Bullet)?;
     let blocks = session.document().blocks();
+    assert_eq!(blocks.len(), 1);
+    assert_eq!(blocks[0].block_id(), Some("list"));
+    assert_eq!(blocks[0].node_type, "bulletList");
+    assert_eq!(blocks[0].children(), source.blocks()[0].children());
+    assert_eq!(blocks[0].attrs, source.blocks()[0].attrs);
+    assert_eq!(session.selection(), Some(&caret("b", 1)));
+    session.undo()?;
+    assert_eq!(session.document(), &source);
+    Ok(())
+}
+
+#[test]
+fn lifting_a_partial_identified_list_allocates_only_additional_retained_wrapper_ids() -> TestResult
+{
+    let source = document(vec![
+        json!({"type":"orderedList","attrs":{"blockId":"list","start":5,"vendor":null},"content":[item("a","A"),item("b","B"),item("c","C")]}),
+    ])?;
+    let mut session = EditorSession::new(source.clone(), Revision(0));
+    session.set_selection(caret("b", 1))?;
+    session.toggle_list(ListKind::Ordered)?;
+    let blocks = session.document().blocks();
     assert_eq!(blocks.len(), 3);
     assert_eq!(blocks[0].block_id(), Some("list"));
-    assert_ne!(blocks[1].block_id(), blocks[0].block_id());
-    assert_ne!(blocks[1].block_id(), blocks[2].block_id());
-    assert_eq!(blocks[1].node_type, "bulletList");
+    assert_eq!(blocks[1].block_id(), Some("b"));
+    assert_ne!(blocks[0].block_id(), blocks[2].block_id());
     assert_eq!(
         blocks[2]
             .attrs
@@ -115,7 +135,7 @@ fn switching_a_partial_identified_list_allocates_only_additional_wrapper_ids() -
         Some(&json!(7))
     );
     assert_eq!(
-        blocks[1]
+        blocks[2]
             .attrs
             .as_ref()
             .and_then(|attrs| attrs.get("vendor")),
@@ -123,6 +143,28 @@ fn switching_a_partial_identified_list_allocates_only_additional_wrapper_ids() -
     );
     session.undo()?;
     assert_eq!(session.document(), &source);
+    Ok(())
+}
+
+#[test]
+fn heading_and_code_list_toggle_converts_to_paragraph_without_an_empty_leading_item() -> TestResult
+{
+    for kind in ["heading", "codeBlock"] {
+        let source = document(vec![
+            json!({"type":kind,"attrs":{"blockId":"text-block","level":2,"language":"rust","sourceRefs":["voice"],"vendor":true},"content":[{"type":"text","text":"А😀text"}]}),
+        ])?;
+        let mut session = EditorSession::new(source.clone(), Revision(0));
+        session.set_selection(caret("text-block", 2))?;
+        session.toggle_list(ListKind::Bullet)?;
+        let item = &session.document().blocks()[0].children()[0];
+        assert_eq!(item.children().len(), 1);
+        assert_eq!(item.children()[0].node_type, "paragraph");
+        assert_eq!(item.children()[0].inline_text(), "А😀text");
+        assert_eq!(item.children()[0].attrs, source.blocks()[0].attrs);
+        assert_eq!(session.selection(), Some(&caret("text-block", 2)));
+        session.undo()?;
+        assert_eq!(session.document(), &source);
+    }
     Ok(())
 }
 

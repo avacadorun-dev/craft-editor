@@ -4,7 +4,7 @@ Tracking: [WriterCraft authoring issue #7](https://github.com/avacadorun-dev/wri
 
 ## Native session API
 
-- `toggle_list(ListKind::{Bullet, Ordered})` toggles the current list portion or wraps the selected sibling blocks. `list_state(kind)` returns `MarkState::{Off, On, Mixed}`.
+- `toggle_list(ListKind::{Bullet, Ordered})` lifts the selected item portion when toggling the active kind, changes the whole current list when switching kind, or wraps the selected sibling blocks. Headings/code are normalized to paragraphs without inserting an empty leading item; stable identities, text, provenance and opaque attributes are retained. `list_state(kind)` returns `MarkState::{Off, On, Mixed}`.
 - `indent_list()` and `outdent_list()` move the selected items by one level through the model's guarded list operations.
 - `toggle_blockquote()` wraps sibling blocks or lifts the selected enclosing quotation portion. `blockquote_state()` reports the selected text's container state.
 - `set_callout_kind(kind)` changes an enclosing callout to the source-defined `info`, `idea`, `warning` or `todo` kind. Creating a callout uses `ContentSlice::Blocks`, preserving the original toolbar's insertion semantics.
@@ -19,3 +19,7 @@ The canvas routes Enter, Shift+Enter and list Tab/Shift+Tab through these same A
 ## Remaining full-editor qualification
 
 This tranche does not close issue #7 or the complete editor gate. Cross-wrapper range joins, open rich-clipboard slices, table Tab behavior at the final cell, source-matched code-block exit/input rules, generalized formatting of partial multi-container/table selections, precise annotation remapping for list split operations, list wrappers with opaque metadata that cannot be lifted, and actual native IME/accessibility remain required until separately implemented and verified. The headless command outcomes and conservative preservation guards are not permission to reduce the approved original editor scope.
+
+## Original command probe
+
+On 2026-11-08, the installed original Tiptap command implementation was executed headlessly with synthetic JSON and equivalent identity attributes (the original BlockIdentity appendTransaction was not invoked). It confirmed that heading/code list toggles normalize to paragraphs, switching kind changes the whole active list, same-kind toggling lifts only selected items, and a paragraph inside a quote becomes a list within that quote. Generic model operations remain more explicit and need not discard metadata as upstream clearNodes/setNodeMarkup can. This probe is behavioral research, not full original-app or native UX acceptance.

@@ -1,8 +1,8 @@
 //! Selection-aware host formatting commands over lossless canonical structure.
 
 use craft_editor_model::{
-    Change, Command, Document, ListKind, ListStyle, Node, NodePath, NodeRef, indent_list_items,
-    outdent_list_items_with_ids, toggle_list_with_ids, wrap_list,
+    Change, Command, Document, Editor, ListKind, ListStyle, Node, NodePath, NodeRef, Transaction,
+    indent_list_items, outdent_list_items_with_ids, toggle_list_with_ids, wrap_list,
 };
 use serde_json::{Map, Value};
 
@@ -178,24 +178,65 @@ impl EditorSession {
     pub fn toggle_list(&mut self, kind: ListKind) -> Result<Change> {
         let bounds = Bounds::new(self)?;
         let mut ids = IdPool::new(self);
-        let command = if let Some(path) = bounds.ancestor(self.document(), is_list) {
+        let commands = if let Some(path) = bounds.ancestor(self.document(), is_list) {
             let list = self.document().node_ref(&path)?;
-            let (from, to) = bounds.child_range(&path)?;
+            // Tiptap changes the complete active list when switching kind; only toggling the
+            // current kind lifts the selected item range. Generic model builders also support
+            // partial type changes, but that is not the original toolbar's interaction.
+            let (from, to) = if list.expected.node_type == kind.node_type() {
+                bounds.child_range(&path)?
+            } else {
+                (0, list.expected.children().len())
+            };
             let portions = usize::from(from > 0)
                 + usize::from(to < list.expected.children().len())
                 + usize::from(list.expected.node_type != kind.node_type());
             let new_ids = ids.additional_portions(&list.expected, portions)?;
-            toggle_list_with_ids(
+            vec![toggle_list_with_ids(
                 self.document(),
                 list,
                 from,
                 to,
                 ListStyle::new(kind),
                 &new_ids,
-            )?
+            )?]
         } else {
             let (parent_path, from, to) = bounds.sibling_range()?;
             let parent = self.document().node_ref(&parent_path)?;
+            let selected = parent
+                .expected
+                .children()
+                .get(from..to)
+                .ok_or(Error::InvalidSelection)?;
+            let mut commands = Vec::new();
+            let mut candidate = Editor::new(self.document().clone(), self.revision());
+            if selected
+                .iter()
+                .any(|node| matches!(node.node_type.as_str(), "heading" | "codeBlock"))
+            {
+                let normalized = selected
+                    .iter()
+                    .map(|node| {
+                        let mut node = node.clone();
+                        if matches!(node.node_type.as_str(), "heading" | "codeBlock") {
+                            node.node_type = "paragraph".into();
+                        }
+                        node
+                    })
+                    .collect();
+                let command = Command::ReplaceChildren {
+                    parent,
+                    from,
+                    to,
+                    children: normalized,
+                };
+                candidate.apply(Transaction {
+                    base_revision: candidate.revision(),
+                    commands: vec![command.clone()],
+                })?;
+                commands.push(command);
+            }
+            let parent = candidate.document().node_ref(&parent_path)?;
             let leading = parent
                 .expected
                 .children()
@@ -205,16 +246,17 @@ impl EditorSession {
                 .filter(|node| node.node_type != "paragraph")
                 .map(|_| ids.id())
                 .collect::<Result<Vec<_>>>()?;
-            wrap_list(
-                self.document(),
+            commands.push(wrap_list(
+                candidate.document(),
                 parent,
                 from,
                 to,
                 ListStyle::new(kind),
                 &leading,
-            )?
+            )?);
+            commands
         };
-        let change = self.apply_commands_with_selection(vec![command], bounds.selection)?;
+        let change = self.apply_commands_with_selection(commands, bounds.selection)?;
         self.next_id = ids.next;
         Ok(change)
     }
@@ -383,6 +425,9 @@ fn distribute_refs(node: &mut Node, refs: &[Value]) -> Result<bool> {
         let value = attrs
             .entry("sourceRefs")
             .or_insert_with(|| Value::Array(vec![]));
+        if value.is_null() {
+            *value = Value::Array(vec![]);
+        }
         let existing = value
             .as_array_mut()
             .ok_or(Error::UnsupportedStructuralEdit)?;
