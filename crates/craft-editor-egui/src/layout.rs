@@ -574,7 +574,9 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
                 let mut canonical_path = canonical_parent.to_vec();
                 canonical_path.push(index);
                 match node.node_type.as_str() {
-                    "paragraph" => self.paragraph(node, Path(native_path)),
+                    "paragraph" | "heading" | "codeBlock" => {
+                        self.paragraph(node, Path(native_path))
+                    }
                     "table" if native_path.len() == 1 => Ok(Arc::new(Block::Table(self.table(
                         node,
                         &native_path,
@@ -590,8 +592,37 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
     fn paragraph(&mut self, node: &Node, path: Path) -> Result<Arc<Block>> {
         let id = node.block_id().ok_or(Error::MissingIdentity)?.to_owned();
         let mut paragraph = Paragraph::new();
+        let body_size = self.style.map_or(18.0, |style| style.font_size);
+        let mut inherited = CharProps::default();
+        if node.node_type == "heading" {
+            let level = integer_attr(node, "level").clamp(1, 6);
+            inherited.size = Some(
+                body_size
+                    * match level {
+                        1 => 1.75,
+                        2 => 1.45,
+                        3 => 1.25,
+                        _ => 1.1,
+                    },
+            );
+            inherited.bold = Some(true);
+            paragraph.props.outline_level = Some((level - 1) as u8);
+            paragraph.props.space_before = Some(body_size * 0.6);
+            paragraph.props.keep_next = Some(true);
+        } else if node.node_type == "codeBlock" {
+            inherited.font = Some("JetBrains Mono".into());
+            inherited.size = Some(body_size * 0.9);
+            paragraph.props.line_spacing = Some(wordcraft_doc::props::LineSpacing::Multiple(1.4));
+        }
+        paragraph.props.align = match node.string_attr("textAlign") {
+            Some("left") => Some(wordcraft_doc::props::Align::Left),
+            Some("center") => Some(wordcraft_doc::props::Align::Center),
+            Some("right") => Some(wordcraft_doc::props::Align::Right),
+            Some("justify") => Some(wordcraft_doc::props::Align::Justify),
+            _ => None,
+        };
         for inline in node.children() {
-            let mut props = CharProps::default();
+            let mut props = inherited.clone();
             for mark in inline.marks.as_deref().unwrap_or_default() {
                 match mark.mark_type.as_str() {
                     "bold" => props.bold = Some(true),
@@ -610,7 +641,8 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
                     if text.contains('\u{fffc}') {
                         return Err(Error::UnsupportedNode("literal_object_scalar".into()));
                     }
-                    paragraph.insert_text(paragraph.len(), text, &props)?;
+                    let display = text.replace('\n', "\u{000b}");
+                    paragraph.insert_text(paragraph.len(), &display, &props)?;
                 }
                 "hardBreak" => {
                     paragraph.insert_text(paragraph.len(), "\u{000b}", &props)?;

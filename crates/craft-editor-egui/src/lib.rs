@@ -70,6 +70,16 @@ pub struct Selection {
     /// Moving endpoint/caret.
     pub head: DocPoint,
 }
+/// Formatting state across the current text selection or pending insertion marks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MarkState {
+    /// No selected text carries this mark.
+    Off,
+    /// Every selected text run carries this mark.
+    On,
+    /// Some selected text runs carry this mark.
+    Mixed,
+}
 /// Host-owned visual options; this library does not install fonts or replace the host theme.
 #[derive(Debug, Clone)]
 pub struct ViewOptions {
@@ -119,6 +129,7 @@ struct Composition {
 pub struct EditorSession {
     editor: Editor,
     selection: Option<Selection>,
+    stored_marks: Option<Vec<Mark>>,
     undo_selection: Vec<SelectionHistory>,
     redo_selection: Vec<SelectionHistory>,
     pending: Vec<Change>,
@@ -138,6 +149,7 @@ impl EditorSession {
         Self {
             editor: Editor::new(document, revision),
             selection: None,
+            stored_marks: None,
             undo_selection: vec![],
             redo_selection: vec![],
             pending: vec![],
@@ -196,6 +208,9 @@ impl EditorSession {
         let projection = Projection::new(self.document())?;
         projection.scalar(&selection.anchor)?;
         projection.scalar(&selection.head)?;
+        if self.selection.as_ref() != Some(&selection) {
+            self.stored_marks = None;
+        }
         self.selection = Some(selection);
         self.restore_cursor = true;
         Ok(())
@@ -229,6 +244,7 @@ impl EditorSession {
             commands,
         })?;
         if change.before_revision != change.after_revision {
+            self.stored_marks = None;
             if let Some(selection) = &mut self.selection {
                 for map in &change.mappings {
                     let (id, offset) =
@@ -270,12 +286,128 @@ impl EditorSession {
         }
         Ok(change)
     }
+    /// Query real formatting across selected runs, including pending marks at a caret.
+    pub fn mark_state(&self, kind: &str) -> Result<MarkState> {
+        let Some(selection) = self.selection.as_ref() else {
+            return Ok(MarkState::Off);
+        };
+        if selection.anchor == selection.head {
+            return Ok(
+                if self
+                    .typing_marks()?
+                    .iter()
+                    .any(|mark| mark.mark_type == kind)
+                {
+                    MarkState::On
+                } else {
+                    MarkState::Off
+                },
+            );
+        }
+        let projection = Projection::new(self.document())?;
+        let a = projection.scalar(&selection.anchor)?;
+        let b = projection.scalar(&selection.head)?;
+        let mut marked = false;
+        let mut unmarked = false;
+        for span in &projection.spans {
+            let from = a.min(b).max(span.start).saturating_sub(span.start);
+            let to = a.max(b).min(span.end).saturating_sub(span.start);
+            let mut offset = 0;
+            for inline in span.node.children() {
+                let end = offset + inline.inline_text().chars().count();
+                if offset < to && end > from && inline.node_type == "text" {
+                    if inline
+                        .marks
+                        .as_deref()
+                        .unwrap_or_default()
+                        .iter()
+                        .any(|mark| mark.mark_type == kind)
+                    {
+                        marked = true;
+                    } else {
+                        unmarked = true;
+                    }
+                }
+                offset = end;
+            }
+        }
+        Ok(match (marked, unmarked) {
+            (true, true) => MarkState::Mixed,
+            (true, false) => MarkState::On,
+            _ => MarkState::Off,
+        })
+    }
+    /// Toggle one mark on selected text or on the next insertion at a collapsed caret.
+    pub fn toggle_mark(&mut self, mark: Mark) -> Result<()> {
+        let mode = if self.mark_state(&mark.mark_type)? == MarkState::On {
+            MarkMode::Remove
+        } else {
+            MarkMode::Add
+        };
+        self.format_selection(mark, mode).map(|_| ())
+    }
+    fn typing_marks(&self) -> Result<Vec<Mark>> {
+        if let Some(marks) = &self.stored_marks {
+            return Ok(marks.clone());
+        }
+        let Some(selection) = &self.selection else {
+            return Ok(Vec::new());
+        };
+        let node = self.document().block(&selection.head.block_id)?;
+        let mut offset = 0;
+        for inline in node.children() {
+            let end = offset + inline.inline_text().chars().count();
+            if selection.head.offset.0 <= end
+                && (selection.head.offset.0 > offset || selection.head.offset.0 == 0)
+            {
+                return Ok(inline.marks.clone().unwrap_or_default());
+            }
+            offset = end;
+        }
+        Ok(Vec::new())
+    }
     /// Add or remove a mark across the exact selection's text-block ranges atomically.
     pub fn format_selection(&mut self, mark: Mark, mode: MarkMode) -> Result<Change> {
+        if self.is_composing() {
+            return Err(Error::CompositionActive);
+        }
         let projection = Projection::new(self.document())?;
         let selection = self.selection.as_ref().ok_or(Error::InvalidSelection)?;
         let a = projection.scalar(&selection.anchor)?;
         let b = projection.scalar(&selection.head)?;
+        if a == b {
+            // Validate pending marks through the same canonical validator, without changing
+            // the actual document or creating an empty formatting history entry.
+            let mut validator = Editor::new(Document::plain("mark-validation", "x")?, Revision(0));
+            validator.apply(Transaction {
+                base_revision: Revision(0),
+                commands: vec![Command::ApplyMarks {
+                    range: TextRange {
+                        block_id: "mark-validation".into(),
+                        start: ScalarOffset(0),
+                        end: ScalarOffset(1),
+                    },
+                    marks: vec![mark.clone()],
+                    mode,
+                }],
+            })?;
+            let mut marks = self.typing_marks()?;
+            match mode {
+                MarkMode::Add => {
+                    if !marks
+                        .iter()
+                        .any(|existing| existing.mark_type == mark.mark_type)
+                    {
+                        marks.push(mark);
+                    }
+                }
+                MarkMode::Remove => marks.retain(|existing| existing.mark_type != mark.mark_type),
+                MarkMode::Replace => marks = vec![mark],
+            }
+            let change = self.apply_commands(Vec::new())?;
+            self.stored_marks = Some(marks);
+            return Ok(change);
+        }
         let mut commands = vec![];
         for span in &projection.spans {
             let start = a.min(b).max(span.start);
@@ -300,6 +432,7 @@ impl EditorSession {
             return Err(Error::CompositionActive);
         }
         let change = self.editor.undo(self.revision())?;
+        self.stored_marks = None;
         if let Some(entry) = self.undo_selection.pop() {
             self.selection = entry.before.clone();
             self.redo_selection.push(entry);
@@ -314,6 +447,7 @@ impl EditorSession {
             return Err(Error::CompositionActive);
         }
         let change = self.editor.redo(self.revision())?;
+        self.stored_marks = None;
         if let Some(entry) = self.redo_selection.pop() {
             self.selection = entry.after.clone();
             self.undo_selection.push(entry);
@@ -407,6 +541,7 @@ impl EditorSession {
         }
         let mut buffer =
             SemanticBuffer::new(working_document, self.revision(), projection, self.next_id);
+        buffer.typing_marks.clone_from(&self.stored_marks);
         let options = self.options.clone();
         let color = ui.visuals().text_color();
         let initial_projection = buffer.initial_projection.clone();
@@ -455,8 +590,10 @@ impl EditorSession {
                 vec![]
             };
             commands.append(&mut buffer.commands);
+            let typing_marks = self.stored_marks.clone();
             match self.apply_commands(commands) {
                 Ok(_) => {
+                    self.stored_marks = typing_marks;
                     if let Some(range) = after_range {
                         self.selection = selection_from_range(&buffer.projection, range).ok();
                     }
@@ -471,7 +608,11 @@ impl EditorSession {
                 }
             }
         } else if let Some(range) = after_range {
-            self.selection = selection_from_range(&buffer.projection, range).ok();
+            let after = selection_from_range(&buffer.projection, range).ok();
+            if self.selection != after {
+                self.stored_marks = None;
+            }
+            self.selection = after;
         }
         ViewResponse {
             response: output.response.response,
@@ -510,6 +651,7 @@ struct SemanticBuffer {
     editor: Editor,
     projection: Projection,
     initial_projection: Projection,
+    typing_marks: Option<Vec<Mark>>,
     commands: Vec<Command>,
     error: Option<Error>,
     next_id: u64,
@@ -519,6 +661,7 @@ impl SemanticBuffer {
         Self {
             editor: Editor::new(document, revision),
             initial_projection: projection.clone(),
+            typing_marks: None,
             projection,
             commands: vec![],
             error: None,
@@ -537,6 +680,32 @@ impl SemanticBuffer {
     fn insert(&mut self, text: &str, at: usize) -> Result<usize> {
         let point = self.projection.point(at, true)?;
         let mut commands = vec![];
+        if self.editor.document().block(&point.block_id)?.node_type == "codeBlock" {
+            commands.push(Command::ReplaceText {
+                range: TextRange {
+                    block_id: point.block_id.clone(),
+                    start: point.offset,
+                    end: point.offset,
+                },
+                expected: String::new(),
+                replacement: text.into(),
+            });
+            if !text.is_empty()
+                && let Some(marks) = &self.typing_marks
+            {
+                commands.push(Command::ApplyMarks {
+                    range: TextRange {
+                        block_id: point.block_id,
+                        start: point.offset,
+                        end: ScalarOffset(point.offset.0 + text.chars().count()),
+                    },
+                    marks: marks.clone(),
+                    mode: MarkMode::Replace,
+                });
+            }
+            self.execute(commands)?;
+            return Ok(text.chars().count());
+        }
         let lines: Vec<_> = text.split('\n').collect();
         let mut current = point.block_id;
         let mut offset = point.offset.0;
@@ -551,6 +720,17 @@ impl SemanticBuffer {
                     expected: String::new(),
                     replacement: (*line).into(),
                 });
+                if let Some(marks) = &self.typing_marks {
+                    commands.push(Command::ApplyMarks {
+                        range: TextRange {
+                            block_id: current.clone(),
+                            start: ScalarOffset(offset),
+                            end: ScalarOffset(offset + line.chars().count()),
+                        },
+                        marks: marks.clone(),
+                        mode: MarkMode::Replace,
+                    });
+                }
                 offset += line.chars().count();
             }
             if index + 1 < lines.len() {

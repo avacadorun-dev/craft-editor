@@ -5,7 +5,7 @@
 //! checkpoint: unsupported nodes fail explicitly; rich clipboard, full accessibility and native
 //! platform IME acceptance are not implied by the headless tests.
 
-use craft_editor_model::{Command, Document, Mark, MarkMode, Revision, ScalarOffset, TextRange};
+use craft_editor_model::{Command, Document, Mark, Revision, ScalarOffset, TextRange};
 use egui::{Color32, Event, Key, Modifiers, Pos2, Rect, Sense, TextureHandle, Vec2};
 
 use crate::{
@@ -304,8 +304,20 @@ impl CanvasState {
         };
         let selection = if triple {
             Selection {
-                anchor: geometry.line_edge(&point, false)?,
-                head: geometry.line_edge(&point, true)?,
+                anchor: DocPoint {
+                    block_id: point.block_id.clone(),
+                    offset: ScalarOffset(0),
+                },
+                head: DocPoint {
+                    block_id: point.block_id.clone(),
+                    offset: ScalarOffset(
+                        session
+                            .document()
+                            .block_text(&point.block_id)?
+                            .chars()
+                            .count(),
+                    ),
+                },
             }
         } else if double {
             geometry.word_at(&point)?
@@ -442,12 +454,7 @@ impl CanvasState {
                         Key::I => "italic",
                         _ => "underline",
                     };
-                    let mode = if selection_has_mark(session, kind)? {
-                        MarkMode::Remove
-                    } else {
-                        MarkMode::Add
-                    };
-                    session.format_selection(Mark::new(kind), mode)?;
+                    session.toggle_mark(Mark::new(kind))?;
                     return Ok(());
                 }
                 _ => {}
@@ -670,38 +677,6 @@ fn editor_event(event: &Event) -> bool {
     }
 }
 
-fn selection_has_mark(session: &EditorSession, kind: &str) -> Result<bool> {
-    let Some(selection) = &session.selection else {
-        return Ok(false);
-    };
-    let projection = Projection::new(session.document())?;
-    let a = projection.scalar(&selection.anchor)?;
-    let b = projection.scalar(&selection.head)?;
-    let mut any = false;
-    for span in &projection.spans {
-        let from = a.min(b).max(span.start).saturating_sub(span.start);
-        let to = a.max(b).min(span.end).saturating_sub(span.start);
-        let mut offset = 0;
-        for inline in span.node.children() {
-            let end = offset + inline.inline_text().chars().count();
-            if offset < to && end > from {
-                any = true;
-                if !inline
-                    .marks
-                    .as_deref()
-                    .unwrap_or_default()
-                    .iter()
-                    .any(|mark| mark.mark_type == kind)
-                {
-                    return Ok(false);
-                }
-            }
-            offset = end;
-        }
-    }
-    Ok(any)
-}
-
 fn replacement_buffer(session: &EditorSession, text: &str) -> Result<(SemanticBuffer, DocPoint)> {
     let projection = Projection::new(session.document())?;
     let selection = session
@@ -717,6 +692,7 @@ fn replacement_buffer(session: &EditorSession, text: &str) -> Result<(SemanticBu
         projection,
         session.next_id,
     );
+    buffer.typing_marks.clone_from(&session.stored_marks);
     if a != b {
         let spans: Vec<_> = buffer
             .projection
@@ -786,10 +762,12 @@ fn replacement_buffer(session: &EditorSession, text: &str) -> Result<(SemanticBu
     Ok((buffer, caret))
 }
 fn replace(session: &mut EditorSession, text: &str) -> Result<()> {
+    let stored_marks = session.stored_marks.clone();
     let (buffer, caret) = replacement_buffer(session, text)?;
     let next_id = buffer.next_id;
     let change = session.apply_commands(buffer.commands)?;
     session.next_id = next_id;
+    session.stored_marks = stored_marks;
     session.selection = Some(collapsed(caret));
     if change.before_revision != change.after_revision
         && let Some(history) = session.undo_selection.last_mut()
@@ -803,6 +781,7 @@ fn replace(session: &mut EditorSession, text: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use craft_editor_model::MarkMode;
     type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
     fn fixture() -> craft_editor_model::Result<Document> {
@@ -979,7 +958,7 @@ mod tests {
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         assert_eq!(response.changes.len(), 1);
         assert_eq!(session.selection(), Some(&selection));
-        assert!(selection_has_mark(&session, "bold")?);
+        assert_eq!(session.mark_state("bold")?, crate::MarkState::On);
         session.undo()?;
         assert_eq!(session.document(), &original);
         assert_eq!(session.selection(), Some(&selection));
@@ -1086,6 +1065,127 @@ mod tests {
         );
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         assert!(response.changes.is_empty());
+        assert_eq!(session.document(), &original);
+        Ok(())
+    }
+    #[test]
+    fn collapsed_toolbar_mark_changes_next_typing_without_empty_history() -> TestResult {
+        let original = Document::plain("p", "AB")?;
+        let mut session = EditorSession::new(original.clone(), Revision(1));
+        session.set_selection(collapsed(point("p", 1)))?;
+        session.toggle_mark(Mark::new("bold"))?;
+        assert_eq!(session.mark_state("bold")?, crate::MarkState::On);
+        assert_eq!(session.document(), &original);
+        assert!(!session.can_undo());
+        replace(&mut session, "X")?;
+        assert_eq!(session.document().block_text("p")?, "AXB");
+        assert_eq!(session.mark_state("bold")?, crate::MarkState::On);
+        session.toggle_mark(Mark::new("bold"))?;
+        replace(&mut session, "Y")?;
+        session.set_selection(Selection {
+            anchor: point("p", 1),
+            head: point("p", 2),
+        })?;
+        assert_eq!(session.mark_state("bold")?, crate::MarkState::On);
+        session.set_selection(Selection {
+            anchor: point("p", 2),
+            head: point("p", 3),
+        })?;
+        assert_eq!(session.mark_state("bold")?, crate::MarkState::Off);
+        session.set_selection(Selection {
+            anchor: point("p", 1),
+            head: point("p", 3),
+        })?;
+        assert_eq!(session.mark_state("bold")?, crate::MarkState::Mixed);
+        session.undo()?;
+        session.undo()?;
+        assert_eq!(session.document(), &original);
+        Ok(())
+    }
+    #[test]
+    fn pending_marks_follow_enter_to_a_new_unique_paragraph_and_atomic_undo() -> TestResult {
+        let original = Document::plain("p", "AB")?;
+        let mut session = EditorSession::new(original.clone(), Revision(7));
+        session.set_selection(collapsed(point("p", 1)))?;
+        session.toggle_mark(Mark::new("italic"))?;
+        replace(&mut session, "X\nY")?;
+        let blocks = session.document().blocks();
+        assert_eq!(blocks.len(), 2);
+        assert_ne!(blocks[0].block_id(), blocks[1].block_id());
+        assert_eq!(blocks[0].inline_text(), "AX");
+        assert_eq!(blocks[1].inline_text(), "YB");
+        assert_eq!(
+            session
+                .selection()
+                .map(|selection| selection.head.block_id.as_str()),
+            blocks[1].block_id()
+        );
+        assert_eq!(session.mark_state("italic")?, crate::MarkState::On);
+        session.undo()?;
+        assert_eq!(session.document(), &original);
+        assert!(!session.can_undo());
+        Ok(())
+    }
+    #[test]
+    fn headings_and_multiline_code_have_real_typography_and_lossless_caret_maps() -> TestResult {
+        let source = Document::from_json(
+            serde_json::json!({"type":"doc","attrs":{"schemaVersion":4},"content":[
+                {"type":"heading","attrs":{"blockId":"h1","level":1,"vendor":{"keep":true}},"content":[{"type":"text","text":"A heading"}]},
+                {"type":"heading","attrs":{"blockId":"h2","level":2},"content":[{"type":"text","text":"Second heading"}]},
+                {"type":"heading","attrs":{"blockId":"h3","level":3},"content":[{"type":"text","text":"Third heading"}]},
+                {"type":"paragraph","attrs":{"blockId":"p"},"content":[{"type":"text","text":"Body text"}]},
+                {"type":"codeBlock","attrs":{"blockId":"code","language":"rust"},"content":[{"type":"text","text":"let a = 1;\nlet b = 2;"}]}
+            ]}),
+        )?;
+        let before = source.to_json()?;
+        let geometry = FlowGeometry::with_style(
+            &source,
+            600.0,
+            &|_| None,
+            Some(&CanvasStyle::default().geometry()),
+        )?;
+        let h1 = geometry
+            .caret(&point("h1", 1))?
+            .ok_or(Error::InvalidSelection)?;
+        let h2 = geometry
+            .caret(&point("h2", 1))?
+            .ok_or(Error::InvalidSelection)?;
+        let h3 = geometry
+            .caret(&point("h3", 1))?
+            .ok_or(Error::InvalidSelection)?;
+        let body = geometry
+            .caret(&point("p", 1))?
+            .ok_or(Error::InvalidSelection)?;
+        assert!(h1.height > h2.height && h2.height > h3.height && h3.height > body.height);
+        let code_start = geometry
+            .caret(&point("code", 0))?
+            .ok_or(Error::InvalidSelection)?;
+        let code_end = geometry
+            .caret(&point("code", 13))?
+            .ok_or(Error::InvalidSelection)?;
+        assert!(code_end.y > code_start.y);
+        assert_eq!(
+            geometry.hit(0, code_end.x + 0.01, code_end.y + code_end.height / 2.0)?,
+            Some(point("code", 13))
+        );
+        assert_eq!(source.to_json()?, before);
+        Ok(())
+    }
+    #[test]
+    fn code_enter_keeps_one_code_block_and_exact_undo() -> TestResult {
+        let original = Document::from_json(
+            serde_json::json!({"type":"doc","attrs":{"schemaVersion":4},"content":[{"type":"codeBlock","attrs":{"blockId":"code","language":"rust"},"content":[{"type":"text","text":"ab"}]}]}),
+        )?;
+        let mut session = EditorSession::new(original.clone(), Revision(1));
+        session.set_selection(collapsed(point("code", 1)))?;
+        replace(&mut session, "\n")?;
+        assert_eq!(session.document().blocks().len(), 1);
+        assert_eq!(session.document().block_text("code")?, "a\nb");
+        assert_eq!(
+            session.selection().map(|selection| selection.head.offset),
+            Some(ScalarOffset(2))
+        );
+        session.undo()?;
         assert_eq!(session.document(), &original);
         Ok(())
     }
