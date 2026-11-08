@@ -70,7 +70,7 @@
   },
   {
     "file": "assets/syntaxes/scheme.sublime-syntax",
-    "sha256": "5ec203ffbb043b7b8a0bd73f08efbb97732f6a832cf73b71bab007d759d16335",
+    "sha256": "3d6f113dc58d273b688a198cef1a0379373066203b36dfa6d3f72af0c6d41966",
     "source": "https://github.com/wooorm/refractor/blob/ed824ac801ef4bb5b25f73a4bcd6ce46b7eec8c9/lang/scheme.js",
     "source_revision": "ed824ac801ef4bb5b25f73a4bcd6ce46b7eec8c9",
     "source_sha256": "8d38181ab74f4a49ec76d5482e2af03704dade57d0bb9945aa65e6fe49e3b43b",
@@ -81,7 +81,7 @@
   },
   {
     "file": "assets/syntaxes/mermaid.sublime-syntax",
-    "sha256": "b78197b0ab78129cb05502f0d9138ac8d8f60012662667079ed37965b50bc78a",
+    "sha256": "01f48bf31136f10ecdd6cf7c34ed8bd13c0e75dd3d2abd29f7f650b1c70b0604",
     "source": "https://github.com/wooorm/refractor/blob/ed824ac801ef4bb5b25f73a4bcd6ce46b7eec8c9/lang/mermaid.js",
     "source_revision": "ed824ac801ef4bb5b25f73a4bcd6ce46b7eec8c9",
     "source_sha256": "61d59512448e2c33aa1236556387ee8a36fc820f930bd8e1c8c8fc2bee60ca0e",
@@ -92,7 +92,7 @@
   },
   {
     "file": "assets/syntaxes/fortran.sublime-syntax",
-    "sha256": "e8246b1692ca89f866972ce554edc7413d3e36ab2290d491f1fba88b0c82817d",
+    "sha256": "c2f0c6e23a36cc8eb6ea0ea51eeb03f08313b2884fb98bb2c46da421bc8ff7e0",
     "source": "https://github.com/wooorm/refractor/blob/ed824ac801ef4bb5b25f73a4bcd6ce46b7eec8c9/lang/fortran.js",
     "source_revision": "ed824ac801ef4bb5b25f73a4bcd6ce46b7eec8c9",
     "source_sha256": "c83dd1303a461baac26db97365e0cadda9ba0dc12afd959856fb078568869898",

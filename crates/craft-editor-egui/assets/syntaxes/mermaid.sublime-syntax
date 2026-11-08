@@ -17,8 +17,8 @@
       {
         "match": "^([ \\t]*)(classDef|linkStyle|style)([ \\t]+)([\\w$-]+)([ \\t]+)",
         "captures": {
-          "2": "keyword.control.mermaid",
-          "4": "entity.other.attribute-name.mermaid"
+          2: "keyword.control.mermaid",
+          4: "entity.other.attribute-name.mermaid"
         },
         "push": [
           {
@@ -46,39 +46,39 @@
       {
         "match": "([^<>ox.=-])((?:-[-.]|==))(?![<>ox.=-])[ \\t]*(\"[^\"\\r\\n]*\"|[^\\s\".=-](?:[^\\r\\n.=-]*[^\\s.=-])?)[ \\t]*((?:\\.+->?|--+[->]|==+[=>]))(?![<>ox.=-])",
         "captures": {
-          "2": "keyword.operator.mermaid",
-          "3": "entity.other.attribute-name.label.mermaid",
-          "4": "keyword.operator.mermaid"
+          2: "keyword.operator.mermaid",
+          3: "entity.other.attribute-name.label.mermaid",
+          4: "keyword.operator.mermaid"
         }
       },
       {
         "match": "(^|[^{}|o.-])([|}][|o](?:--|\\.\\.)[|o][|{](?![{}|o.-]))",
         "captures": {
-          "2": "keyword.operator.arrow.mermaid"
+          2: "keyword.operator.arrow.mermaid"
         }
       },
       {
         "match": "(^|[^<>ox.=-])((?:[<ox](?:==+|--+|-\\.*-)[>ox]?|(?:==+|--+|-\\.*-)[>ox]|===+|---+|-\\.+-)(?![<>ox.=-]))",
         "captures": {
-          "2": "keyword.operator.arrow.mermaid"
+          2: "keyword.operator.arrow.mermaid"
         }
       },
       {
         "match": "(^|[^<>()x-])((?:--?(?:>>|[x>)])(?![<>()x])|(?:<<|[x<(])--?(?!-)))",
         "captures": {
-          "2": "keyword.operator.arrow.mermaid"
+          2: "keyword.operator.arrow.mermaid"
         }
       },
       {
         "match": "(^|[^<>|*o.-])((?:[*o]--|--[*o]|<\\|?(?:--|\\.\\.)|(?:--|\\.\\.)\\|?>|--|\\.\\.)(?![<>|*o.-]))",
         "captures": {
-          "2": "keyword.operator.arrow.mermaid"
+          2: "keyword.operator.arrow.mermaid"
         }
       },
       {
         "match": "(^|[^|<])(\\|(?:[^\\r\\n\"|]|\"[^\"\\r\\n]*\")+\\|)",
         "captures": {
-          "2": "entity.other.attribute-name.label.mermaid"
+          2: "entity.other.attribute-name.label.mermaid"
         }
       },
       {
@@ -96,13 +96,13 @@
       {
         "match": "(^[ \\t]*)((?:action|callback|class|classDef|classDiagram|click|direction|erDiagram|flowchart|gantt|gitGraph|graph|journey|link|linkStyle|pie|requirementDiagram|sequenceDiagram|stateDiagram|stateDiagram-v2|style|subgraph)(?![\\w$-]))",
         "captures": {
-          "2": "keyword.control.mermaid"
+          2: "keyword.control.mermaid"
         }
       },
       {
         "match": "(?i)(^[ \\t]*)((?:activate|alt|and|as|autonumber|deactivate|else|end(?:[ \\t]+note)?|loop|opt|par|participant|rect|state|note[ \\t]+(?:over|(?:left|right)[ \\t]+of))(?![\\w$-]))",
         "captures": {
-          "2": "keyword.control.mermaid"
+          2: "keyword.control.mermaid"
         }
       },
       {
@@ -112,7 +112,7 @@
       {
         "match": "(\\w[ \\t]*)(&(?=[ \\t]*\\w)|:::|:)",
         "captures": {
-          "2": "keyword.operator.mermaid"
+          2: "keyword.operator.mermaid"
         }
       },
       {

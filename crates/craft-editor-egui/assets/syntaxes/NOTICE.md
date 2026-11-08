@@ -10,8 +10,8 @@ BASIC, Visual Basic/.NET, Arduino, Fortran, Scheme and Mermaid port the precise 
 
 Changes for native execution:
 
-- Regex flags and source token roles become syntect-native scopes and captures; source bytes are never altered. Lookbehind capture prefixes remain outside the colored capture.
-- Arduino's original C++ inheritance uses the maintained native C++ grammar with the source Arduino keyword/constants/built-ins injected as a prototype. Tests require that native comments and strings retain their own scopes, including inside function bodies.
+- Regex flags and source token roles become syntect-native scopes and numeric YAML capture keys; source bytes are never altered. Lookbehind capture prefixes remain outside the colored capture.
+- Arduino's original C++ inheritance uses the maintained native C++ grammar with the source Arduino keyword/constants/built-ins injected as a prototype. The role adapter explicitly preserves opaque parent C++ comment/string scopes even when a with_prototype match is injected into them. Tests require this behavior, including inside function bodies.
 - Scheme's source R7RS vocabulary/number definitions remain specific to Scheme. Native contexts carry strings, nested block comments and datum comments across lines. The source dangling-radix alternative is grouped correctly instead of treating a bare radix prefix as a number.
 - Fortran string contexts preserve doubled quotes and continuation-line comments. Type/statement/operator vocabularies match the source grammar.
 - Mermaid preserves the source's distinct ER/flowchart/sequence/class arrow families, labels, styles, annotations and case-sensitive/case-insensitive declarations. No rendered-diagram behavior is simulated by these source tokens.

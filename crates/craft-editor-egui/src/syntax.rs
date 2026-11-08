@@ -519,6 +519,30 @@ pub fn highlight(source: &str, language: &str) -> Result<Highlighted> {
     Ok(output)
 }
 fn classify(scopes: &ScopeStack) -> TokenKind {
+    // Arduino's vocabulary is injected into native C++ contexts. Syntect's with_prototype
+    // deliberately preempts opaque contexts too, so their existing lexical authority wins over
+    // injected keyword/constant matches inside comments and strings. This does not recolor code
+    // interpolation in unrelated grammars or guess source delimiters outside the native parser.
+    if scopes
+        .as_slice()
+        .iter()
+        .any(|scope| scope.to_string() == "source.arduino")
+    {
+        if scopes
+            .as_slice()
+            .iter()
+            .any(|scope| scope.to_string().starts_with("comment"))
+        {
+            return TokenKind::Comment;
+        }
+        if scopes
+            .as_slice()
+            .iter()
+            .any(|scope| scope.to_string().starts_with("string"))
+        {
+            return TokenKind::String;
+        }
+    }
     for scope in scopes.as_slice().iter().rev() {
         let scope = scope.to_string();
         let kind = if scope.starts_with("comment") {

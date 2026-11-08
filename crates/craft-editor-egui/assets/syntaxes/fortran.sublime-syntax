@@ -60,7 +60,7 @@
       {
         "match": "(^|(?!\\().)(/(?!\\)))",
         "captures": {
-          "2": "keyword.operator.fortran"
+          2: "keyword.operator.fortran"
         }
       },
       {
