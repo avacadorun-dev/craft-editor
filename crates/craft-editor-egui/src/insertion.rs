@@ -419,6 +419,9 @@ impl EditorSession {
     /// Code blocks keep a literal newline. A selected opaque block is retained and followed by a
     /// new paragraph. The resulting tree and caret form one revision-guarded Undo/Redo entry.
     pub fn insert_paragraph(&mut self) -> Result<Change> {
+        if self.table_selection.is_some() {
+            return self.append_paragraph_in_head_cell();
+        }
         if self.is_composing() {
             return Err(Error::CompositionActive);
         }

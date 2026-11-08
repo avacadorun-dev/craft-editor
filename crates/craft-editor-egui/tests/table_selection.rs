@@ -186,6 +186,23 @@ fn rectangular_typing_cut_and_clear_have_distinct_source_selection_semantics_and
             _ => session.cut_to_clipboard()?.ok_or("missing cut")?,
         };
         let after = session.document().clone();
+        let written = after.blocks()[0]
+            .children()
+            .iter()
+            .flat_map(Node::children)
+            .flat_map(Node::children)
+            .map(Node::inline_text)
+            .filter(|text| !text.is_empty())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            written,
+            if operation == 0 {
+                vec!["New 😀".to_owned()]
+            } else {
+                vec![]
+            },
+            "all other selected cell writing must be cleared"
+        );
         let cells = session.cell_selection().cloned();
         let text = session.selection().cloned();
         assert_eq!(session.revision(), Revision(1));
@@ -292,5 +309,245 @@ fn rectangle_changes_stale_deferred_paste_and_native_capacity_refuses_before_mut
     assert_eq!(session.document(), &original);
     assert_eq!(session.revision(), Revision(0));
     assert!(!session.can_undo());
+    Ok(())
+}
+
+#[test]
+fn source_cell_enter_tab_and_delete_commands_preserve_writing_and_one_undo() -> TestResult {
+    let cells = fixture()?;
+    let mut input = cells.to_json()?;
+    let rows = input["content"].as_array_mut().ok_or("missing blocks")?;
+    rows.insert(
+        0,
+        serde_json::to_value(Node::paragraph("before", "Before"))?,
+    );
+    rows.push(serde_json::to_value(Node::paragraph("after", "After"))?);
+    // Source fixture uses body cells; header behavior is checked separately.
+    for cell in input["content"][1]["content"][0]["content"]
+        .as_array_mut()
+        .ok_or("missing cells")?
+    {
+        cell["type"] = "tableCell".into();
+    }
+    fn source_defaults(node: &mut Value) {
+        if node["type"] == "paragraph" {
+            node["attrs"]["sourceRefs"] = json!([]);
+        }
+        if node["type"] == "tableCell" || node["type"] == "tableHeader" {
+            node["attrs"] = json!({"colspan":1,"rowspan":1,"colwidth":null,"align":null});
+        }
+        if let Some(children) = node.get_mut("content").and_then(Value::as_array_mut) {
+            for child in children {
+                source_defaults(child);
+            }
+        }
+    }
+    source_defaults(&mut input);
+    let original = Document::from_json(input)?;
+    let corpus: Value = serde_json::from_str(include_str!("fixtures/source-cell-keys.json"))?;
+    for case in corpus["cases"].as_array().ok_or("missing cases")? {
+        let key = case["key"].as_str().ok_or("missing key")?;
+        if !matches!(key, "Enter" | "Tab" | "Shift-Tab" | "Backspace") {
+            continue;
+        }
+        let name = case["name"].as_str().ok_or("missing name")?;
+        let (anchor, head) = match name {
+            "all" => (
+                CellPoint { row: 0, column: 0 },
+                CellPoint { row: 1, column: 1 },
+            ),
+            "partial" => (
+                CellPoint { row: 0, column: 0 },
+                CellPoint { row: 0, column: 1 },
+            ),
+            "reversed" => (
+                CellPoint { row: 1, column: 1 },
+                CellPoint { row: 0, column: 0 },
+            ),
+            _ => (
+                CellPoint { row: 1, column: 1 },
+                CellPoint { row: 1, column: 1 },
+            ),
+        };
+        let selected = TableSelection {
+            table_path: NodePath(vec![1]),
+            anchor,
+            head,
+        };
+        let mut session = EditorSession::new(original.clone(), Revision(0));
+        session.set_cell_selection(selected.clone())?;
+        match key {
+            "Enter" => {
+                session.insert_paragraph()?;
+            }
+            "Backspace" => {
+                session.delete_cell_selection()?;
+            }
+            _ => {
+                assert!(session.advance_table_cell(key == "Shift-Tab")?);
+            }
+        }
+        if let Some(expected) = case.get("doc") {
+            let mut expected = expected.clone();
+            let mut actual = session.document().to_json()?;
+            normalize(&mut actual);
+            normalize(&mut expected);
+            assert_eq!(actual, expected, "{name}/{key}");
+        }
+        if case["selection"]["type"] == "text" {
+            let selected = session.selection().ok_or("missing caret")?;
+            for (point, expected) in [
+                (&selected.anchor, &case["from"]),
+                (&selected.head, &case["to"]),
+            ] {
+                if let Some(id) = expected["blockId"].as_str() {
+                    assert_eq!(point.block_id, id, "{name}/{key}");
+                }
+                assert_eq!(
+                    point.offset.0,
+                    expected["offset"].as_u64().ok_or("missing offset")? as usize,
+                    "{name}/{key}"
+                );
+            }
+        }
+        if session.revision() != Revision(0) {
+            session.undo()?;
+            assert_eq!(session.document(), &original, "{name}/{key}");
+            assert_eq!(session.cell_selection(), Some(&selected));
+            assert!(!session.can_undo());
+        }
+    }
+    Ok(())
+}
+#[test]
+fn tab_after_a_header_only_table_creates_body_cells_without_cloning_source_metadata() -> TestResult
+{
+    let mut input = fixture()?.to_json()?;
+    input["content"][0]["content"]
+        .as_array_mut()
+        .ok_or("missing rows")?
+        .truncate(1);
+    let original = Document::from_json(input)?;
+    let mut session = EditorSession::new(original.clone(), Revision(0));
+    session.set_cell_selection(TableSelection {
+        table_path: NodePath(vec![0]),
+        anchor: CellPoint { row: 0, column: 1 },
+        head: CellPoint { row: 0, column: 1 },
+    })?;
+    assert!(session.advance_table_cell(false)?);
+    assert!(
+        session.document().blocks()[0].children()[1]
+            .children()
+            .iter()
+            .all(|cell| cell.node_type == "tableCell")
+    );
+    session.undo()?;
+    assert_eq!(session.document(), &original);
+    Ok(())
+}
+#[test]
+fn rectangular_mark_formatting_is_one_transaction_and_preserves_headers_and_direction() -> TestResult
+{
+    let original = fixture()?;
+    let mut session = EditorSession::new(original.clone(), Revision(0));
+    session.set_cell_selection(rectangle())?;
+    session.toggle_mark(craft_editor_model::Mark::new("bold"))?;
+    assert_eq!(
+        session.mark_state("bold")?,
+        craft_editor_egui::MarkState::On
+    );
+    assert_eq!(session.cell_selection(), Some(&rectangle()));
+    assert_eq!(session.revision(), Revision(1));
+    for cell in session.document().blocks()[0]
+        .children()
+        .iter()
+        .flat_map(Node::children)
+    {
+        assert!(
+            cell.children()[0].children()[0]
+                .marks
+                .as_ref()
+                .is_some_and(|marks| marks.iter().any(|mark| mark.mark_type == "bold"))
+        );
+    }
+    session.undo()?;
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.cell_selection(), Some(&rectangle()));
+    Ok(())
+}
+
+#[test]
+fn selection_forms_stay_exclusive_through_setters_history_guard_cancel_and_reload() -> TestResult {
+    let mut input = fixture()?.to_json()?;
+    input["content"]
+        .as_array_mut()
+        .ok_or("missing blocks")?
+        .push(json!({"type":"horizontalRule","attrs":{"blockId":"rule"}}));
+    let original = Document::from_json(input)?;
+    let mut session = EditorSession::new(original.clone(), Revision(0));
+    let invariant = |session: &EditorSession| {
+        usize::from(session.selection().is_some())
+            + usize::from(session.node_selection().is_some())
+            + usize::from(session.cell_selection().is_some())
+    };
+    assert_eq!(invariant(&session), 0);
+    let text = Selection {
+        anchor: DocPoint {
+            block_id: "a".into(),
+            offset: ScalarOffset(0),
+        },
+        head: DocPoint {
+            block_id: "a".into(),
+            offset: ScalarOffset(2),
+        },
+    };
+    session.set_selection(text.clone())?;
+    assert_eq!(invariant(&session), 1);
+    session.select_node(session.document().node_ref(&NodePath(vec![1]))?)?;
+    assert_eq!(invariant(&session), 1);
+    session.set_cell_selection(rectangle())?;
+    assert_eq!(invariant(&session), 1);
+    let pending = session.begin_paste(ClipboardBundle {
+        plain: "wrong".into(),
+        ..Default::default()
+    })?;
+    session.cancel_clipboard_requests()?;
+    assert_eq!(session.cell_selection(), Some(&rectangle()));
+    assert_eq!(invariant(&session), 1);
+    let craft_editor_egui::clipboard::ClipboardRequest::Paste { context, guard, .. } = pending
+    else {
+        return Err("wrong request".into());
+    };
+    assert!(
+        session
+            .finish_paste(guard, context.prepare(1_000_000)?)
+            .is_err()
+    );
+    assert_eq!(session.document(), &original);
+    assert_eq!(invariant(&session), 1);
+    session.insert_paragraph()?;
+    assert!(session.selection().is_some());
+    assert_eq!(invariant(&session), 1);
+    session.undo()?;
+    assert_eq!(session.cell_selection(), Some(&rectangle()));
+    assert_eq!(invariant(&session), 1);
+    session.redo()?;
+    assert!(session.selection().is_some());
+    assert_eq!(invariant(&session), 1);
+    session.set_cell_selection(rectangle())?;
+    let reference = session.document().node_ref(&NodePath(vec![1]))?;
+    session.apply_commands_with_node_selection(vec![], reference)?;
+    assert!(session.node_selection().is_some());
+    assert_eq!(invariant(&session), 1);
+    session.set_cell_selection(rectangle())?;
+    session.apply_commands_with_selection(vec![], text)?;
+    assert!(session.selection().is_some());
+    assert_eq!(invariant(&session), 1);
+    let reloaded = EditorSession::new(
+        Document::from_json(session.document().to_json()?)?,
+        session.revision(),
+    );
+    assert_eq!(invariant(&reloaded), 0);
+    assert_eq!(reloaded.document(), session.document());
     Ok(())
 }

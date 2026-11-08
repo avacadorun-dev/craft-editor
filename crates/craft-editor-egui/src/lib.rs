@@ -637,6 +637,9 @@ impl EditorSession {
     }
     /// Query real formatting across selected runs, including pending marks at a caret.
     pub fn mark_state(&self, kind: &str) -> Result<MarkState> {
+        if self.table_selection.is_some() {
+            return self.selected_cells_mark_state(kind);
+        }
         if let Some(reference) = &self.node_selection {
             let node = self.document().node(&reference.path)?;
             return Ok(
@@ -796,6 +799,9 @@ impl EditorSession {
         if self.is_composing() {
             return Err(Error::CompositionActive);
         }
+        if self.table_selection.is_some() {
+            return self.format_selected_cells(mark, mode);
+        }
         if let Some(reference) = self.node_selection.clone() {
             let Some(selection) = self.inline_node_text_selection()? else {
                 return self.apply_commands(vec![]);
@@ -929,7 +935,7 @@ impl EditorSession {
     /// Undo restores the original caret/range, rather than a separately expanded live selection.
     /// Missing mark ranges use the current selection, including validated stored marks at a caret.
     pub fn format_mark_range(&mut self, mark: Mark, mode: MarkMode) -> Result<Change> {
-        if self.node_selection.is_some() {
+        if self.node_selection.is_some() || self.table_selection.is_some() {
             return self.format_selection(mark, mode);
         }
         let selection = self

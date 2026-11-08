@@ -14,6 +14,8 @@ use crate::{
     projection::Projection,
 };
 
+mod cells;
+
 pub use crate::layout::LineHeightBasis;
 
 /// Host-owned canvas colors and typography, independent of canonical document attributes.
@@ -125,6 +127,7 @@ pub(crate) struct CanvasState {
     preedit: Option<Preedit>,
     preedit_epoch: u64,
     scroll_to_caret: bool,
+    cell_drag: Option<crate::TableSelection>,
 }
 
 impl CanvasState {
@@ -135,11 +138,17 @@ impl CanvasState {
         let Some(geometry) = &self.geometry else {
             return Ok(None);
         };
+        let cell_point = if session.cell_selection().is_some() {
+            session.head_cell_text_point(false)?
+        } else {
+            None
+        };
         let point = self
             .preedit
             .as_ref()
             .map(|preedit| &preedit.caret)
-            .or_else(|| session.selection.as_ref().map(|selection| &selection.head));
+            .or_else(|| session.selection.as_ref().map(|selection| &selection.head))
+            .or(cell_point.as_ref());
         let Some(point) = point else {
             return Ok(None);
         };
@@ -434,6 +443,11 @@ impl CanvasState {
                 Err(error) => errors.push(error),
             }
         }
+        if self.preedit.is_none()
+            && let Err(error) = self.paint_cells(session, ui, rect.min, style.selection)
+        {
+            errors.push(error);
+        }
         if let Some(geometry) = &self.geometry {
             let selection = session.selection.as_ref();
             if let Some(reference) = &session.node_selection
@@ -473,24 +487,38 @@ impl CanvasState {
                     Err(error) => errors.push(error.into()),
                 }
             }
+            let cell_point = if session.cell_selection().is_some() {
+                match session.head_cell_text_point(false) {
+                    Ok(point) => point,
+                    Err(error) => {
+                        errors.push(error);
+                        None
+                    }
+                }
+            } else {
+                None
+            };
             let caret = self
                 .preedit
                 .as_ref()
                 .map(|preedit| &preedit.caret)
-                .or_else(|| selection.map(|s| &s.head));
+                .or_else(|| selection.map(|s| &s.head))
+                .or(cell_point.as_ref());
             if let Some(caret) = caret {
                 match geometry.caret(caret) {
                     Ok(Some(caret)) => {
                         let caret_rect = on_screen(rect.min, caret);
                         if focused {
-                            let x = caret_rect.left();
-                            ui.painter().line_segment(
-                                [
-                                    Pos2::new(x, caret_rect.top()),
-                                    Pos2::new(x, caret_rect.bottom()),
-                                ],
-                                egui::Stroke::new(1.5, style.caret),
-                            );
+                            if session.cell_selection().is_none() || self.preedit.is_some() {
+                                let x = caret_rect.left();
+                                ui.painter().line_segment(
+                                    [
+                                        Pos2::new(x, caret_rect.top()),
+                                        Pos2::new(x, caret_rect.bottom()),
+                                    ],
+                                    egui::Stroke::new(1.5, style.caret),
+                                );
+                            }
                             ui.output_mut(|output| {
                                 output.ime = Some(egui::output::IMEOutput {
                                     purpose: egui::IMEPurpose::Normal,
@@ -539,6 +567,10 @@ impl CanvasState {
         double: bool,
         triple: bool,
     ) -> Result<()> {
+        if self.cell_pointer(session, local, shift, dragging, triple)? {
+            self.goal_x = None;
+            return Ok(());
+        }
         let geometry = self.geometry.as_ref().ok_or(Error::InvalidSelection)?;
         if !shift
             && !dragging
@@ -753,6 +785,28 @@ impl CanvasState {
                 }
                 _ => {}
             }
+        }
+        if session.cell_selection().is_some()
+            && !read_only
+            && matches!(key, Key::Backspace | Key::Delete)
+        {
+            session.delete_cell_selection()?;
+            self.scroll_to_caret = true;
+            return Ok(());
+        }
+        if session.cell_selection().is_some() && key == Key::Enter {
+            if !read_only && !modifiers.shift && !modifiers.command {
+                session.append_paragraph_in_head_cell()?;
+                self.scroll_to_caret = true;
+            }
+            return Ok(());
+        }
+        if key == Key::Tab && !read_only && session.advance_table_cell(modifiers.shift)? {
+            self.scroll_to_caret = true;
+            return Ok(());
+        }
+        if self.cell_arrow(session, key, modifiers)? {
+            return Ok(());
         }
         if session.node_selection.is_some()
             && !read_only
