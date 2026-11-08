@@ -7,7 +7,7 @@ use craft_editor_model::NodeRef;
 pub enum SelectionState {
     /// Directional text range or collapsed insertion caret.
     Text(Selection),
-    /// Exact guarded opaque block/inline atom.
+    /// Exact guarded opaque atom or complete table.
     Node(NodeRef),
     /// Directional originating table cells.
     Cells(TableSelection),
@@ -37,6 +37,7 @@ impl EditorSession {
             None => {
                 self.selection = None;
                 self.node_selection = None;
+                self.table_node_return = None;
                 self.table_selection = None;
                 self.stored_marks = None;
                 self.restore_cursor = true;

@@ -968,6 +968,37 @@ impl FlowGeometry {
         Ok(columns)
     }
 
+    /// Exact whole-node selection frame, separate from opaque-atom pointer-hit targets.
+    /// A wide table selects its bounded component; ordinary cell/text/resize hits stay unchanged.
+    pub fn node_bounds(&self, path: &NodePath) -> Option<GeometryRect> {
+        self.raw_selection_bounds(path)
+            .and_then(|rect| self.viewports.rect(path, rect))
+    }
+
+    fn raw_selection_bounds(&self, path: &NodePath) -> Option<GeometryRect> {
+        if let Some(node) = self
+            .node_geometry
+            .iter()
+            .find(|node| node.canonical_path == *path)
+        {
+            return Some(node.rect);
+        }
+        let available = *self.table_available.get(path)?;
+        let mut matching = self
+            .raw_columns
+            .iter()
+            .filter(|column| column.table_path == *path);
+        let first = matching.next()?;
+        let mut rect = first.rect;
+        for column in matching {
+            let right = (rect.x + rect.width).max(column.rect.x + column.rect.width);
+            rect.x = rect.x.min(column.rect.x);
+            rect.width = right - rect.x;
+        }
+        rect.width = rect.width.min(available);
+        Some(rect)
+    }
+
     /// Actual selectable opaque-node bounds, with native caption and separator line geometry.
     pub fn nodes(&self) -> Vec<NodeGeometry> {
         self.node_geometry
@@ -1155,14 +1186,10 @@ impl FlowGeometry {
     }
     /// Reveal a measured opaque block through its enclosing table components.
     pub fn reveal_node(&mut self, path: &NodePath) -> bool {
-        let Some(node) = self
-            .node_geometry
-            .iter()
-            .find(|node| node.canonical_path == *path)
-        else {
+        let Some(rect) = self.raw_selection_bounds(path) else {
             return false;
         };
-        let changed = self.viewports.reveal(path, node.rect);
+        let changed = self.viewports.reveal(path, rect);
         #[cfg(feature = "wordcraft-canvas")]
         if changed {
             self.view_paint.update(&self.viewports);

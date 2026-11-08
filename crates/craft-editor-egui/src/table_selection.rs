@@ -156,6 +156,7 @@ impl EditorSession {
         self.node_selection = None;
         self.stored_marks = None;
         self.table_selection = Some(selection);
+        self.table_node_return = None;
         self.restore_cursor = true;
         #[cfg(feature = "wordcraft-canvas")]
         self.request_scroll_to_caret();
@@ -222,6 +223,10 @@ impl EditorSession {
             )));
         }
         let path = if let Some(reference) = &self.node_selection {
+            if reference.expected.node_type == "table" {
+                // A whole nested table is replaced as a node, never pasted into its outer cell.
+                return Ok(None);
+            }
             reference.path.clone()
         } else if let Some(selection) = &self.selection {
             let projection = crate::projection::Projection::new(self.document())?;
@@ -434,11 +439,15 @@ impl EditorSession {
 }
 
 impl EditorSession {
-    pub(crate) fn selected_cell_blocks(&self) -> Result<Vec<&craft_editor_model::Node>> {
-        let selected = self
-            .table_selection
-            .as_ref()
-            .ok_or(Error::InvalidSelection)?;
+    pub(crate) fn selected_table_text_blocks(&self) -> Result<Vec<&craft_editor_model::Node>> {
+        let paths = if let Some(node) = self.selected_table_node()? {
+            vec![node.path.clone()]
+        } else {
+            self.table_selection
+                .as_ref()
+                .ok_or(Error::InvalidSelection)?
+                .origin_paths(self.document())?
+        };
         fn collect<'a>(
             node: &'a craft_editor_model::Node,
             out: &mut Vec<&'a craft_editor_model::Node>,
@@ -455,7 +464,7 @@ impl EditorSession {
             }
         }
         let mut blocks = Vec::new();
-        for path in selected.origin_paths(self.document())? {
+        for path in paths {
             collect(self.document().node(&path)?, &mut blocks);
         }
         Ok(blocks)
@@ -464,7 +473,7 @@ impl EditorSession {
         let mut marked = false;
         let mut unmarked = false;
         for block in self
-            .selected_cell_blocks()?
+            .selected_table_text_blocks()?
             .into_iter()
             .filter(|block| block.node_type != "codeBlock")
         {
@@ -499,13 +508,11 @@ impl EditorSession {
         if self.is_composing() {
             return Err(Error::CompositionActive);
         }
-        let selection = self
-            .table_selection
-            .clone()
-            .ok_or(Error::InvalidSelection)?;
+        let node_selection = self.selected_table_node()?.cloned();
+        let cell_selection = self.table_selection.clone();
         let mut commands = Vec::new();
         for block in self
-            .selected_cell_blocks()?
+            .selected_table_text_blocks()?
             .into_iter()
             .filter(|block| block.node_type != "codeBlock")
         {
@@ -523,7 +530,14 @@ impl EditorSession {
                 mode,
             });
         }
-        self.apply_commands_with_cell_selection(commands, selection)
+        if let Some(reference) = node_selection {
+            self.commit_selected_table_node(commands, reference)
+        } else {
+            self.apply_commands_with_cell_selection(
+                commands,
+                cell_selection.ok_or(Error::InvalidSelection)?,
+            )
+        }
     }
     #[cfg(feature = "wordcraft-canvas")]
     pub(crate) fn head_cell_text_point(&self, backward: bool) -> Result<Option<crate::DocPoint>> {
@@ -573,6 +587,21 @@ impl EditorSession {
             return Ok(Some(selected.clone()));
         }
         if let Some(reference) = &self.node_selection {
+            if reference.expected.node_type == "table" {
+                let grid = TableGrid::new(self.document().node(&reference.path)?)?;
+                let cell = grid
+                    .cell_at(grid.rows - 1, grid.columns - 1)
+                    .ok_or(Error::InvalidSelection)?;
+                let point = CellPoint {
+                    row: cell.row,
+                    column: cell.column,
+                };
+                return Ok(Some(TableSelection {
+                    table_path: reference.path.clone(),
+                    anchor: point,
+                    head: point,
+                }));
+            }
             return TableSelection::from_path(self.document(), &reference.path);
         }
         match &self.selection {
@@ -605,7 +634,10 @@ impl EditorSession {
         let selected = self.current_table_cell()?.ok_or(Error::InvalidSelection)?;
         self.remove_table_at(&selected.table_path)
     }
-    fn remove_table_at(&mut self, table_path: &NodePath) -> Result<craft_editor_model::Change> {
+    pub(crate) fn remove_table_at(
+        &mut self,
+        table_path: &NodePath,
+    ) -> Result<craft_editor_model::Change> {
         let mut plan = crate::insertion::Plan::new(self, &[])?;
         let parent_path = table_path.parent().ok_or(Error::InvalidSelection)?;
         let index = *table_path.0.last().ok_or(Error::InvalidSelection)?;

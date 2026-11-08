@@ -1,0 +1,5318 @@
+{
+  "provenance": {
+    "scope": "Actual original unmounted Tiptap Editor command manager and installed schema/extensions. Mounted plugin normalization/history, browser rendering, native OS clipboard/IME are not exercised. A false list command still clears retained paragraph blockIds in this source path; native must preserve exact data rather than reproduce that bug. Synthetic writing only.",
+    "sourceHashes": {
+      "src/features/editor/model/extensions.ts": "cab5b92255c6e7e60a7831a9b428346f632bafbab297c515b5cef9d874eee135",
+      "node_modules/@tiptap/core/dist/index.js": "66c4e0dfe6f2f8c6b6cfc4d8a46ab1f92c90dc3295726fe553af9830470a59c9",
+      "node_modules/prosemirror-tables/dist/index.js": "86226413762b2b8d88356f83e691a770d7b1d1c3b8de7e2de6bf25d785593cdf"
+    }
+  },
+  "cases": [
+    {
+      "name": "ordinary",
+      "action": "toggleBold",
+      "handled": true,
+      "before": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "table"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "a",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Alpha 😀"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "b",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Bravo"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "after": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "table"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "a",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "marks": [
+                              {
+                                "type": "bold"
+                              }
+                            ],
+                            "text": "Alpha 😀"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "b",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "marks": [
+                              {
+                                "type": "bold"
+                              }
+                            ],
+                            "text": "Bravo"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "node",
+        "anchor": 8
+      },
+      "selectedTable": true
+    },
+    {
+      "name": "ordinary",
+      "action": "setHeading",
+      "handled": true,
+      "before": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "table"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "a",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Alpha 😀"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "b",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Bravo"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "after": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "table"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "heading",
+                        "attrs": {
+                          "blockId": null,
+                          "sourceRefs": [],
+                          "level": 2
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Alpha 😀"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "heading",
+                        "attrs": {
+                          "blockId": null,
+                          "sourceRefs": [],
+                          "level": 2
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Bravo"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "node",
+        "anchor": 8
+      },
+      "selectedTable": true
+    },
+    {
+      "name": "ordinary",
+      "action": "toggleBlockquote",
+      "handled": true,
+      "before": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "table"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "a",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Alpha 😀"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "b",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Bravo"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "after": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "blockquote",
+            "attrs": {
+              "blockId": null,
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "table",
+                "attrs": {
+                  "blockId": "table"
+                },
+                "content": [
+                  {
+                    "type": "tableRow",
+                    "content": [
+                      {
+                        "type": "tableCell",
+                        "attrs": {
+                          "colspan": 1,
+                          "rowspan": 1,
+                          "colwidth": null,
+                          "align": null
+                        },
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "attrs": {
+                              "blockId": "a",
+                              "sourceRefs": []
+                            },
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "Alpha 😀"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "tableCell",
+                        "attrs": {
+                          "colspan": 1,
+                          "rowspan": 1,
+                          "colwidth": null,
+                          "align": null
+                        },
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "attrs": {
+                              "blockId": "b",
+                              "sourceRefs": []
+                            },
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "Bravo"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "node",
+        "anchor": 9
+      },
+      "selectedTable": true
+    },
+    {
+      "name": "ordinary",
+      "action": "toggleBulletList",
+      "handled": false,
+      "before": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "table"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "a",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Alpha 😀"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "b",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Bravo"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "after": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "table"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": null,
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Alpha 😀"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": null,
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Bravo"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "node",
+        "anchor": 8
+      },
+      "selectedTable": true
+    },
+    {
+      "name": "ordinary",
+      "action": "toggleOrderedList",
+      "handled": false,
+      "before": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "table"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "a",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Alpha 😀"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "b",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Bravo"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "after": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "table"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": null,
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Alpha 😀"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": null,
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Bravo"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "node",
+        "anchor": 8
+      },
+      "selectedTable": true
+    },
+    {
+      "name": "nested",
+      "action": "toggleBold",
+      "handled": true,
+      "before": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "outer"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "ib",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Inner before"
+                          }
+                        ]
+                      },
+                      {
+                        "type": "table",
+                        "attrs": {
+                          "blockId": "table"
+                        },
+                        "content": [
+                          {
+                            "type": "tableRow",
+                            "content": [
+                              {
+                                "type": "tableCell",
+                                "attrs": {
+                                  "colspan": 1,
+                                  "rowspan": 1,
+                                  "colwidth": null,
+                                  "align": null
+                                },
+                                "content": [
+                                  {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                      "blockId": "a",
+                                      "sourceRefs": []
+                                    },
+                                    "content": [
+                                      {
+                                        "type": "text",
+                                        "text": "Alpha 😀"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "tableCell",
+                                "attrs": {
+                                  "colspan": 1,
+                                  "rowspan": 1,
+                                  "colwidth": null,
+                                  "align": null
+                                },
+                                "content": [
+                                  {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                      "blockId": "b",
+                                      "sourceRefs": []
+                                    },
+                                    "content": [
+                                      {
+                                        "type": "text",
+                                        "text": "Bravo"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "ia",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Inner after"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "after": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "outer"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "ib",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Inner before"
+                          }
+                        ]
+                      },
+                      {
+                        "type": "table",
+                        "attrs": {
+                          "blockId": "table"
+                        },
+                        "content": [
+                          {
+                            "type": "tableRow",
+                            "content": [
+                              {
+                                "type": "tableCell",
+                                "attrs": {
+                                  "colspan": 1,
+                                  "rowspan": 1,
+                                  "colwidth": null,
+                                  "align": null
+                                },
+                                "content": [
+                                  {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                      "blockId": "a",
+                                      "sourceRefs": []
+                                    },
+                                    "content": [
+                                      {
+                                        "type": "text",
+                                        "marks": [
+                                          {
+                                            "type": "bold"
+                                          }
+                                        ],
+                                        "text": "Alpha 😀"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "tableCell",
+                                "attrs": {
+                                  "colspan": 1,
+                                  "rowspan": 1,
+                                  "colwidth": null,
+                                  "align": null
+                                },
+                                "content": [
+                                  {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                      "blockId": "b",
+                                      "sourceRefs": []
+                                    },
+                                    "content": [
+                                      {
+                                        "type": "text",
+                                        "marks": [
+                                          {
+                                            "type": "bold"
+                                          }
+                                        ],
+                                        "text": "Bravo"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "ia",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Inner after"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "node",
+        "anchor": 25
+      },
+      "selectedTable": true
+    },
+    {
+      "name": "nested",
+      "action": "setHeading",
+      "handled": true,
+      "before": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "outer"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "ib",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Inner before"
+                          }
+                        ]
+                      },
+                      {
+                        "type": "table",
+                        "attrs": {
+                          "blockId": "table"
+                        },
+                        "content": [
+                          {
+                            "type": "tableRow",
+                            "content": [
+                              {
+                                "type": "tableCell",
+                                "attrs": {
+                                  "colspan": 1,
+                                  "rowspan": 1,
+                                  "colwidth": null,
+                                  "align": null
+                                },
+                                "content": [
+                                  {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                      "blockId": "a",
+                                      "sourceRefs": []
+                                    },
+                                    "content": [
+                                      {
+                                        "type": "text",
+                                        "text": "Alpha 😀"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "tableCell",
+                                "attrs": {
+                                  "colspan": 1,
+                                  "rowspan": 1,
+                                  "colwidth": null,
+                                  "align": null
+                                },
+                                "content": [
+                                  {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                      "blockId": "b",
+                                      "sourceRefs": []
+                                    },
+                                    "content": [
+                                      {
+                                        "type": "text",
+                                        "text": "Bravo"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "ia",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Inner after"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "after": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "outer"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "ib",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Inner before"
+                          }
+                        ]
+                      },
+                      {
+                        "type": "table",
+                        "attrs": {
+                          "blockId": "table"
+                        },
+                        "content": [
+                          {
+                            "type": "tableRow",
+                            "content": [
+                              {
+                                "type": "tableCell",
+                                "attrs": {
+                                  "colspan": 1,
+                                  "rowspan": 1,
+                                  "colwidth": null,
+                                  "align": null
+                                },
+                                "content": [
+                                  {
+                                    "type": "heading",
+                                    "attrs": {
+                                      "blockId": null,
+                                      "sourceRefs": [],
+                                      "level": 2
+                                    },
+                                    "content": [
+                                      {
+                                        "type": "text",
+                                        "text": "Alpha 😀"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "tableCell",
+                                "attrs": {
+                                  "colspan": 1,
+                                  "rowspan": 1,
+                                  "colwidth": null,
+                                  "align": null
+                                },
+                                "content": [
+                                  {
+                                    "type": "heading",
+                                    "attrs": {
+                                      "blockId": null,
+                                      "sourceRefs": [],
+                                      "level": 2
+                                    },
+                                    "content": [
+                                      {
+                                        "type": "text",
+                                        "text": "Bravo"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "ia",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Inner after"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "node",
+        "anchor": 25
+      },
+      "selectedTable": true
+    },
+    {
+      "name": "nested",
+      "action": "toggleBlockquote",
+      "handled": true,
+      "before": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "outer"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "ib",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Inner before"
+                          }
+                        ]
+                      },
+                      {
+                        "type": "table",
+                        "attrs": {
+                          "blockId": "table"
+                        },
+                        "content": [
+                          {
+                            "type": "tableRow",
+                            "content": [
+                              {
+                                "type": "tableCell",
+                                "attrs": {
+                                  "colspan": 1,
+                                  "rowspan": 1,
+                                  "colwidth": null,
+                                  "align": null
+                                },
+                                "content": [
+                                  {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                      "blockId": "a",
+                                      "sourceRefs": []
+                                    },
+                                    "content": [
+                                      {
+                                        "type": "text",
+                                        "text": "Alpha 😀"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "tableCell",
+                                "attrs": {
+                                  "colspan": 1,
+                                  "rowspan": 1,
+                                  "colwidth": null,
+                                  "align": null
+                                },
+                                "content": [
+                                  {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                      "blockId": "b",
+                                      "sourceRefs": []
+                                    },
+                                    "content": [
+                                      {
+                                        "type": "text",
+                                        "text": "Bravo"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "ia",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Inner after"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "after": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "outer"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "ib",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Inner before"
+                          }
+                        ]
+                      },
+                      {
+                        "type": "blockquote",
+                        "attrs": {
+                          "blockId": null,
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "table",
+                            "attrs": {
+                              "blockId": "table"
+                            },
+                            "content": [
+                              {
+                                "type": "tableRow",
+                                "content": [
+                                  {
+                                    "type": "tableCell",
+                                    "attrs": {
+                                      "colspan": 1,
+                                      "rowspan": 1,
+                                      "colwidth": null,
+                                      "align": null
+                                    },
+                                    "content": [
+                                      {
+                                        "type": "paragraph",
+                                        "attrs": {
+                                          "blockId": "a",
+                                          "sourceRefs": []
+                                        },
+                                        "content": [
+                                          {
+                                            "type": "text",
+                                            "text": "Alpha 😀"
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "type": "tableCell",
+                                    "attrs": {
+                                      "colspan": 1,
+                                      "rowspan": 1,
+                                      "colwidth": null,
+                                      "align": null
+                                    },
+                                    "content": [
+                                      {
+                                        "type": "paragraph",
+                                        "attrs": {
+                                          "blockId": "b",
+                                          "sourceRefs": []
+                                        },
+                                        "content": [
+                                          {
+                                            "type": "text",
+                                            "text": "Bravo"
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "ia",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Inner after"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "node",
+        "anchor": 26
+      },
+      "selectedTable": true
+    },
+    {
+      "name": "nested",
+      "action": "toggleBulletList",
+      "handled": false,
+      "before": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "outer"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "ib",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Inner before"
+                          }
+                        ]
+                      },
+                      {
+                        "type": "table",
+                        "attrs": {
+                          "blockId": "table"
+                        },
+                        "content": [
+                          {
+                            "type": "tableRow",
+                            "content": [
+                              {
+                                "type": "tableCell",
+                                "attrs": {
+                                  "colspan": 1,
+                                  "rowspan": 1,
+                                  "colwidth": null,
+                                  "align": null
+                                },
+                                "content": [
+                                  {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                      "blockId": "a",
+                                      "sourceRefs": []
+                                    },
+                                    "content": [
+                                      {
+                                        "type": "text",
+                                        "text": "Alpha 😀"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "tableCell",
+                                "attrs": {
+                                  "colspan": 1,
+                                  "rowspan": 1,
+                                  "colwidth": null,
+                                  "align": null
+                                },
+                                "content": [
+                                  {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                      "blockId": "b",
+                                      "sourceRefs": []
+                                    },
+                                    "content": [
+                                      {
+                                        "type": "text",
+                                        "text": "Bravo"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "ia",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Inner after"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "after": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "outer"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "ib",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Inner before"
+                          }
+                        ]
+                      },
+                      {
+                        "type": "table",
+                        "attrs": {
+                          "blockId": "table"
+                        },
+                        "content": [
+                          {
+                            "type": "tableRow",
+                            "content": [
+                              {
+                                "type": "tableCell",
+                                "attrs": {
+                                  "colspan": 1,
+                                  "rowspan": 1,
+                                  "colwidth": null,
+                                  "align": null
+                                },
+                                "content": [
+                                  {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                      "blockId": null,
+                                      "sourceRefs": []
+                                    },
+                                    "content": [
+                                      {
+                                        "type": "text",
+                                        "text": "Alpha 😀"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "tableCell",
+                                "attrs": {
+                                  "colspan": 1,
+                                  "rowspan": 1,
+                                  "colwidth": null,
+                                  "align": null
+                                },
+                                "content": [
+                                  {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                      "blockId": null,
+                                      "sourceRefs": []
+                                    },
+                                    "content": [
+                                      {
+                                        "type": "text",
+                                        "text": "Bravo"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "ia",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Inner after"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "node",
+        "anchor": 25
+      },
+      "selectedTable": true
+    },
+    {
+      "name": "nested",
+      "action": "toggleOrderedList",
+      "handled": false,
+      "before": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "outer"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "ib",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Inner before"
+                          }
+                        ]
+                      },
+                      {
+                        "type": "table",
+                        "attrs": {
+                          "blockId": "table"
+                        },
+                        "content": [
+                          {
+                            "type": "tableRow",
+                            "content": [
+                              {
+                                "type": "tableCell",
+                                "attrs": {
+                                  "colspan": 1,
+                                  "rowspan": 1,
+                                  "colwidth": null,
+                                  "align": null
+                                },
+                                "content": [
+                                  {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                      "blockId": "a",
+                                      "sourceRefs": []
+                                    },
+                                    "content": [
+                                      {
+                                        "type": "text",
+                                        "text": "Alpha 😀"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "tableCell",
+                                "attrs": {
+                                  "colspan": 1,
+                                  "rowspan": 1,
+                                  "colwidth": null,
+                                  "align": null
+                                },
+                                "content": [
+                                  {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                      "blockId": "b",
+                                      "sourceRefs": []
+                                    },
+                                    "content": [
+                                      {
+                                        "type": "text",
+                                        "text": "Bravo"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "ia",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Inner after"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "after": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "outer"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "ib",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Inner before"
+                          }
+                        ]
+                      },
+                      {
+                        "type": "table",
+                        "attrs": {
+                          "blockId": "table"
+                        },
+                        "content": [
+                          {
+                            "type": "tableRow",
+                            "content": [
+                              {
+                                "type": "tableCell",
+                                "attrs": {
+                                  "colspan": 1,
+                                  "rowspan": 1,
+                                  "colwidth": null,
+                                  "align": null
+                                },
+                                "content": [
+                                  {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                      "blockId": null,
+                                      "sourceRefs": []
+                                    },
+                                    "content": [
+                                      {
+                                        "type": "text",
+                                        "text": "Alpha 😀"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "tableCell",
+                                "attrs": {
+                                  "colspan": 1,
+                                  "rowspan": 1,
+                                  "colwidth": null,
+                                  "align": null
+                                },
+                                "content": [
+                                  {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                      "blockId": null,
+                                      "sourceRefs": []
+                                    },
+                                    "content": [
+                                      {
+                                        "type": "text",
+                                        "text": "Bravo"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "ia",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Inner after"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "node",
+        "anchor": 25
+      },
+      "selectedTable": true
+    },
+    {
+      "name": "quote",
+      "action": "toggleBold",
+      "handled": true,
+      "before": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "blockquote",
+            "attrs": {
+              "blockId": "quote",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "blockId": "qb",
+                  "sourceRefs": []
+                },
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Quote before"
+                  }
+                ]
+              },
+              {
+                "type": "table",
+                "attrs": {
+                  "blockId": "table"
+                },
+                "content": [
+                  {
+                    "type": "tableRow",
+                    "content": [
+                      {
+                        "type": "tableCell",
+                        "attrs": {
+                          "colspan": 1,
+                          "rowspan": 1,
+                          "colwidth": null,
+                          "align": null
+                        },
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "attrs": {
+                              "blockId": "a",
+                              "sourceRefs": []
+                            },
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "Alpha 😀"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "tableCell",
+                        "attrs": {
+                          "colspan": 1,
+                          "rowspan": 1,
+                          "colwidth": null,
+                          "align": null
+                        },
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "attrs": {
+                              "blockId": "b",
+                              "sourceRefs": []
+                            },
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "Bravo"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "blockId": "qa",
+                  "sourceRefs": []
+                },
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Quote after"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "after": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "blockquote",
+            "attrs": {
+              "blockId": "quote",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "blockId": "qb",
+                  "sourceRefs": []
+                },
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Quote before"
+                  }
+                ]
+              },
+              {
+                "type": "table",
+                "attrs": {
+                  "blockId": "table"
+                },
+                "content": [
+                  {
+                    "type": "tableRow",
+                    "content": [
+                      {
+                        "type": "tableCell",
+                        "attrs": {
+                          "colspan": 1,
+                          "rowspan": 1,
+                          "colwidth": null,
+                          "align": null
+                        },
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "attrs": {
+                              "blockId": "a",
+                              "sourceRefs": []
+                            },
+                            "content": [
+                              {
+                                "type": "text",
+                                "marks": [
+                                  {
+                                    "type": "bold"
+                                  }
+                                ],
+                                "text": "Alpha 😀"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "tableCell",
+                        "attrs": {
+                          "colspan": 1,
+                          "rowspan": 1,
+                          "colwidth": null,
+                          "align": null
+                        },
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "attrs": {
+                              "blockId": "b",
+                              "sourceRefs": []
+                            },
+                            "content": [
+                              {
+                                "type": "text",
+                                "marks": [
+                                  {
+                                    "type": "bold"
+                                  }
+                                ],
+                                "text": "Bravo"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "blockId": "qa",
+                  "sourceRefs": []
+                },
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Quote after"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "node",
+        "anchor": 23
+      },
+      "selectedTable": true
+    },
+    {
+      "name": "quote",
+      "action": "setHeading",
+      "handled": true,
+      "before": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "blockquote",
+            "attrs": {
+              "blockId": "quote",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "blockId": "qb",
+                  "sourceRefs": []
+                },
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Quote before"
+                  }
+                ]
+              },
+              {
+                "type": "table",
+                "attrs": {
+                  "blockId": "table"
+                },
+                "content": [
+                  {
+                    "type": "tableRow",
+                    "content": [
+                      {
+                        "type": "tableCell",
+                        "attrs": {
+                          "colspan": 1,
+                          "rowspan": 1,
+                          "colwidth": null,
+                          "align": null
+                        },
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "attrs": {
+                              "blockId": "a",
+                              "sourceRefs": []
+                            },
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "Alpha 😀"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "tableCell",
+                        "attrs": {
+                          "colspan": 1,
+                          "rowspan": 1,
+                          "colwidth": null,
+                          "align": null
+                        },
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "attrs": {
+                              "blockId": "b",
+                              "sourceRefs": []
+                            },
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "Bravo"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "blockId": "qa",
+                  "sourceRefs": []
+                },
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Quote after"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "after": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "blockquote",
+            "attrs": {
+              "blockId": "quote",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "blockId": "qb",
+                  "sourceRefs": []
+                },
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Quote before"
+                  }
+                ]
+              },
+              {
+                "type": "table",
+                "attrs": {
+                  "blockId": "table"
+                },
+                "content": [
+                  {
+                    "type": "tableRow",
+                    "content": [
+                      {
+                        "type": "tableCell",
+                        "attrs": {
+                          "colspan": 1,
+                          "rowspan": 1,
+                          "colwidth": null,
+                          "align": null
+                        },
+                        "content": [
+                          {
+                            "type": "heading",
+                            "attrs": {
+                              "blockId": "quote",
+                              "sourceRefs": [],
+                              "level": 2
+                            },
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "Alpha 😀"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "tableCell",
+                        "attrs": {
+                          "colspan": 1,
+                          "rowspan": 1,
+                          "colwidth": null,
+                          "align": null
+                        },
+                        "content": [
+                          {
+                            "type": "heading",
+                            "attrs": {
+                              "blockId": "quote",
+                              "sourceRefs": [],
+                              "level": 2
+                            },
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "Bravo"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "blockId": "qa",
+                  "sourceRefs": []
+                },
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Quote after"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "node",
+        "anchor": 23
+      },
+      "selectedTable": true
+    },
+    {
+      "name": "quote",
+      "action": "toggleBlockquote",
+      "handled": true,
+      "before": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "blockquote",
+            "attrs": {
+              "blockId": "quote",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "blockId": "qb",
+                  "sourceRefs": []
+                },
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Quote before"
+                  }
+                ]
+              },
+              {
+                "type": "table",
+                "attrs": {
+                  "blockId": "table"
+                },
+                "content": [
+                  {
+                    "type": "tableRow",
+                    "content": [
+                      {
+                        "type": "tableCell",
+                        "attrs": {
+                          "colspan": 1,
+                          "rowspan": 1,
+                          "colwidth": null,
+                          "align": null
+                        },
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "attrs": {
+                              "blockId": "a",
+                              "sourceRefs": []
+                            },
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "Alpha 😀"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "tableCell",
+                        "attrs": {
+                          "colspan": 1,
+                          "rowspan": 1,
+                          "colwidth": null,
+                          "align": null
+                        },
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "attrs": {
+                              "blockId": "b",
+                              "sourceRefs": []
+                            },
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "Bravo"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "blockId": "qa",
+                  "sourceRefs": []
+                },
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Quote after"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "after": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "blockquote",
+            "attrs": {
+              "blockId": "quote",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "blockId": "qb",
+                  "sourceRefs": []
+                },
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Quote before"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "table"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "a",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Alpha 😀"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "b",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Bravo"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "blockquote",
+            "attrs": {
+              "blockId": "quote",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "blockId": "qa",
+                  "sourceRefs": []
+                },
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Quote after"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "node",
+        "anchor": 24
+      },
+      "selectedTable": true
+    },
+    {
+      "name": "quote",
+      "action": "toggleBulletList",
+      "handled": false,
+      "before": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "blockquote",
+            "attrs": {
+              "blockId": "quote",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "blockId": "qb",
+                  "sourceRefs": []
+                },
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Quote before"
+                  }
+                ]
+              },
+              {
+                "type": "table",
+                "attrs": {
+                  "blockId": "table"
+                },
+                "content": [
+                  {
+                    "type": "tableRow",
+                    "content": [
+                      {
+                        "type": "tableCell",
+                        "attrs": {
+                          "colspan": 1,
+                          "rowspan": 1,
+                          "colwidth": null,
+                          "align": null
+                        },
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "attrs": {
+                              "blockId": "a",
+                              "sourceRefs": []
+                            },
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "Alpha 😀"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "tableCell",
+                        "attrs": {
+                          "colspan": 1,
+                          "rowspan": 1,
+                          "colwidth": null,
+                          "align": null
+                        },
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "attrs": {
+                              "blockId": "b",
+                              "sourceRefs": []
+                            },
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "Bravo"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "blockId": "qa",
+                  "sourceRefs": []
+                },
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Quote after"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "after": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "blockquote",
+            "attrs": {
+              "blockId": "quote",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "blockId": "qb",
+                  "sourceRefs": []
+                },
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Quote before"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "table"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": null,
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Alpha 😀"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": null,
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Bravo"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "blockquote",
+            "attrs": {
+              "blockId": "quote",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "blockId": "qa",
+                  "sourceRefs": []
+                },
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Quote after"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "node",
+        "anchor": 24
+      },
+      "selectedTable": true
+    },
+    {
+      "name": "quote",
+      "action": "toggleOrderedList",
+      "handled": false,
+      "before": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "blockquote",
+            "attrs": {
+              "blockId": "quote",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "blockId": "qb",
+                  "sourceRefs": []
+                },
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Quote before"
+                  }
+                ]
+              },
+              {
+                "type": "table",
+                "attrs": {
+                  "blockId": "table"
+                },
+                "content": [
+                  {
+                    "type": "tableRow",
+                    "content": [
+                      {
+                        "type": "tableCell",
+                        "attrs": {
+                          "colspan": 1,
+                          "rowspan": 1,
+                          "colwidth": null,
+                          "align": null
+                        },
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "attrs": {
+                              "blockId": "a",
+                              "sourceRefs": []
+                            },
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "Alpha 😀"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "tableCell",
+                        "attrs": {
+                          "colspan": 1,
+                          "rowspan": 1,
+                          "colwidth": null,
+                          "align": null
+                        },
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "attrs": {
+                              "blockId": "b",
+                              "sourceRefs": []
+                            },
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "Bravo"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "blockId": "qa",
+                  "sourceRefs": []
+                },
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Quote after"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "after": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "blockquote",
+            "attrs": {
+              "blockId": "quote",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "blockId": "qb",
+                  "sourceRefs": []
+                },
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Quote before"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "table"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": null,
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Alpha 😀"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": null,
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Bravo"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "blockquote",
+            "attrs": {
+              "blockId": "quote",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "blockId": "qa",
+                  "sourceRefs": []
+                },
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Quote after"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "node",
+        "anchor": 24
+      },
+      "selectedTable": true
+    },
+    {
+      "name": "list",
+      "action": "toggleBold",
+      "handled": true,
+      "before": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "bulletList",
+            "content": [
+              {
+                "type": "listItem",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "blockId": "lh",
+                      "sourceRefs": []
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "List head"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "table",
+                    "attrs": {
+                      "blockId": "table"
+                    },
+                    "content": [
+                      {
+                        "type": "tableRow",
+                        "content": [
+                          {
+                            "type": "tableCell",
+                            "attrs": {
+                              "colspan": 1,
+                              "rowspan": 1,
+                              "colwidth": null,
+                              "align": null
+                            },
+                            "content": [
+                              {
+                                "type": "paragraph",
+                                "attrs": {
+                                  "blockId": "a",
+                                  "sourceRefs": []
+                                },
+                                "content": [
+                                  {
+                                    "type": "text",
+                                    "text": "Alpha 😀"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "type": "tableCell",
+                            "attrs": {
+                              "colspan": 1,
+                              "rowspan": 1,
+                              "colwidth": null,
+                              "align": null
+                            },
+                            "content": [
+                              {
+                                "type": "paragraph",
+                                "attrs": {
+                                  "blockId": "b",
+                                  "sourceRefs": []
+                                },
+                                "content": [
+                                  {
+                                    "type": "text",
+                                    "text": "Bravo"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "blockId": "lt",
+                      "sourceRefs": []
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "List tail"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "after": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "bulletList",
+            "content": [
+              {
+                "type": "listItem",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "blockId": "lh",
+                      "sourceRefs": []
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "List head"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "table",
+                    "attrs": {
+                      "blockId": "table"
+                    },
+                    "content": [
+                      {
+                        "type": "tableRow",
+                        "content": [
+                          {
+                            "type": "tableCell",
+                            "attrs": {
+                              "colspan": 1,
+                              "rowspan": 1,
+                              "colwidth": null,
+                              "align": null
+                            },
+                            "content": [
+                              {
+                                "type": "paragraph",
+                                "attrs": {
+                                  "blockId": "a",
+                                  "sourceRefs": []
+                                },
+                                "content": [
+                                  {
+                                    "type": "text",
+                                    "marks": [
+                                      {
+                                        "type": "bold"
+                                      }
+                                    ],
+                                    "text": "Alpha 😀"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "type": "tableCell",
+                            "attrs": {
+                              "colspan": 1,
+                              "rowspan": 1,
+                              "colwidth": null,
+                              "align": null
+                            },
+                            "content": [
+                              {
+                                "type": "paragraph",
+                                "attrs": {
+                                  "blockId": "b",
+                                  "sourceRefs": []
+                                },
+                                "content": [
+                                  {
+                                    "type": "text",
+                                    "marks": [
+                                      {
+                                        "type": "bold"
+                                      }
+                                    ],
+                                    "text": "Bravo"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "blockId": "lt",
+                      "sourceRefs": []
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "List tail"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "node",
+        "anchor": 21
+      },
+      "selectedTable": true
+    },
+    {
+      "name": "list",
+      "action": "setHeading",
+      "handled": true,
+      "before": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "bulletList",
+            "content": [
+              {
+                "type": "listItem",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "blockId": "lh",
+                      "sourceRefs": []
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "List head"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "table",
+                    "attrs": {
+                      "blockId": "table"
+                    },
+                    "content": [
+                      {
+                        "type": "tableRow",
+                        "content": [
+                          {
+                            "type": "tableCell",
+                            "attrs": {
+                              "colspan": 1,
+                              "rowspan": 1,
+                              "colwidth": null,
+                              "align": null
+                            },
+                            "content": [
+                              {
+                                "type": "paragraph",
+                                "attrs": {
+                                  "blockId": "a",
+                                  "sourceRefs": []
+                                },
+                                "content": [
+                                  {
+                                    "type": "text",
+                                    "text": "Alpha 😀"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "type": "tableCell",
+                            "attrs": {
+                              "colspan": 1,
+                              "rowspan": 1,
+                              "colwidth": null,
+                              "align": null
+                            },
+                            "content": [
+                              {
+                                "type": "paragraph",
+                                "attrs": {
+                                  "blockId": "b",
+                                  "sourceRefs": []
+                                },
+                                "content": [
+                                  {
+                                    "type": "text",
+                                    "text": "Bravo"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "blockId": "lt",
+                      "sourceRefs": []
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "List tail"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "after": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "bulletList",
+            "content": [
+              {
+                "type": "listItem",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "blockId": "lh",
+                      "sourceRefs": []
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "List head"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "table",
+                    "attrs": {
+                      "blockId": "table"
+                    },
+                    "content": [
+                      {
+                        "type": "tableRow",
+                        "content": [
+                          {
+                            "type": "tableCell",
+                            "attrs": {
+                              "colspan": 1,
+                              "rowspan": 1,
+                              "colwidth": null,
+                              "align": null
+                            },
+                            "content": [
+                              {
+                                "type": "heading",
+                                "attrs": {
+                                  "blockId": null,
+                                  "sourceRefs": [],
+                                  "level": 2
+                                },
+                                "content": [
+                                  {
+                                    "type": "text",
+                                    "text": "Alpha 😀"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "type": "tableCell",
+                            "attrs": {
+                              "colspan": 1,
+                              "rowspan": 1,
+                              "colwidth": null,
+                              "align": null
+                            },
+                            "content": [
+                              {
+                                "type": "heading",
+                                "attrs": {
+                                  "blockId": null,
+                                  "sourceRefs": [],
+                                  "level": 2
+                                },
+                                "content": [
+                                  {
+                                    "type": "text",
+                                    "text": "Bravo"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "blockId": "lt",
+                      "sourceRefs": []
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "List tail"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "node",
+        "anchor": 21
+      },
+      "selectedTable": true
+    },
+    {
+      "name": "list",
+      "action": "toggleBlockquote",
+      "handled": true,
+      "before": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "bulletList",
+            "content": [
+              {
+                "type": "listItem",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "blockId": "lh",
+                      "sourceRefs": []
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "List head"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "table",
+                    "attrs": {
+                      "blockId": "table"
+                    },
+                    "content": [
+                      {
+                        "type": "tableRow",
+                        "content": [
+                          {
+                            "type": "tableCell",
+                            "attrs": {
+                              "colspan": 1,
+                              "rowspan": 1,
+                              "colwidth": null,
+                              "align": null
+                            },
+                            "content": [
+                              {
+                                "type": "paragraph",
+                                "attrs": {
+                                  "blockId": "a",
+                                  "sourceRefs": []
+                                },
+                                "content": [
+                                  {
+                                    "type": "text",
+                                    "text": "Alpha 😀"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "type": "tableCell",
+                            "attrs": {
+                              "colspan": 1,
+                              "rowspan": 1,
+                              "colwidth": null,
+                              "align": null
+                            },
+                            "content": [
+                              {
+                                "type": "paragraph",
+                                "attrs": {
+                                  "blockId": "b",
+                                  "sourceRefs": []
+                                },
+                                "content": [
+                                  {
+                                    "type": "text",
+                                    "text": "Bravo"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "blockId": "lt",
+                      "sourceRefs": []
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "List tail"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "after": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "bulletList",
+            "content": [
+              {
+                "type": "listItem",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "blockId": "lh",
+                      "sourceRefs": []
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "List head"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "blockquote",
+                    "attrs": {
+                      "blockId": null,
+                      "sourceRefs": []
+                    },
+                    "content": [
+                      {
+                        "type": "table",
+                        "attrs": {
+                          "blockId": "table"
+                        },
+                        "content": [
+                          {
+                            "type": "tableRow",
+                            "content": [
+                              {
+                                "type": "tableCell",
+                                "attrs": {
+                                  "colspan": 1,
+                                  "rowspan": 1,
+                                  "colwidth": null,
+                                  "align": null
+                                },
+                                "content": [
+                                  {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                      "blockId": "a",
+                                      "sourceRefs": []
+                                    },
+                                    "content": [
+                                      {
+                                        "type": "text",
+                                        "text": "Alpha 😀"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "tableCell",
+                                "attrs": {
+                                  "colspan": 1,
+                                  "rowspan": 1,
+                                  "colwidth": null,
+                                  "align": null
+                                },
+                                "content": [
+                                  {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                      "blockId": "b",
+                                      "sourceRefs": []
+                                    },
+                                    "content": [
+                                      {
+                                        "type": "text",
+                                        "text": "Bravo"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "blockId": "lt",
+                      "sourceRefs": []
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "List tail"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "node",
+        "anchor": 22
+      },
+      "selectedTable": true
+    },
+    {
+      "name": "list",
+      "action": "toggleBulletList",
+      "handled": true,
+      "before": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "bulletList",
+            "content": [
+              {
+                "type": "listItem",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "blockId": "lh",
+                      "sourceRefs": []
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "List head"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "table",
+                    "attrs": {
+                      "blockId": "table"
+                    },
+                    "content": [
+                      {
+                        "type": "tableRow",
+                        "content": [
+                          {
+                            "type": "tableCell",
+                            "attrs": {
+                              "colspan": 1,
+                              "rowspan": 1,
+                              "colwidth": null,
+                              "align": null
+                            },
+                            "content": [
+                              {
+                                "type": "paragraph",
+                                "attrs": {
+                                  "blockId": "a",
+                                  "sourceRefs": []
+                                },
+                                "content": [
+                                  {
+                                    "type": "text",
+                                    "text": "Alpha 😀"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "type": "tableCell",
+                            "attrs": {
+                              "colspan": 1,
+                              "rowspan": 1,
+                              "colwidth": null,
+                              "align": null
+                            },
+                            "content": [
+                              {
+                                "type": "paragraph",
+                                "attrs": {
+                                  "blockId": "b",
+                                  "sourceRefs": []
+                                },
+                                "content": [
+                                  {
+                                    "type": "text",
+                                    "text": "Bravo"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "blockId": "lt",
+                      "sourceRefs": []
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "List tail"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "after": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "lh",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "List head"
+              }
+            ]
+          },
+          {
+            "type": "table",
+            "attrs": {
+              "blockId": "table"
+            },
+            "content": [
+              {
+                "type": "tableRow",
+                "content": [
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "a",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Alpha 😀"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tableCell",
+                    "attrs": {
+                      "colspan": 1,
+                      "rowspan": 1,
+                      "colwidth": null,
+                      "align": null
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "blockId": "b",
+                          "sourceRefs": []
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Bravo"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "lt",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "List tail"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "node",
+        "anchor": 19
+      },
+      "selectedTable": true
+    },
+    {
+      "name": "list",
+      "action": "toggleOrderedList",
+      "handled": true,
+      "before": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "bulletList",
+            "content": [
+              {
+                "type": "listItem",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "blockId": "lh",
+                      "sourceRefs": []
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "List head"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "table",
+                    "attrs": {
+                      "blockId": "table"
+                    },
+                    "content": [
+                      {
+                        "type": "tableRow",
+                        "content": [
+                          {
+                            "type": "tableCell",
+                            "attrs": {
+                              "colspan": 1,
+                              "rowspan": 1,
+                              "colwidth": null,
+                              "align": null
+                            },
+                            "content": [
+                              {
+                                "type": "paragraph",
+                                "attrs": {
+                                  "blockId": "a",
+                                  "sourceRefs": []
+                                },
+                                "content": [
+                                  {
+                                    "type": "text",
+                                    "text": "Alpha 😀"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "type": "tableCell",
+                            "attrs": {
+                              "colspan": 1,
+                              "rowspan": 1,
+                              "colwidth": null,
+                              "align": null
+                            },
+                            "content": [
+                              {
+                                "type": "paragraph",
+                                "attrs": {
+                                  "blockId": "b",
+                                  "sourceRefs": []
+                                },
+                                "content": [
+                                  {
+                                    "type": "text",
+                                    "text": "Bravo"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "blockId": "lt",
+                      "sourceRefs": []
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "List tail"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "after": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "before",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Before"
+              }
+            ]
+          },
+          {
+            "type": "orderedList",
+            "attrs": {
+              "start": 1,
+              "type": null
+            },
+            "content": [
+              {
+                "type": "listItem",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "blockId": "lh",
+                      "sourceRefs": []
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "List head"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "table",
+                    "attrs": {
+                      "blockId": "table"
+                    },
+                    "content": [
+                      {
+                        "type": "tableRow",
+                        "content": [
+                          {
+                            "type": "tableCell",
+                            "attrs": {
+                              "colspan": 1,
+                              "rowspan": 1,
+                              "colwidth": null,
+                              "align": null
+                            },
+                            "content": [
+                              {
+                                "type": "paragraph",
+                                "attrs": {
+                                  "blockId": "a",
+                                  "sourceRefs": []
+                                },
+                                "content": [
+                                  {
+                                    "type": "text",
+                                    "text": "Alpha 😀"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "type": "tableCell",
+                            "attrs": {
+                              "colspan": 1,
+                              "rowspan": 1,
+                              "colwidth": null,
+                              "align": null
+                            },
+                            "content": [
+                              {
+                                "type": "paragraph",
+                                "attrs": {
+                                  "blockId": "b",
+                                  "sourceRefs": []
+                                },
+                                "content": [
+                                  {
+                                    "type": "text",
+                                    "text": "Bravo"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "blockId": "lt",
+                      "sourceRefs": []
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "List tail"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "after",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "After"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "node",
+        "anchor": 21
+      },
+      "selectedTable": true
+    }
+  ]
+}

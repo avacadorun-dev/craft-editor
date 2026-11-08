@@ -96,6 +96,8 @@ impl CanvasState {
                     session.restore_selection_bookmark(&drag.bookmark)?;
                     if let Some(cells) = session.cell_selection().cloned() {
                         session.apply_commands_with_cell_selection(vec![command], cells)?;
+                    } else if let Some(reference) = session.selected_table_node()?.cloned() {
+                        session.commit_selected_table_node(vec![command], reference)?;
                     } else {
                         session.apply_commands(vec![command])?;
                     }

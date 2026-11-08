@@ -13,6 +13,7 @@ use crate::{
 enum Bookmark {
     Text(Selection),
     Cells(crate::TableSelection),
+    Node(NodeRef),
 }
 impl Bookmark {
     fn commit(self, session: &mut EditorSession, commands: Vec<Command>) -> Result<Change> {
@@ -21,6 +22,7 @@ impl Bookmark {
             Self::Cells(selection) => {
                 session.apply_commands_with_cell_selection(commands, selection)
             }
+            Self::Node(reference) => session.commit_selected_table_node(commands, reference),
         }
     }
 }
@@ -33,6 +35,13 @@ impl Bounds {
     fn new(session: &EditorSession) -> Result<Self> {
         if session.is_composing() {
             return Err(Error::CompositionActive);
+        }
+        if let Some(reference) = session.selected_table_node()? {
+            return Ok(Self {
+                first: reference.path.clone(),
+                last: reference.path.clone(),
+                selection: Bookmark::Node(reference.clone()),
+            });
         }
         if let Some(cells) = session.cell_selection() {
             let path = cells.head_path(session.document())?;
@@ -206,6 +215,18 @@ impl EditorSession {
     /// Existing IDs, source references and rich runs remain canonical. Splitting an identified
     /// list allocates fresh IDs only for additional retained wrapper portions.
     pub fn toggle_list(&mut self, kind: ListKind) -> Result<Change> {
+        if let Some(reference) = self.selected_table_node()? {
+            let in_list = (0..reference.path.0.len()).any(|depth| {
+                self.document()
+                    .node(&NodePath(reference.path.0[..depth].to_vec()))
+                    .is_ok_and(|node| is_list(&node.node_type))
+            });
+            if !in_list {
+                // Source toggleList cannot wrap a selected table as a new list. Its failed
+                // clearNodes attempt loses paragraph identities; keep canonical data exact.
+                return self.apply_commands(vec![]);
+            }
+        }
         let bounds = Bounds::new(self)?;
         let mut ids = IdPool::new(self);
         let commands = if let Some(path) = bounds.ancestor(self.document(), is_list) {
@@ -517,8 +538,8 @@ pub enum TextBlockState {
 }
 impl EditorSession {
     fn selected_text_blocks(&self) -> Result<Vec<&Node>> {
-        if self.cell_selection().is_some() {
-            return self.selected_cell_blocks();
+        if self.cell_selection().is_some() || self.selected_table_node()?.is_some() {
+            return self.selected_table_text_blocks();
         }
         let Some(selected) = self.selection() else {
             return Ok(vec![]);
@@ -591,7 +612,9 @@ impl EditorSession {
                     .ok_or(Error::MissingBlockIdentity)
             })
             .collect::<Result<Vec<_>>>()?;
-        let bookmark = if let Some(cells) = self.cell_selection() {
+        let bookmark = if let Some(reference) = self.selected_table_node()? {
+            Bookmark::Node(reference.clone())
+        } else if let Some(cells) = self.cell_selection() {
             Bookmark::Cells(cells.clone())
         } else {
             Bookmark::Text(self.selection().cloned().ok_or(Error::InvalidSelection)?)

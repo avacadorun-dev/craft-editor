@@ -16,6 +16,8 @@ use crate::{
 
 mod cells;
 mod resize;
+#[cfg(test)]
+mod table_nodes_tests;
 mod tables;
 
 pub use crate::layout::LineHeightBasis;
@@ -506,12 +508,9 @@ impl CanvasState {
         if let Some(geometry) = &self.geometry {
             let selection = session.selection.as_ref();
             if let Some(reference) = &session.node_selection
-                && let Some(node) = geometry
-                    .nodes()
-                    .iter()
-                    .find(|node| node.canonical_path == reference.path)
+                && let Some(bounds) = geometry.node_bounds(&reference.path)
             {
-                let selected = on_screen(rect.min, node.rect);
+                let selected = on_screen(rect.min, bounds);
                 ui.painter().rect_stroke(
                     selected.expand(2.0),
                     3.0,
@@ -807,7 +806,11 @@ impl CanvasState {
         read_only: bool,
     ) -> Result<()> {
         if key == Key::Escape {
-            self.cancel_preedit(session);
+            if self.preedit.is_some() {
+                self.cancel_preedit(session);
+            } else if session.leave_table_node_selection()? {
+                self.scroll_to_caret = true;
+            }
             return Ok(());
         }
         if self.preedit.is_some() {
@@ -831,7 +834,11 @@ impl CanvasState {
                     self.scroll_to_caret = true;
                     return Ok(());
                 }
-                Key::B | Key::I | Key::U if !read_only && session.node_selection.is_none() => {
+                Key::B | Key::I | Key::U
+                    if !read_only
+                        && (session.node_selection.is_none()
+                            || session.selected_table_node()?.is_some()) =>
+                {
                     let kind = match key {
                         Key::B => "bold",
                         Key::I => "italic",
@@ -879,6 +886,27 @@ impl CanvasState {
             return Ok(());
         }
         let geometry = self.geometry.as_ref().ok_or(Error::InvalidSelection)?;
+        if session.selected_table_node()?.is_some() {
+            if modifiers.command && key == Key::A {
+                session.set_selection(Selection {
+                    anchor: geometry.edge(false)?,
+                    head: geometry.edge(true)?,
+                })?;
+            } else if matches!(
+                key,
+                Key::ArrowLeft
+                    | Key::ArrowUp
+                    | Key::Home
+                    | Key::ArrowRight
+                    | Key::ArrowDown
+                    | Key::End
+            ) {
+                let before = matches!(key, Key::ArrowLeft | Key::ArrowUp | Key::Home);
+                session.navigate_selected_table(before)?;
+                self.scroll_to_caret = true;
+            }
+            return Ok(());
+        }
         if let Some(reference) = &session.node_selection {
             if let Some(node) = geometry
                 .nodes()

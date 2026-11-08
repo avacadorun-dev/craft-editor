@@ -37,6 +37,7 @@ pub use selection_state::{SelectionBookmark, SelectionState};
 mod structure;
 /// Canonical prose block kinds used by the source-compatible format command.
 pub use structure::{TextBlockKind, TextBlockState};
+mod table_node;
 mod table_selection;
 pub use craft_editor_model::ListKind;
 pub use insertion::ContentSlice;
@@ -191,6 +192,7 @@ pub struct EditorSession {
     selection: Option<Selection>,
     stored_marks: Option<Vec<Mark>>,
     node_selection: Option<NodeRef>,
+    table_node_return: Option<SelectionBookmark>,
     table_selection: Option<TableSelection>,
     max_table_columns: Option<usize>,
     undo_selection: Vec<SelectionHistory>,
@@ -216,6 +218,7 @@ impl EditorSession {
             selection: None,
             stored_marks: None,
             node_selection: None,
+            table_node_return: None,
             table_selection: None,
             max_table_columns: None,
             undo_selection: vec![],
@@ -275,11 +278,11 @@ impl EditorSession {
     pub fn selection(&self) -> Option<&Selection> {
         self.selection.as_ref()
     }
-    /// Borrow an exact opaque-node selection, independent of transient renderer identities.
+    /// Borrow an exact opaque-atom or whole-table selection, independent of transient renderer identities.
     pub fn node_selection(&self) -> Option<&NodeRef> {
         self.node_selection.as_ref()
     }
-    /// Select one canonical opaque block/inline atom using its exact guarded path and snapshot.
+    /// Select one canonical opaque atom or complete table using its exact guarded path and snapshot.
     pub fn select_node(&mut self, reference: NodeRef) -> Result<()> {
         if self.is_composing() {
             return Err(Error::CompositionActive);
@@ -296,13 +299,24 @@ impl EditorSession {
                 | "horizontalRule"
                 | "sceneBreak"
                 | "inlineMath"
+                | "table"
         ) {
             return Err(Error::InvalidSelection);
         }
+        let table_return = if actual.node_type == "table" {
+            if self.node_selection.as_ref() == Some(&reference) {
+                self.table_node_return.clone()
+            } else {
+                Some(self.capture_selection_bookmark()?)
+            }
+        } else {
+            None
+        };
         self.selection = None;
         self.table_selection = None;
         self.stored_marks = None;
         self.node_selection = Some(reference);
+        self.table_node_return = table_return;
         #[cfg(feature = "wordcraft-canvas")]
         self.request_scroll_to_caret();
         Ok(())
@@ -320,6 +334,7 @@ impl EditorSession {
         }
         self.selection = Some(selection);
         self.node_selection = None;
+        self.table_node_return = None;
         self.table_selection = None;
         self.restore_cursor = true;
         Ok(())
@@ -331,6 +346,11 @@ impl EditorSession {
         }
         if self.table_selection.is_some() {
             return self.selected_cell_plain_text();
+        }
+        if self.selected_table_node()?.is_some() {
+            return Ok(self
+                .copy_selection()?
+                .map_or_else(String::new, |bundle| bundle.plain));
         }
         if self.node_selection.is_some() {
             return Ok("\u{fffc}".into());
@@ -517,6 +537,9 @@ impl EditorSession {
         if self.document().node(&target.path)? != target.expected.as_ref() {
             return Err(craft_editor_model::Error::NodeReferenceConflict.into());
         }
+        if target.expected.node_type == "table" && text.is_empty() {
+            return self.remove_table_at(&target.path);
+        }
         let parent_path = target.path.parent().ok_or(Error::InvalidSelection)?;
         let index = *target.path.0.last().ok_or(Error::InvalidSelection)?;
         let parent = self.document().node_ref(&parent_path)?;
@@ -645,7 +668,7 @@ impl EditorSession {
     }
     /// Query real formatting across selected runs, including pending marks at a caret.
     pub fn mark_state(&self, kind: &str) -> Result<MarkState> {
-        if self.table_selection.is_some() {
+        if self.table_selection.is_some() || self.selected_table_node()?.is_some() {
             return self.selected_cells_mark_state(kind);
         }
         if let Some(reference) = &self.node_selection {
@@ -807,7 +830,7 @@ impl EditorSession {
         if self.is_composing() {
             return Err(Error::CompositionActive);
         }
-        if self.table_selection.is_some() {
+        if self.table_selection.is_some() || self.selected_table_node()?.is_some() {
             return self.format_selected_cells(mark, mode);
         }
         if let Some(reference) = self.node_selection.clone() {

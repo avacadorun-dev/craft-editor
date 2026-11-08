@@ -436,10 +436,21 @@ impl EditorSession {
             let parent_path = reference.path.parent().ok_or(Error::InvalidSelection)?;
             let index = *reference.path.0.last().ok_or(Error::InvalidSelection)?;
             let id = plan.id()?;
-            let paragraph = Node::paragraph(&id, "");
+            let is_table = reference.expected.node_type == "table";
+            let paragraph = if is_table {
+                crate::table_selection::source_empty_paragraph(&id)
+            } else {
+                Node::paragraph(&id, "")
+            };
+            let parent = plan.doc().node_ref(&parent_path)?;
+            let insertion = if is_table && index == 0 && parent.expected.children().len() > 1 {
+                index
+            } else {
+                index + 1
+            };
             plan.execute(vec![Command::InsertChildren {
-                parent: plan.doc().node_ref(&parent_path)?,
-                index: index + 1,
+                parent,
+                index: insertion,
                 children: vec![paragraph],
             }])?;
             DocPoint {
