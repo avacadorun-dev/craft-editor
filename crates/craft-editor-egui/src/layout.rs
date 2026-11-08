@@ -21,6 +21,9 @@ use wordcraft_layout::{DocLayout, LayoutCache, LayoutOptions, Placed, ViewMode};
 
 use crate::{DocPoint, Selection, syntax};
 
+mod table_viewport;
+pub use table_viewport::{TABLE_SCROLL_GUTTER, TableViewport};
+
 /// Upstream revision used by the hosted geometry experiment.
 pub const UPSTREAM_REVISION: &str = "da914ce674f18ebc4e08cca425cc8f8acca3372f";
 
@@ -178,6 +181,8 @@ pub struct ColumnGeometry {
     pub table_path: NodePath,
     /// Logical column index, starting at zero.
     pub column: usize,
+    /// Ancestor/own viewport clip; a hidden boundary cannot intercept a pointer.
+    pub clip: Option<GeometryRect>,
     /// Track's actual native rectangle in document points.
     pub rect: GeometryRect,
 }
@@ -214,6 +219,7 @@ pub struct SyntaxReport {
 }
 
 struct BlockMap {
+    canonical: NodePath,
     id: String,
     path: Path,
     text: String,
@@ -236,6 +242,7 @@ pub struct FlowGeometry {
     blocks: Vec<BlockMap>,
     cell_paths: HashMap<(Path, usize, usize), NodePath>,
     table_tracks: HashMap<NodePath, Vec<f32>>,
+    table_available: HashMap<NodePath, f32>,
     atom_paths: HashMap<String, NodePath>,
     node_paths: HashMap<Path, NodePath>,
     syntax_reports: Vec<SyntaxReport>,
@@ -244,6 +251,11 @@ pub struct FlowGeometry {
     placeholder_geometry: Vec<AtomPlaceholderGeometry>,
     text_windows: Vec<(GeometryRect, Selection)>,
     text_window_max_height: f32,
+    raw_cells: Vec<CellGeometry>,
+    raw_columns: Vec<ColumnGeometry>,
+    viewports: table_viewport::Viewports,
+    #[cfg(feature = "wordcraft-canvas")]
+    view_paint: table_viewport::ViewPaint,
 }
 
 impl FlowGeometry {
@@ -308,6 +320,7 @@ impl FlowGeometry {
             blocks: Vec::new(),
             cell_paths: HashMap::new(),
             table_tracks: HashMap::new(),
+            table_available: HashMap::new(),
             atom_size,
             style,
             resolver,
@@ -371,6 +384,7 @@ impl FlowGeometry {
             blocks: builder.blocks,
             cell_paths: builder.cell_paths,
             table_tracks: builder.table_tracks,
+            table_available: builder.table_available,
             atom_paths: builder.atom_paths,
             node_paths: builder.node_paths,
             syntax_reports: builder.syntax_reports,
@@ -379,9 +393,22 @@ impl FlowGeometry {
             placeholder_geometry: vec![],
             text_windows: vec![],
             text_window_max_height: 0.0,
+            raw_cells: vec![],
+            raw_columns: vec![],
+            viewports: table_viewport::Viewports::default(),
+            #[cfg(feature = "wordcraft-canvas")]
+            view_paint: table_viewport::ViewPaint::default(),
         };
         // Viewport scheduling/overlays read these every native frame. The immutable measured
         // layout changes only with a new projection; do not rebuild its full display list on hover.
+        geometry.raw_cells = geometry.measure_cells()?;
+        geometry.raw_columns = geometry.measure_columns(source)?;
+        geometry.viewports =
+            table_viewport::Viewports::new(source, &geometry.raw_cells, &geometry.table_available)?;
+        #[cfg(feature = "wordcraft-canvas")]
+        if !geometry.viewports.is_empty() {
+            geometry.view_paint = table_viewport::ViewPaint::new(&geometry);
+        }
         geometry.node_geometry = geometry.measure_nodes();
         geometry.placeholder_geometry = geometry.measure_placeholders();
         geometry.text_windows = geometry.measure_text_windows()?;
@@ -572,13 +599,35 @@ impl FlowGeometry {
             paper: wordcraft_doc::props::Rgb(paper[0], paper[1], paper[2]),
             ..Default::default()
         };
-        let rendered = wordcraft_render::render_area(
-            &self.upstream,
-            &self.measured.pages[area.page],
-            wordcraft_geom::Rect::new(area.x, area.y, area.width, area.height),
-            scale,
-            &options,
-        );
+        let mut rendered = if self.viewports.is_empty() {
+            wordcraft_render::render_area(
+                &self.upstream,
+                &self.measured.pages[area.page],
+                wordcraft_geom::Rect::new(area.x, area.y, area.width, area.height),
+                scale,
+                &options,
+            )
+        } else {
+            wordcraft_render::render_items(
+                &self.upstream,
+                &self.view_paint.pages[area.page],
+                wordcraft_geom::Rect::new(area.x, area.y, area.width, area.height),
+                scale,
+                &options,
+            )
+        };
+        if !self.viewports.is_empty() {
+            // render_items is transparent. Composite its premultiplied pixels on the host paper.
+            for pixel in rendered.pixels.chunks_exact_mut(4) {
+                let remaining = 255 - u32::from(pixel[3]);
+                for channel in 0..3 {
+                    pixel[channel] = (u32::from(pixel[channel])
+                        + (u32::from(paper[channel]) * remaining + 127) / 255)
+                        .min(255) as u8;
+                }
+                pixel[3] = 255;
+            }
+        }
         if rendered.width == 0
             || rendered.height == 0
             || rendered.pixels.len() != rendered.width as usize * rendered.height as usize * 4
@@ -595,36 +644,94 @@ impl FlowGeometry {
 
     /// Convert an exact semantic point to a native byte position and caret rectangle.
     pub fn caret(&self, point: &DocPoint) -> Result<Option<GeometryRect>> {
+        let block = self
+            .blocks
+            .iter()
+            .find(|block| block.id == point.block_id)
+            .ok_or(Error::UnmappedPosition)?;
         Ok(self
             .measured
             .caret(&self.to_native(point)?)
-            .map(|caret| GeometryRect {
-                page: caret.page,
-                x: caret.x,
-                y: caret.top,
-                width: caret.width,
-                height: caret.height,
+            .and_then(|caret| {
+                self.viewports.rect(
+                    &block.canonical,
+                    GeometryRect {
+                        page: caret.page,
+                        x: caret.x,
+                        y: caret.top,
+                        width: caret.width.max(1.0),
+                        height: caret.height,
+                    },
+                )
             }))
     }
 
     /// Resolve native hit testing to an exact canonical block/scalar point.
     pub fn hit(&self, page: usize, x: f32, y: f32) -> Result<Option<DocPoint>> {
-        self.measured
-            .hit(page, x, y, StoryRef::Body)
-            .map(|pos| self.resolve_native(&pos))
-            .transpose()
+        let (raw_x, raw_y) = self.viewports.inverse(page, x, y);
+        let Some(pos) = self.measured.hit(page, raw_x, raw_y, StoryRef::Body) else {
+            return Ok(None);
+        };
+        let point = self.resolve_native(&pos)?;
+        let block = self
+            .blocks
+            .iter()
+            .find(|block| block.id == point.block_id)
+            .ok_or(Error::UnmappedPosition)?;
+        if self.viewports.clip(&block.canonical).is_some_and(|clip| {
+            x < clip.x || x > clip.x + clip.width || y < clip.y || y > clip.y + clip.height
+        }) {
+            return Ok(None);
+        }
+        Ok(Some(point))
     }
 
     /// Resolve cross-block and cross-table selection geometry in one document coordinate space.
     pub fn selection_rects(&self, selection: &Selection) -> Result<Vec<GeometryRect>> {
-        let anchor = self.to_native(&selection.anchor)?;
-        let head = self.to_native(&selection.head)?;
-        Ok(self
-            .measured
-            .selection_rects(&self.upstream, &anchor, &head, 0)
-            .into_iter()
-            .map(|(page, rect)| GeometryRect::from_rect(page, rect))
-            .collect())
+        let a = self.to_native(&selection.anchor)?;
+        let b = self.to_native(&selection.head)?;
+        let (first, last) = if a.path.0 < b.path.0 || (a.path == b.path && a.off <= b.off) {
+            (a, b)
+        } else {
+            (b, a)
+        };
+        let mut rectangles = Vec::new();
+        for block in self
+            .blocks
+            .iter()
+            .filter(|block| first.path.0 <= block.path.0 && block.path.0 <= last.path.0)
+        {
+            let start = Pos::new(
+                StoryRef::Body,
+                block.path.clone(),
+                if block.path == first.path {
+                    first.off
+                } else {
+                    0
+                },
+            );
+            let end = Pos::new(
+                StoryRef::Body,
+                block.path.clone(),
+                if block.path == last.path {
+                    last.off
+                } else {
+                    block.text.len()
+                },
+            );
+            for (page, rect) in self
+                .measured
+                .selection_rects(&self.upstream, &start, &end, 0)
+            {
+                if let Some(rect) = self
+                    .viewports
+                    .rect(&block.canonical, GeometryRect::from_rect(page, rect))
+                {
+                    rectangles.push(rect);
+                }
+            }
+        }
+        Ok(rectangles)
     }
 
     /// Exact semantic ranges of measured text lines intersecting a viewport.
@@ -647,10 +754,16 @@ impl FlowGeometry {
         self.text_windows[start..]
             .iter()
             .take_while(|(rect, _)| rect.page == area.page && rect.y <= area.y + area.height)
-            .filter(|(rect, _)| {
-                rect.y + rect.height >= area.y
-                    && rect.x < area.x + area.width
-                    && rect.x + rect.width > area.x
+            .filter(|(rect, range)| {
+                self.blocks
+                    .iter()
+                    .find(|block| block.id == range.anchor.block_id)
+                    .and_then(|block| self.viewports.rect(&block.canonical, *rect))
+                    .is_some_and(|rect| {
+                        rect.y + rect.height >= area.y
+                            && rect.x < area.x + area.width
+                            && rect.x + rect.width > area.x
+                    })
             })
             .map(|(_, range)| range.clone())
             .collect()
@@ -712,6 +825,20 @@ impl FlowGeometry {
 
     /// Return actual cell boxes emitted by the table layout engine.
     pub fn cells(&self) -> Result<Vec<CellGeometry>> {
+        Ok(self
+            .raw_cells
+            .iter()
+            .filter_map(|cell| {
+                self.viewports
+                    .rect(&cell.canonical_path, cell.rect)
+                    .map(|rect| CellGeometry {
+                        rect,
+                        ..cell.clone()
+                    })
+            })
+            .collect())
+    }
+    fn measure_cells(&self) -> Result<Vec<CellGeometry>> {
         let mut cells = Vec::new();
         for (page, layout) in self.measured.pages.iter().enumerate() {
             for item in &layout.items {
@@ -741,8 +868,22 @@ impl FlowGeometry {
     }
 
     /// Resolve real column tracks from measured cell boxes, including invisible merged boundaries.
-    pub fn columns(&self, source: &Document) -> Result<Vec<ColumnGeometry>> {
-        let cells = self.cells()?;
+    pub fn columns(&self, _source: &Document) -> Result<Vec<ColumnGeometry>> {
+        Ok(self
+            .raw_columns
+            .iter()
+            .map(|column| {
+                let path = column.table_path.child(0);
+                ColumnGeometry {
+                    rect: self.viewports.unbounded(&path, column.rect),
+                    clip: self.viewports.clip(&path),
+                    ..column.clone()
+                }
+            })
+            .collect())
+    }
+    fn measure_columns(&self, source: &Document) -> Result<Vec<ColumnGeometry>> {
+        let cells = &self.raw_cells;
         let mut columns = Vec::new();
         for (path, tracks) in &self.table_tracks {
             let grid = craft_editor_model::TableGrid::new(source.node(path)?)?;
@@ -776,6 +917,7 @@ impl FlowGeometry {
                 columns.push(ColumnGeometry {
                     table_path: path.clone(),
                     column,
+                    clip: None,
                     rect: GeometryRect {
                         page: 0,
                         x: left,
@@ -792,7 +934,17 @@ impl FlowGeometry {
 
     /// Actual selectable opaque-node bounds, with native caption and separator line geometry.
     pub fn nodes(&self) -> Vec<NodeGeometry> {
-        self.node_geometry.clone()
+        self.node_geometry
+            .iter()
+            .filter_map(|node| {
+                self.viewports
+                    .rect(&node.canonical_path, node.rect)
+                    .map(|rect| NodeGeometry {
+                        rect,
+                        ..node.clone()
+                    })
+            })
+            .collect()
     }
 
     fn measure_nodes(&self) -> Vec<NodeGeometry> {
@@ -843,7 +995,17 @@ impl FlowGeometry {
     /// Nonfinal atom status boxes at their actual native object bounds.
     /// The canvas paints these over transparent reservation pixels without changing source text.
     pub fn placeholders(&self) -> Vec<AtomPlaceholderGeometry> {
-        self.placeholder_geometry.clone()
+        self.placeholder_geometry
+            .iter()
+            .filter_map(|node| {
+                self.viewports
+                    .rect(&node.canonical_path, node.rect)
+                    .map(|rect| AtomPlaceholderGeometry {
+                        rect,
+                        ..node.clone()
+                    })
+            })
+            .collect()
     }
 
     fn measure_placeholders(&self) -> Vec<AtomPlaceholderGeometry> {
@@ -906,6 +1068,118 @@ impl FlowGeometry {
             .collect()
     }
 
+    /// Bounded native table components in current presentation coordinates.
+    pub fn table_viewports(&self) -> Vec<TableViewport> {
+        self.viewports.list()
+    }
+    /// Current session-local table offsets, containing no edit authority.
+    pub fn table_offsets(&self) -> HashMap<String, f32> {
+        self.viewports.offsets()
+    }
+    /// Reapply/clamp presentation offsets after source or typography changes without canonical edits.
+    pub fn restore_table_offsets(&mut self, offsets: &HashMap<String, f32>) {
+        self.viewports.restore(offsets);
+        #[cfg(feature = "wordcraft-canvas")]
+        self.view_paint.update(&self.viewports);
+    }
+    /// Scroll one exact measured table, preserving source, semantic positions and history.
+    pub fn scroll_table(&mut self, path: &NodePath, offset: f32) -> Result<bool> {
+        let changed = self.viewports.set(path, offset)?;
+        #[cfg(feature = "wordcraft-canvas")]
+        if changed {
+            self.view_paint.update(&self.viewports);
+        }
+        Ok(changed)
+    }
+    /// Reveal an exact caret through nested table viewports without reshaping or rewriting content.
+    pub fn reveal_caret(&mut self, point: &DocPoint) -> Result<bool> {
+        let block = self
+            .blocks
+            .iter()
+            .find(|block| block.id == point.block_id)
+            .ok_or(Error::UnmappedPosition)?;
+        let Some(caret) = self.measured.caret(&self.to_native(point)?) else {
+            return Ok(false);
+        };
+        let changed = self.viewports.reveal(
+            &block.canonical,
+            GeometryRect {
+                page: caret.page,
+                x: caret.x,
+                y: caret.top,
+                width: caret.width.max(1.0),
+                height: caret.height,
+            },
+        );
+        #[cfg(feature = "wordcraft-canvas")]
+        if changed {
+            self.view_paint.update(&self.viewports);
+        }
+        Ok(changed)
+    }
+    /// Reveal a measured opaque block through its enclosing table components.
+    pub fn reveal_node(&mut self, path: &NodePath) -> bool {
+        let Some(node) = self
+            .node_geometry
+            .iter()
+            .find(|node| node.canonical_path == *path)
+        else {
+            return false;
+        };
+        let changed = self.viewports.reveal(path, node.rect);
+        #[cfg(feature = "wordcraft-canvas")]
+        if changed {
+            self.view_paint.update(&self.viewports);
+        }
+        changed
+    }
+    #[cfg(feature = "wordcraft-canvas")]
+    fn canonical_item_path(&self, item: &Placed) -> Option<NodePath> {
+        let from_path = |path: &Path| {
+            self.blocks
+                .iter()
+                .find(|block| block.path == *path)
+                .map(|block| block.canonical.clone())
+                .or_else(|| self.node_paths.get(path).cloned())
+        };
+        let bounds = match item {
+            Placed::Lines { path, .. } => return from_path(path),
+            Placed::Cell {
+                table, row, cell, ..
+            } => return self.cell_paths.get(&(table.clone(), *row, *cell)).cloned(),
+            Placed::Image {
+                rect, media, path, ..
+            } => {
+                return self
+                    .atom_paths
+                    .get(media)
+                    .cloned()
+                    .or_else(|| from_path(path))
+                    .or_else(|| {
+                        self.viewports
+                            .scope_for_rect(GeometryRect::from_rect(0, *rect))
+                    });
+            }
+            Placed::Graphic { rect, path, .. } | Placed::Object { rect, path, .. } => {
+                return from_path(path).or_else(|| {
+                    self.viewports
+                        .scope_for_rect(GeometryRect::from_rect(0, *rect))
+                });
+            }
+            Placed::Fill { rect, .. } | Placed::Shape { rect, .. } | Placed::Clip { rect, .. } => {
+                GeometryRect::from_rect(0, *rect)
+            }
+            Placed::Rule { x0, y0, x1, y1, .. } => GeometryRect {
+                page: 0,
+                x: x0.min(*x1),
+                y: y0.min(*y1),
+                width: (x1 - x0).abs().max(0.01),
+                height: (y1 - y0).abs().max(0.01),
+            },
+        };
+        self.viewports.scope_for_rect(bounds)
+    }
+
     fn to_native(&self, point: &DocPoint) -> Result<Pos> {
         let block = self
             .blocks
@@ -963,6 +1237,7 @@ struct Builder<'a, F> {
     blocks: Vec<BlockMap>,
     cell_paths: HashMap<(Path, usize, usize), NodePath>,
     table_tracks: HashMap<NodePath, Vec<f32>>,
+    table_available: HashMap<NodePath, f32>,
     atom_size: &'a F,
     style: Option<&'a GeometryStyle>,
     resolver: Option<&'a dyn crate::renderers::AtomResolver>,
@@ -1293,6 +1568,7 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
             }
         }
         self.blocks.push(BlockMap {
+            canonical: NodePath(canonical_path.to_vec()),
             id,
             path,
             text: node.inline_text(),
@@ -1468,6 +1744,8 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
             .collect();
         self.table_tracks
             .insert(NodePath(canonical_path.to_vec()), tracks.clone());
+        self.table_available
+            .insert(NodePath(canonical_path.to_vec()), width);
         let mut active: Vec<Option<ActiveSpan>> = vec![None; maximum];
         let mut rows = Vec::new();
         let mut column_count = 0;
@@ -1567,6 +1845,9 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
         table.grid = tracks;
         table.props.fixed = true;
         table.props.width = Some(table.grid.iter().sum());
+        if table.grid.iter().sum::<f32>() > width + 0.5 {
+            table.props.space_after = Some(TABLE_SCROLL_GUTTER);
+        }
         if let Some(style) = self.style {
             let mut border = wordcraft_doc::props::Border::single(0.75);
             border.color = Some(rgb(style.table_border));
@@ -2249,3 +2530,6 @@ mod tests {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod table_viewport_tests;
