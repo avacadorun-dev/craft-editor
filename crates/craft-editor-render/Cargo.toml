@@ -1,0 +1,27 @@
+[package]
+name = "craft-editor-render"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Bounded native Mermaid, formula and media rendering for structured document atoms"
+
+[dependencies]
+craft-editor-model.workspace = true
+craft-editor-egui = { path = "../craft-editor-egui", features = ["wordcraft-geometry"] }
+serde_json.workspace = true
+thiserror.workspace = true
+merman = "=0.9.3"
+ratex-parser = "=0.1.15"
+ratex-layout = "=0.1.15"
+ratex-types = "=0.1.15"
+ratex-render = { version = "=0.1.15", features = ["embed-fonts"] }
+resvg = { version = "=0.47.0", default-features = false, features = ["text", "raster-images"] }
+usvg = { version = "=0.47.0", default-features = false, features = ["text"] }
+image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
+roxmltree = "=0.21.2"
+wordcraft-fonts = { git = "https://github.com/storytold/wordcraft", rev = "da914ce674f18ebc4e08cca425cc8f8acca3372f" }
+
+[lints]
+workspace = true

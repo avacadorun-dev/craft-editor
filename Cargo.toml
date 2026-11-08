@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/craft-editor-model", "crates/craft-editor-egui"]
+members = ["crates/craft-editor-model", "crates/craft-editor-egui", "crates/craft-editor-render"]
 
 [workspace.package]
 version = "0.1.0-alpha.1"
