@@ -146,7 +146,8 @@ fn table_destination_matches_source_tiling_growth_and_crossing_span_isolation() 
         };
         let cells = match table_cells_from_slice(&content, open_start, open_end, &mut allocate)? {
             Some(cells) => cells,
-            None => PastedCells::from_writing(&content, open_start, open_end, &mut allocate)?,
+            None => PastedCells::from_writing(&content, open_start, open_end, &mut allocate)
+                .map_err(|error| format!("{} writing-cell fit: {error}", case["name"]))?,
         };
         let (command, after_selection) = paste_table_cells(
             &original,

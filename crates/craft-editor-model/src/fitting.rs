@@ -1039,10 +1039,19 @@ pub(crate) fn fit_clipboard_container<F: FnMut() -> Result<String>>(
         .collect::<Result<Vec<_>>>()?;
     let schema = bridge.schema(kind)?;
     let value = schema.with_types(|| -> Result<Value> {
-        let root = schema
-            .node_type(kind)
-            .and_then(|node_type| node_type.create_and_fill(Value::Null, None, None))
-            .ok_or(Error::UnsupportedEdit)?;
+        let root = if kind == "tableCell" {
+            // The source's cell factory has one empty default paragraph. Construct
+            // that explicit schema-default root rather than relying on native
+            // recursive block+ filler discovery for this isolated container.
+            schema
+                .node_from_json(&json!({"type":"tableCell","content":[{"type":"paragraph"}]}))
+                .map_err(|_| Error::UnsupportedEdit)?
+        } else {
+            schema
+                .node_type(kind)
+                .and_then(|node_type| node_type.create_and_fill(Value::Null, None, None))
+                .ok_or(Error::UnsupportedEdit)?
+        };
         let end = root.content().map_or(0, Fragment::size);
         let nodes = incoming
             .iter()
