@@ -291,6 +291,9 @@ impl EditorSession {
         if self.is_composing() {
             return Err(Error::CompositionActive);
         }
+        if self.table_selection.is_some() {
+            return self.copy_table_selection().map(Some);
+        }
         if let Some(reference) = self.node_selection() {
             if self.document().node(&reference.path)? != reference.expected.as_ref() {
                 return Err(craft_editor_model::Error::NodeReferenceConflict.into());
@@ -391,6 +394,68 @@ impl EditorSession {
         .bundle()
         .map(Some)
     }
+    pub(crate) fn selected_cell_plain_text(&self) -> Result<String> {
+        let selection = self
+            .table_selection
+            .as_ref()
+            .ok_or(Error::InvalidSelection)?;
+        selection
+            .origin_paths(self.document())?
+            .iter()
+            .map(|path| {
+                self.document()
+                    .node(path)
+                    .map(|cell| plain::export(cell.children()))
+                    .map_err(Error::from)
+            })
+            .collect::<Result<Vec<_>>>()
+            .map(|cells| cells.join("\n\n"))
+    }
+    fn copy_table_selection(&self) -> Result<ClipboardBundle> {
+        let selection = self
+            .table_selection
+            .as_ref()
+            .ok_or(Error::InvalidSelection)?;
+        let rectangle = selection.rectangle(self.document())?;
+        let target = self.document().node_ref(&selection.table_path)?;
+        let grid = craft_editor_model::TableGrid::new(&target.expected)?;
+        let whole = rectangle.top == 0
+            && rectangle.left == 0
+            && rectangle.bottom == grid.rows
+            && rectangle.right == grid.columns;
+        let mut reserved = insertion::block_id_reservations(self.document());
+        let mut next = 0;
+        let max_bytes = self
+            .clipboard_provider
+            .as_ref()
+            .map_or(256 * 1024 * 1024, |provider| provider.max_bytes());
+        let table = craft_editor_model::copy_table_fragment(
+            self.document(),
+            &target,
+            rectangle,
+            max_bytes,
+            || {
+                insertion::allocate_block_id(self.revision().0, &mut next, &mut reserved).map_err(
+                    |error| match error {
+                        Error::Model(error) => error,
+                        _ => craft_editor_model::Error::UnsupportedEdit,
+                    },
+                )
+            },
+        )?;
+        // One additional open table context retains unknown table metadata in partial copies.
+        // The source's complete-table slice already has that context at open depth one.
+        let open = if whole { 1 } else { 2 };
+        let mut bundle = RichSlice {
+            content: vec![table],
+            open_start: open,
+            open_end: open,
+        }
+        .bundle()?;
+        bundle.plain = self.selected_cell_plain_text()?;
+        bundle.check_budget(max_bytes)?;
+        Ok(bundle)
+    }
     /// Publish before deleting the selected content. Clipboard failure never changes the document.
     pub fn cut_to_clipboard(&mut self) -> Result<Option<Change>> {
         let Some(bundle) = self.copy_selection()? else {
@@ -426,8 +491,11 @@ impl EditorSession {
         let prepared = context.prepare(max_bytes)?;
         self.finish_prepared_paste(guard, prepared)
     }
-    fn paste_rich_slice(&mut self, mut slice: RichSlice) -> Result<Change> {
+    fn paste_rich_slice(&mut self, mut slice: RichSlice, max_bytes: usize) -> Result<Change> {
         slice.validate_edges()?;
+        if let Some(change) = self.try_paste_table_slice(&slice, max_bytes)? {
+            return Ok(change);
+        }
         // A copy creates new block identities. Source references and every other field stay exact.
         let mut reserved = insertion::block_id_reservations(self.document());
         fn reserve(nodes: &[Node], reserved: &mut HashSet<String>) {

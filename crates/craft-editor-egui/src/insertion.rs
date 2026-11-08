@@ -47,15 +47,15 @@ pub(crate) fn allocate_block_id(
     }
 }
 
-struct Plan {
+pub(crate) struct Plan {
     editor: Editor,
-    commands: Vec<Command>,
-    next_id: u64,
+    pub(crate) commands: Vec<Command>,
+    pub(crate) next_id: u64,
     prefix: u64,
     reserved: HashSet<String>,
 }
 impl Plan {
-    fn new(session: &EditorSession, incoming: &[Node]) -> Result<Self> {
+    pub(crate) fn new(session: &EditorSession, incoming: &[Node]) -> Result<Self> {
         let mut reserved = block_id_reservations(session.document());
         fn reserve(nodes: &[Node], reserved: &mut HashSet<String>) -> Result<()> {
             for node in nodes {
@@ -111,10 +111,10 @@ impl Plan {
         }
         Ok(())
     }
-    fn doc(&self) -> &Document {
+    pub(crate) fn doc(&self) -> &Document {
         self.editor.document()
     }
-    fn execute(&mut self, commands: Vec<Command>) -> Result<()> {
+    pub(crate) fn execute(&mut self, commands: Vec<Command>) -> Result<()> {
         self.editor.apply(Transaction {
             base_revision: self.editor.revision(),
             commands: commands.clone(),
@@ -122,7 +122,7 @@ impl Plan {
         self.commands.extend(commands);
         Ok(())
     }
-    fn id(&mut self) -> Result<String> {
+    pub(crate) fn id(&mut self) -> Result<String> {
         allocate_block_id(self.prefix, &mut self.next_id, &mut self.reserved)
     }
     fn path(&self, id: &str) -> Result<NodePath> {
@@ -152,7 +152,7 @@ impl Plan {
             children,
         }])
     }
-    fn insert_text_fragment(
+    pub(crate) fn insert_text_fragment(
         &mut self,
         point: DocPoint,
         template: &Node,
@@ -383,6 +383,9 @@ impl EditorSession {
     pub fn insert_plain_text(&mut self, text: &str) -> Result<Change> {
         if self.is_composing() {
             return Err(Error::CompositionActive);
+        }
+        if self.table_selection.is_some() {
+            return self.replace_selected_cells(text, false);
         }
         if self.node_selection.is_some() {
             return self.replace_selected_node(text);

@@ -32,8 +32,10 @@ pub mod decorations;
 
 mod insertion;
 mod structure;
+mod table_selection;
 pub use craft_editor_model::ListKind;
 pub use insertion::ContentSlice;
+pub use table_selection::{CellPoint, TableSelection};
 
 mod projection;
 use craft_editor_model::{
@@ -81,6 +83,14 @@ pub enum Error {
     /// The current checkpoint has no qualified renderer/input contract for this block.
     #[error("unsupported_block_renderer: {0}")]
     UnsupportedBlockKind(String),
+    /// A requested table edit exceeds the embedding host's explicit native column capacity.
+    #[error("table_column_limit: requested={requested}, maximum={maximum}")]
+    TableColumnLimit {
+        /// Resulting logical columns required by the edit.
+        requested: usize,
+        /// Optional native edit limit installed by the host; generic parsing remains unchanged.
+        maximum: usize,
+    },
     /// A canonical command cannot interrupt an uncommitted native IME composition.
     #[error("composition_active")]
     CompositionActive,
@@ -156,6 +166,8 @@ struct SelectionHistory {
     after: Option<Selection>,
     before_node: Option<NodeRef>,
     after_node: Option<NodeRef>,
+    before_cells: Option<TableSelection>,
+    after_cells: Option<TableSelection>,
 }
 struct Composition {
     document: Document,
@@ -171,6 +183,8 @@ pub struct EditorSession {
     selection: Option<Selection>,
     stored_marks: Option<Vec<Mark>>,
     node_selection: Option<NodeRef>,
+    table_selection: Option<TableSelection>,
+    max_table_columns: Option<usize>,
     undo_selection: Vec<SelectionHistory>,
     redo_selection: Vec<SelectionHistory>,
     pending: Vec<Change>,
@@ -194,6 +208,8 @@ impl EditorSession {
             selection: None,
             stored_marks: None,
             node_selection: None,
+            table_selection: None,
+            max_table_columns: None,
             undo_selection: vec![],
             redo_selection: vec![],
             pending: vec![],
@@ -276,6 +292,7 @@ impl EditorSession {
             return Err(Error::InvalidSelection);
         }
         self.selection = None;
+        self.table_selection = None;
         self.stored_marks = None;
         self.node_selection = Some(reference);
         #[cfg(feature = "wordcraft-canvas")]
@@ -295,6 +312,7 @@ impl EditorSession {
         }
         self.selection = Some(selection);
         self.node_selection = None;
+        self.table_selection = None;
         self.restore_cursor = true;
         Ok(())
     }
@@ -302,6 +320,9 @@ impl EditorSession {
     pub fn selected_text(&self) -> Result<String> {
         if self.is_composing() {
             return Err(Error::CompositionActive);
+        }
+        if self.table_selection.is_some() {
+            return self.selected_cell_plain_text();
         }
         if self.node_selection.is_some() {
             return Ok("\u{fffc}".into());
@@ -326,6 +347,7 @@ impl EditorSession {
         }
         let before = self.selection.clone();
         let before_node = self.node_selection.clone();
+        let before_cells = self.table_selection.clone();
         let change = self.editor.apply(Transaction {
             base_revision: self.revision(),
             commands,
@@ -368,6 +390,16 @@ impl EditorSession {
             }) {
                 self.node_selection = None;
             }
+            if let Some(mut cells) = self.table_selection.take() {
+                let mapped = change
+                    .mappings
+                    .iter()
+                    .try_fold(cells.table_path.clone(), |path, map| map.map_path(&path));
+                if let Some(path) = mapped {
+                    cells.table_path = path;
+                    self.table_selection = cells.canonicalized(self.document()).ok();
+                }
+            }
             if self.undo_selection.len() >= 100 {
                 self.undo_selection.remove(0);
             }
@@ -376,6 +408,8 @@ impl EditorSession {
                 after: self.selection.clone(),
                 before_node,
                 after_node: self.node_selection.clone(),
+                before_cells,
+                after_cells: self.table_selection.clone(),
             });
             self.redo_selection.clear();
             self.pending.push(change.clone());
@@ -400,6 +434,7 @@ impl EditorSession {
             base_revision: self.revision(),
             commands: commands.clone(),
         })?;
+        self.validate_table_capacity(candidate.document())?;
         for point in [&selection.anchor, &selection.head] {
             let node = candidate
                 .document()
@@ -419,12 +454,14 @@ impl EditorSession {
         }
         self.selection = Some(selection);
         self.node_selection = None;
+        self.table_selection = None;
         self.restore_cursor = true;
         if change.before_revision != change.after_revision
             && let Some(history) = self.undo_selection.last_mut()
         {
             history.after = self.selection.clone();
             history.after_node = None;
+            history.after_cells = None;
         }
         #[cfg(feature = "wordcraft-canvas")]
         self.request_scroll_to_caret();
@@ -441,16 +478,19 @@ impl EditorSession {
         }
         let mut candidate = EditorSession::new(self.document().clone(), self.revision());
         candidate.apply_commands(commands.clone())?;
+        self.validate_table_capacity(candidate.document())?;
         candidate.select_node(selection.clone())?;
         let change = self.apply_commands(commands)?;
         self.selection = None;
         self.node_selection = Some(selection);
+        self.table_selection = None;
         self.stored_marks = None;
         if change.before_revision != change.after_revision
             && let Some(history) = self.undo_selection.last_mut()
         {
             history.after = None;
             history.after_node = self.node_selection.clone();
+            history.after_cells = None;
         }
         #[cfg(feature = "wordcraft-canvas")]
         self.request_scroll_to_caret();
@@ -1000,6 +1040,7 @@ impl EditorSession {
         if let Some(entry) = self.undo_selection.pop() {
             self.selection = entry.before.clone();
             self.node_selection = entry.before_node.clone();
+            self.table_selection = entry.before_cells.clone();
             self.redo_selection.push(entry);
         }
         self.pending.push(change.clone());
@@ -1016,6 +1057,7 @@ impl EditorSession {
         if let Some(entry) = self.redo_selection.pop() {
             self.selection = entry.after.clone();
             self.node_selection = entry.after_node.clone();
+            self.table_selection = entry.after_cells.clone();
             self.undo_selection.push(entry);
         }
         self.pending.push(change.clone());

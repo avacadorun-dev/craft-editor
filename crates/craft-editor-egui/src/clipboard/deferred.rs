@@ -122,6 +122,7 @@ struct Guard {
     revision: Revision,
     selection: Option<Selection>,
     node_selection: Option<NodeRef>,
+    table_selection: Option<crate::TableSelection>,
     stored_marks: Option<Vec<craft_editor_model::Mark>>,
 }
 /// Captured Cut destination; only a correlated successful native write can complete it.
@@ -179,6 +180,7 @@ impl Guard {
             revision: session.revision(),
             selection: session.selection.clone(),
             node_selection: session.node_selection.clone(),
+            table_selection: session.table_selection.clone(),
             stored_marks: session.stored_marks.clone(),
         })
     }
@@ -191,6 +193,7 @@ impl Guard {
             || self.revision != session.revision()
             || self.selection != session.selection
             || self.node_selection != session.node_selection
+            || self.table_selection != session.table_selection
             || self.stored_marks != session.stored_marks
         {
             return Err(ClipboardError::StaleRequest.into());

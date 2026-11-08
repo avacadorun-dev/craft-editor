@@ -358,7 +358,7 @@ impl EditorSession {
         match prepared.content {
             Content::Empty => self.apply_commands(vec![]),
             Content::Literal(text) => self.insert_plain_text(&text),
-            Content::Rich(slice) => self.paste_rich_slice(slice),
+            Content::Rich(slice) => self.paste_rich_slice(slice, prepared.max_bytes),
         }
     }
     fn can_link_paste_selection(&self) -> Result<bool> {

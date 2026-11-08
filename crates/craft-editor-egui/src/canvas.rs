@@ -205,6 +205,7 @@ impl CanvasState {
         }
         if session.selection.is_none()
             && session.node_selection.is_none()
+            && session.table_selection.is_none()
             && let Some(geometry) = &self.geometry
         {
             match geometry.edge(false) {
@@ -1171,6 +1172,8 @@ fn preedit_document(
     let mut shadow = EditorSession::new(session.document().clone(), session.revision());
     shadow.selection.clone_from(&session.selection);
     shadow.node_selection.clone_from(&session.node_selection);
+    shadow.table_selection.clone_from(&session.table_selection);
+    shadow.max_table_columns = session.max_table_columns;
     shadow.stored_marks.clone_from(&session.stored_marks);
     shadow.next_id = session.next_id;
     shadow.insert_plain_text(text)?;
