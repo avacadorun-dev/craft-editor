@@ -209,6 +209,7 @@ mod tests {
                 Event::PointerMoved(at),
                 Event::MouseWheel {
                     unit: egui::MouseWheelUnit::Point,
+                    phase: egui::TouchPhase::Move,
                     delta: Vec2::new(-150.0, 0.0),
                     modifiers: Modifiers::NONE,
                 },
@@ -357,6 +358,7 @@ mod tests {
                 Event::PointerMoved(table_center),
                 Event::MouseWheel {
                     unit: egui::MouseWheelUnit::Point,
+                    phase: egui::TouchPhase::Move,
                     delta: Vec2::new(-100_000.0, 0.0),
                     modifiers: Modifiers::NONE,
                 },
