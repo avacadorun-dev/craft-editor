@@ -498,7 +498,79 @@ pub enum TextBlockKind {
         level: u8,
     },
 }
+/// Read-only formatting selector state for the exact native text/cell selection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextBlockState {
+    /// Ordinary paragraphs throughout the selected writing.
+    Paragraph,
+    /// One semantic heading level throughout the selected writing.
+    Heading {
+        /// Canonical heading level one through six.
+        level: u8,
+    },
+    /// Code blocks throughout the selected writing.
+    Code,
+    /// More than one text block kind or heading level is selected.
+    Mixed,
+    /// No eligible text or cell selection is active.
+    Unavailable,
+}
 impl EditorSession {
+    fn selected_text_blocks(&self) -> Result<Vec<&Node>> {
+        if self.cell_selection().is_some() {
+            return self.selected_cell_blocks();
+        }
+        let Some(selected) = self.selection() else {
+            return Ok(vec![]);
+        };
+        let projection = Projection::new(self.document())?;
+        let a = projection
+            .spans
+            .iter()
+            .position(|span| !span.atom && span.id == selected.anchor.block_id)
+            .ok_or(Error::InvalidSelection)?;
+        let b = projection
+            .spans
+            .iter()
+            .position(|span| !span.atom && span.id == selected.head.block_id)
+            .ok_or(Error::InvalidSelection)?;
+        projection.spans[a.min(b)..=a.max(b)]
+            .iter()
+            .filter(|span| !span.atom)
+            .map(|span| {
+                self.document()
+                    .node(&NodePath(span.path.clone()))
+                    .map_err(Into::into)
+            })
+            .collect()
+    }
+    /// Summarize the complete eligible selection without moving it or changing stored marks.
+    /// A mixed cell/paragraph range never masquerades as an ordinary paragraph.
+    pub fn text_block_state(&self) -> Result<TextBlockState> {
+        let mut result = TextBlockState::Unavailable;
+        for node in self.selected_text_blocks()? {
+            let next = match node.node_type.as_str() {
+                "paragraph" => TextBlockState::Paragraph,
+                "codeBlock" => TextBlockState::Code,
+                "heading" => TextBlockState::Heading {
+                    level: node
+                        .attrs
+                        .as_ref()
+                        .and_then(|attrs| attrs.get("level"))
+                        .and_then(serde_json::Value::as_f64)
+                        .filter(|value| value.fract() == 0.0 && (1.0..=6.0).contains(value))
+                        .ok_or(Error::InvalidSelection)? as u8,
+                },
+                _ => return Err(Error::InvalidSelection),
+            };
+            if result == TextBlockState::Unavailable {
+                result = next;
+            } else if result != next {
+                return Ok(TextBlockState::Mixed);
+            }
+        }
+        Ok(result)
+    }
     /// Format selected textblocks, including every selected cell range, in one guarded history entry.
     /// Lists/quotes use the source head-cell policy; this command follows setBlockType's all-range policy.
     pub fn set_text_block_kind(&mut self, kind: TextBlockKind) -> Result<Change> {
@@ -510,57 +582,19 @@ impl EditorSession {
         {
             return Err(craft_editor_model::Error::InvalidDocument("heading_level".into()).into());
         }
-        let (ids, bookmark) = if let Some(cells) = self.cell_selection() {
-            (
-                self.selected_cell_blocks()?
-                    .into_iter()
-                    .map(|node| {
-                        node.block_id()
-                            .map(str::to_owned)
-                            .ok_or(Error::MissingBlockIdentity)
-                    })
-                    .collect::<Result<Vec<_>>>()?,
-                Bookmark::Cells(cells.clone()),
-            )
+        let ids = self
+            .selected_text_blocks()?
+            .into_iter()
+            .map(|node| {
+                node.block_id()
+                    .map(str::to_owned)
+                    .ok_or(Error::MissingBlockIdentity)
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let bookmark = if let Some(cells) = self.cell_selection() {
+            Bookmark::Cells(cells.clone())
         } else {
-            let selected = self.selection().cloned().ok_or(Error::InvalidSelection)?;
-            let projection = Projection::new(self.document())?;
-            let a = projection.scalar(&selected.anchor)?;
-            let b = projection.scalar(&selected.head)?;
-            let first = projection
-                .spans
-                .iter()
-                .position(|span| {
-                    !span.atom
-                        && span.id
-                            == if a <= b {
-                                selected.anchor.block_id.as_str()
-                            } else {
-                                selected.head.block_id.as_str()
-                            }
-                })
-                .ok_or(Error::InvalidSelection)?;
-            let last = projection
-                .spans
-                .iter()
-                .position(|span| {
-                    !span.atom
-                        && span.id
-                            == if a <= b {
-                                selected.head.block_id.as_str()
-                            } else {
-                                selected.anchor.block_id.as_str()
-                            }
-                })
-                .ok_or(Error::InvalidSelection)?;
-            (
-                projection.spans[first..=last]
-                    .iter()
-                    .filter(|span| !span.atom)
-                    .map(|span| span.id.clone())
-                    .collect(),
-                Bookmark::Text(selected),
-            )
+            Bookmark::Text(self.selection().cloned().ok_or(Error::InvalidSelection)?)
         };
         let ids = ids.into_iter().collect::<std::collections::HashSet<_>>();
         let projection = Projection::new(self.document())?;

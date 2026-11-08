@@ -732,3 +732,70 @@ fn explicit_table_deletion_preserves_original_text_selection_and_one_reversible_
     assert_eq!(session.selection(), target.as_ref());
     Ok(())
 }
+
+#[test]
+fn format_selector_reports_uniform_and_mixed_table_blocks_without_changing_direction() -> TestResult
+{
+    use craft_editor_egui::{TextBlockKind, TextBlockState};
+    let original = fixture()?;
+    let mut session = EditorSession::new(original.clone(), Revision(0));
+    let cells = rectangle();
+    session.set_cell_selection(cells.clone())?;
+    assert_eq!(session.text_block_state()?, TextBlockState::Paragraph);
+    session.set_text_block_kind(TextBlockKind::Heading { level: 4 })?;
+    assert_eq!(
+        session.text_block_state()?,
+        TextBlockState::Heading { level: 4 }
+    );
+    let point = DocPoint {
+        block_id: "a".into(),
+        offset: ScalarOffset(0),
+    };
+    session.set_selection(Selection {
+        anchor: point.clone(),
+        head: point,
+    })?;
+    session.set_text_block_kind(TextBlockKind::Paragraph)?;
+    session.set_cell_selection(cells.clone())?;
+    let before = session.document().to_json()?;
+    let revision = session.revision();
+    assert_eq!(session.text_block_state()?, TextBlockState::Mixed);
+    assert_eq!(session.cell_selection(), Some(&cells));
+    assert_eq!(session.document().to_json()?, before);
+    assert_eq!(session.revision(), revision);
+    session.set_selection(Selection {
+        anchor: DocPoint {
+            block_id: "d".into(),
+            offset: ScalarOffset(0),
+        },
+        head: DocPoint {
+            block_id: "a".into(),
+            offset: ScalarOffset(0),
+        },
+    })?;
+    assert_eq!(session.text_block_state()?, TextBlockState::Mixed);
+    Ok(())
+}
+
+#[test]
+fn format_selector_preserves_legacy_integral_heading_attributes() -> TestResult {
+    let canonical = json!({"type":"doc","attrs":{"schemaVersion":4},"content":[
+        {"type":"heading","attrs":{"blockId":"h","level":4.0},"content":[{"type":"text","text":"Legacy"}]}
+    ]});
+    let mut session = EditorSession::new(Document::from_json(canonical.clone())?, Revision(0));
+    let point = DocPoint {
+        block_id: "h".into(),
+        offset: ScalarOffset(0),
+    };
+    session.set_selection(Selection {
+        anchor: point.clone(),
+        head: point,
+    })?;
+    assert_eq!(
+        session.text_block_state()?,
+        craft_editor_egui::TextBlockState::Heading { level: 4 }
+    );
+    assert_eq!(session.document().to_json()?, canonical);
+    assert_eq!(session.revision(), Revision(0));
+    Ok(())
+}

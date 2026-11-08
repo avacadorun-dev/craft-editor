@@ -9,3 +9,5 @@ Source: the installed original TableKit configuration (`resizable`, `renderWrapp
 - Copy/Cut/Paste use existing acknowledged clipboard publication. Cut does not delete before publication success. Native capacity is a host policy; generic parsing preserves wider data.
 
 Required tests include merged/ordinary widths, inherited nested content alignment, range mutation/Undo, pointer down/move/release, Escape, stale revision, read only and rejection without mutation. Hosted geometry/native clipboard qualification precedes consumer repinning; real native authoring/IME/AX and independent UX remain separate acceptance.
+
+The formatting selector reports Paragraph, the real Heading1–6, Code, Mixed or Unavailable from the same complete text/cell scope used by the formatting command. A read-only state query preserves selection direction, pending typing marks, canonical content and history.

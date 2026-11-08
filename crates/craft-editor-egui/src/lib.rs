@@ -36,7 +36,7 @@ mod selection_state;
 pub use selection_state::{SelectionBookmark, SelectionState};
 mod structure;
 /// Canonical prose block kinds used by the source-compatible format command.
-pub use structure::TextBlockKind;
+pub use structure::{TextBlockKind, TextBlockState};
 mod table_selection;
 pub use craft_editor_model::ListKind;
 pub use insertion::ContentSlice;
