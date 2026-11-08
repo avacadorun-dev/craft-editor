@@ -159,6 +159,19 @@ impl EditorSession {
     pub fn revision(&self) -> Revision {
         self.editor.revision()
     }
+    /// Whether one acknowledged canonical transaction can be undone now.
+    pub fn can_undo(&self) -> bool {
+        !self.is_composing() && self.editor.can_undo()
+    }
+    /// Whether one undone canonical transaction can be reapplied now.
+    pub fn can_redo(&self) -> bool {
+        !self.is_composing() && self.editor.can_redo()
+    }
+    /// Return keyboard focus from a host toolbar without changing semantic selection.
+    #[cfg(feature = "wordcraft-canvas")]
+    pub fn request_canvas_focus(&self, context: &egui::Context) {
+        context.memory_mut(|memory| memory.request_focus(self.options.id));
+    }
     /// Whether the native IME has an uncommitted display-only composition.
     pub fn is_composing(&self) -> bool {
         self.composition.is_some() || self.canvas_is_composing()

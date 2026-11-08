@@ -149,16 +149,21 @@ impl CanvasState {
         if response.hovered() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
         }
-        if (response.clicked() || response.drag_started() || response.dragged())
+        let pressed = response.hovered()
+            && ui.input(|input| input.pointer.button_pressed(egui::PointerButton::Primary));
+        if (pressed || response.clicked() || response.drag_started() || response.dragged())
             && let Some(pointer) = response.interact_pointer_pos()
         {
             response.request_focus();
             self.cancel_preedit(session);
+            if let Err(error) = self.measure(session, width, style) {
+                errors.push(error);
+            }
             if let Err(error) = self.pointer(
                 session,
                 pointer - rect.min,
                 ui.input(|i| i.modifiers.shift),
-                response.dragged(),
+                !pressed && response.dragged(),
                 response.double_clicked(),
                 response.triple_clicked(),
             ) {
@@ -167,6 +172,17 @@ impl CanvasState {
         }
         let focused = ui.memory(|memory| memory.has_focus(session.options.id));
         if focused {
+            ui.memory_mut(|memory| {
+                memory.set_focus_lock_filter(
+                    session.options.id,
+                    egui::EventFilter {
+                        tab: true,
+                        horizontal_arrows: true,
+                        vertical_arrows: true,
+                        escape: true,
+                    },
+                )
+            });
             let events = ui.input_mut(|input| {
                 let mut accepted = Vec::new();
                 input.events.retain(|event| {
@@ -772,12 +788,305 @@ fn replacement_buffer(session: &EditorSession, text: &str) -> Result<(SemanticBu
 fn replace(session: &mut EditorSession, text: &str) -> Result<()> {
     let (buffer, caret) = replacement_buffer(session, text)?;
     let next_id = buffer.next_id;
-    session.apply_commands(buffer.commands)?;
+    let change = session.apply_commands(buffer.commands)?;
     session.next_id = next_id;
     session.selection = Some(collapsed(caret));
-    if let Some(history) = session.undo_selection.last_mut() {
+    if change.before_revision != change.after_revision
+        && let Some(history) = session.undo_selection.last_mut()
+    {
         history.after = session.selection.clone();
     }
     session.restore_cursor = false;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
+
+    fn fixture() -> craft_editor_model::Result<Document> {
+        Document::from_json(serde_json::from_str(include_str!(
+            "../examples/canvas_fixture.json"
+        ))?)
+    }
+    fn point(id: &str, offset: usize) -> DocPoint {
+        DocPoint {
+            block_id: id.into(),
+            offset: ScalarOffset(offset),
+        }
+    }
+    fn frame(
+        session: &mut EditorSession,
+        context: &egui::Context,
+        events: Vec<Event>,
+        style: &CanvasStyle,
+    ) -> ViewResponse {
+        let mut result = None;
+        let mut output = context.run_ui(
+            egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(700.0, 650.0))),
+                events,
+                focused: true,
+                ..Default::default()
+            },
+            |root| {
+                egui::CentralPanel::default().show(root, |ui| {
+                    result = Some(session.show_canvas(ui, style));
+                });
+            },
+        );
+        output.textures_delta.clear();
+        match result {
+            Some(result) => result,
+            None => panic!("canvas frame did not run"),
+        }
+    }
+    fn key(key: Key, modifiers: Modifiers) -> Event {
+        Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers,
+        }
+    }
+
+    #[test]
+    fn real_grid_wraps_spans_within_the_host_column() -> TestResult {
+        let source = fixture()?;
+        let geometry = FlowGeometry::with_style(
+            &source,
+            500.0,
+            &|_| None,
+            Some(&CanvasStyle::default().geometry()),
+        )?;
+        let cells = geometry.cells()?;
+        assert_eq!(cells.len(), 6);
+        assert_eq!(cells.iter().filter(|cell| cell.covered).count(), 1);
+        assert!(
+            cells
+                .iter()
+                .all(|cell| cell.rect.x >= 17.0 && cell.rect.x + cell.rect.width <= 483.0)
+        );
+        let first = geometry
+            .caret(&point("merged", 0))?
+            .ok_or(Error::InvalidSelection)?;
+        let last = geometry
+            .caret(&point("merged", 85))?
+            .ok_or(Error::InvalidSelection)?;
+        assert!(
+            last.y > first.y,
+            "cell text must wrap within real grid tracks"
+        );
+        Ok(())
+    }
+    #[test]
+    fn raster_uses_host_paper_and_premultiplied_rgba() -> TestResult {
+        let source = fixture()?;
+        let style = CanvasStyle {
+            foreground: Color32::from_rgb(220, 225, 232),
+            background: Color32::from_rgb(29, 34, 42),
+            table_border: Color32::from_rgb(90, 105, 123),
+            table_header: Color32::from_rgb(39, 48, 61),
+            ..Default::default()
+        };
+        let geometry =
+            FlowGeometry::with_style(&source, 600.0, &|_| None, Some(&style.geometry()))?;
+        let raster = geometry.rasterize(
+            GeometryRect {
+                page: 0,
+                x: 0.0,
+                y: 0.0,
+                width: 256.0,
+                height: 256.0,
+            },
+            2.0,
+            rgb(style.background),
+        )?;
+        assert_eq!((raster.width, raster.height), (512, 512));
+        assert_eq!(&raster.pixels[..4], &[29, 34, 42, 255]);
+        assert!(
+            raster
+                .pixels
+                .chunks_exact(4)
+                .any(|pixel| pixel[..3] != [29, 34, 42])
+        );
+        assert!(
+            raster
+                .pixels
+                .chunks_exact(4)
+                .all(|pixel| pixel[0] <= pixel[3] && pixel[1] <= pixel[3] && pixel[2] <= pixel[3])
+        );
+        Ok(())
+    }
+    #[test]
+    fn canvas_pointer_hit_then_unicode_typing_preserves_merged_grid() -> TestResult {
+        let original = fixture()?;
+        let mut session = EditorSession::new(original.clone(), Revision(2));
+        let mut state = CanvasState::default();
+        state.measure(&session, 600.0, &CanvasStyle::default())?;
+        let caret = state
+            .geometry
+            .as_ref()
+            .ok_or(Error::InvalidSelection)?
+            .caret(&point("merged", 2))?
+            .ok_or(Error::InvalidSelection)?;
+        state.pointer(
+            &mut session,
+            Vec2::new(caret.x + 0.01, caret.y + caret.height / 2.0),
+            false,
+            false,
+            false,
+            false,
+        )?;
+        assert_eq!(
+            session.selection().map(|s| &s.head),
+            Some(&point("merged", 2))
+        );
+        replace(&mut session, "字")?;
+        assert!(
+            session
+                .document()
+                .block_text("merged")?
+                .starts_with("Я😀字")
+        );
+        assert_eq!(
+            session.document().block("grid")?.attrs,
+            original.block("grid")?.attrs
+        );
+        session.undo()?;
+        assert_eq!(session.document(), &original);
+        Ok(())
+    }
+    #[test]
+    fn reverse_cross_cell_selection_formats_and_undo_restores_direction() -> TestResult {
+        let original = fixture()?;
+        let mut session = EditorSession::new(original.clone(), Revision(1));
+        let selection = Selection {
+            anchor: point("corner", 3),
+            head: point("merged", 2),
+        };
+        session.set_selection(selection.clone())?;
+        let context = egui::Context::default();
+        context.memory_mut(|memory| memory.request_focus(session.options.id));
+        let response = frame(
+            &mut session,
+            &context,
+            vec![key(Key::B, Modifiers::COMMAND)],
+            &CanvasStyle::default(),
+        );
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        assert_eq!(response.changes.len(), 1);
+        assert_eq!(session.selection(), Some(&selection));
+        assert!(selection_has_mark(&session, "bold")?);
+        session.undo()?;
+        assert_eq!(session.document(), &original);
+        assert_eq!(session.selection(), Some(&selection));
+        Ok(())
+    }
+    #[test]
+    fn canvas_text_event_and_keyboard_undo_use_canonical_history() -> TestResult {
+        let original = fixture()?;
+        let mut session = EditorSession::new(original.clone(), Revision(8));
+        session.set_selection(collapsed(point("right", 2)))?;
+        let context = egui::Context::default();
+        context.memory_mut(|memory| memory.request_focus(session.options.id));
+        let result = frame(
+            &mut session,
+            &context,
+            vec![Event::Text("🪶".into())],
+            &CanvasStyle::default(),
+        );
+        assert!(result.errors.is_empty(), "{:?}", result.errors);
+        assert_eq!(session.document().block_text("right")?, "Ri🪶ght header");
+        assert_eq!(result.changes.len(), 1);
+        let undone = frame(
+            &mut session,
+            &context,
+            vec![key(Key::Z, Modifiers::COMMAND)],
+            &CanvasStyle::default(),
+        );
+        assert!(undone.errors.is_empty(), "{:?}", undone.errors);
+        assert_eq!(session.document(), &original);
+        Ok(())
+    }
+    #[test]
+    fn canvas_preedit_never_changes_canonical_state_before_commit() -> TestResult {
+        let original = fixture()?;
+        let mut session = EditorSession::new(original.clone(), Revision(3));
+        session.set_selection(collapsed(point("right", 1)))?;
+        let context = egui::Context::default();
+        context.memory_mut(|memory| memory.request_focus(session.options.id));
+        let interim = frame(
+            &mut session,
+            &context,
+            vec![Event::Ime(egui::ImeEvent::Preedit {
+                text: "ni".into(),
+                active_range_chars: Some(0..2),
+            })],
+            &CanvasStyle::default(),
+        );
+        assert!(interim.errors.is_empty(), "{:?}", interim.errors);
+        assert!(interim.changes.is_empty());
+        assert!(session.is_composing());
+        assert_eq!(session.document(), &original);
+        assert!(matches!(
+            session.format_selection(Mark::new("bold"), MarkMode::Add),
+            Err(Error::CompositionActive)
+        ));
+        let committed = frame(
+            &mut session,
+            &context,
+            vec![Event::Ime(egui::ImeEvent::Commit("字".into()))],
+            &CanvasStyle::default(),
+        );
+        assert!(committed.errors.is_empty(), "{:?}", committed.errors);
+        assert_eq!(committed.changes.len(), 1);
+        assert!(!session.is_composing());
+        assert_eq!(session.document().block_text("right")?, "R字ight header");
+        session.undo()?;
+        assert_eq!(session.document(), &original);
+        Ok(())
+    }
+    #[test]
+    fn cross_cell_text_deletion_clears_text_without_joining_cells() -> TestResult {
+        let original = fixture()?;
+        let mut session = EditorSession::new(original.clone(), Revision(1));
+        session.set_selection(Selection {
+            anchor: point("right", 2),
+            head: point("merged", 2),
+        })?;
+        replace(&mut session, "X")?;
+        assert_eq!(session.document().block_text("merged")?, "Я😀X");
+        assert_eq!(session.document().block_text("right")?, "ght header");
+        assert_eq!(session.document().block("grid")?.children().len(), 3);
+        session.undo()?;
+        assert_eq!(session.document(), &original);
+        Ok(())
+    }
+    #[test]
+    fn read_only_canvas_allows_selection_but_rejects_native_text() -> TestResult {
+        let original = fixture()?;
+        let mut session = EditorSession::new(original.clone(), Revision(1));
+        session.set_selection(collapsed(point("right", 1)))?;
+        let context = egui::Context::default();
+        context.memory_mut(|memory| memory.request_focus(session.options.id));
+        let response = frame(
+            &mut session,
+            &context,
+            vec![
+                Event::Text("ignored".into()),
+                key(Key::B, Modifiers::COMMAND),
+            ],
+            &CanvasStyle {
+                read_only: true,
+                ..Default::default()
+            },
+        );
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        assert!(response.changes.is_empty());
+        assert_eq!(session.document(), &original);
+        Ok(())
+    }
 }

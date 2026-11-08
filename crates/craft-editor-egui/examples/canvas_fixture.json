@@ -1,0 +1,23 @@
+{
+  "type": "doc", "attrs": {"schemaVersion": 4}, "vendorRoot": {"preserve": true},
+  "content": [
+    {"type":"paragraph","attrs":{"blockId":"intro","sourceRefs":["source-a"]},"content":[
+      {"type":"text","text":"A real native document canvas","marks":[{"type":"bold"}]},
+      {"type":"text","text":" — wrapped cells, one selection and semantic history."}
+    ]},
+    {"type":"table","attrs":{"blockId":"grid","vendor":{"preserve":true}},"content":[
+      {"type":"tableRow","content":[
+        {"type":"tableHeader","attrs":{"colspan":2,"rowspan":2},"content":[{"type":"paragraph","attrs":{"blockId":"merged"},"content":[{"type":"text","text":"Я😀 merged across two columns and two rows. Click here and write; the grid is retained.","marks":[{"type":"italic"}]}]}]},
+        {"type":"tableHeader","attrs":{"colspan":1,"rowspan":1},"content":[{"type":"paragraph","attrs":{"blockId":"right"},"content":[{"type":"text","text":"Right header"}]}]}
+      ]},
+      {"type":"tableRow","content":[
+        {"type":"tableCell","attrs":{"colspan":1,"rowspan":1},"content":[{"type":"paragraph","attrs":{"blockId":"bottom"},"content":[{"type":"text","text":"This cell wraps naturally inside its own column."}]}]}
+      ]},
+      {"type":"tableRow","content":[
+        {"type":"tableCell","attrs":{"colspan":2,"rowspan":1},"content":[{"type":"paragraph","attrs":{"blockId":"wide"},"content":[{"type":"text","text":"Select from this cell back into the first paragraph, then apply bold."}]}]},
+        {"type":"tableCell","attrs":{"colspan":1,"rowspan":1},"content":[{"type":"paragraph","attrs":{"blockId":"corner"},"content":[{"type":"text","text":"Final cell"}]}]}
+      ]}
+    ]},
+    {"type":"paragraph","attrs":{"blockId":"outro"},"content":[{"type":"text","text":"The surrounding manuscript remains continuous. Undo restores the exact structured document."}]}
+  ]
+}
