@@ -74,6 +74,11 @@ pub(crate) struct DeferredState {
     mode: ClipboardMode,
     requests: VecDeque<ClipboardRequest>,
 }
+impl DeferredState {
+    pub(crate) fn session_identity(&self) -> Arc<()> {
+        self.identity.clone()
+    }
+}
 impl Default for DeferredState {
     fn default() -> Self {
         Self {

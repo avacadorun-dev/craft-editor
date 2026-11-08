@@ -104,3 +104,143 @@ mod tests {
         Ok(())
     }
 }
+
+/// Sealed positional bookmark for one native session/revision, including pending typing marks.
+///
+/// This is not database, clipboard-provider or project authority. Hosts retain their storage guards.
+/// It cannot be forged or deserialized from external data.
+/// ```compile_fail
+/// use craft_editor_egui::SelectionBookmark;
+/// let forged = SelectionBookmark { revision: craft_editor_model::Revision(0) };
+/// ```
+#[derive(Debug, Clone)]
+pub struct SelectionBookmark {
+    session: std::sync::Arc<()>,
+    revision: craft_editor_model::Revision,
+    selection: Option<SelectionState>,
+    stored_marks: Option<Vec<craft_editor_model::Mark>>,
+}
+impl EditorSession {
+    /// Freeze one selection and its stored marks without cloning unrelated manuscript content.
+    pub fn capture_selection_bookmark(&self) -> Result<SelectionBookmark> {
+        if self.is_composing() {
+            return Err(Error::CompositionActive);
+        }
+        Ok(SelectionBookmark {
+            session: self.clipboard_state.session_identity(),
+            revision: self.revision(),
+            selection: self.selection_state()?,
+            stored_marks: self.stored_marks.clone(),
+        })
+    }
+    /// Restore only within the captured session/revision, after validating the full target.
+    /// IME, foreign/stale identity and invalid positions preserve the current selection and marks.
+    pub fn restore_selection_bookmark(&mut self, bookmark: &SelectionBookmark) -> Result<()> {
+        if self.is_composing() {
+            return Err(Error::CompositionActive);
+        }
+        if !std::sync::Arc::ptr_eq(&self.clipboard_state.session_identity(), &bookmark.session)
+            || self.revision() != bookmark.revision
+        {
+            return Err(Error::StaleSelectionBookmark);
+        }
+        self.restore_selection_state(bookmark.selection.clone())?;
+        self.stored_marks = bookmark.stored_marks.clone();
+        Ok(())
+    }
+}
+#[cfg(test)]
+mod bookmark_tests {
+    use super::*;
+    use crate::{DocPoint, MarkState};
+    use craft_editor_model::{Document, Mark, Revision, ScalarOffset};
+    type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
+    fn selected(session: &mut EditorSession, offset: usize) -> Result<()> {
+        let point = DocPoint {
+            block_id: "p".into(),
+            offset: ScalarOffset(offset),
+        };
+        session.set_selection(Selection {
+            anchor: point.clone(),
+            head: point,
+        })
+    }
+    #[test]
+    fn sealed_bookmark_restores_marks_but_rejects_foreign_same_revision_and_stale_history()
+    -> TestResult {
+        let original = Document::plain("p", "ABC")?;
+        let mut session = EditorSession::new(original.clone(), Revision(0));
+        selected(&mut session, 1)?;
+        session.toggle_mark(Mark::new("bold"))?;
+        let bookmark = session.capture_selection_bookmark()?;
+        let saved = session.selection_state()?;
+        selected(&mut session, 2)?;
+        session.restore_selection_bookmark(&bookmark)?;
+        assert_eq!(session.selection_state()?, saved);
+        assert_eq!(session.mark_state("bold")?, MarkState::On);
+        assert_eq!(session.document(), &original);
+        assert!(!session.can_undo());
+        let mut other = EditorSession::new(original.clone(), Revision(0));
+        selected(&mut other, 2)?;
+        let before = other.selection_state()?;
+        assert!(matches!(
+            other.restore_selection_bookmark(&bookmark),
+            Err(Error::StaleSelectionBookmark)
+        ));
+        assert_eq!(other.selection_state()?, before);
+        assert_eq!(other.document(), &original);
+        session.insert_plain_text("X")?;
+        let before = session.selection_state()?;
+        let written = session.document().clone();
+        assert!(matches!(
+            session.restore_selection_bookmark(&bookmark),
+            Err(Error::StaleSelectionBookmark)
+        ));
+        assert_eq!(session.selection_state()?, before);
+        assert_eq!(session.document(), &written);
+        session.undo()?;
+        assert!(matches!(
+            session.restore_selection_bookmark(&bookmark),
+            Err(Error::StaleSelectionBookmark)
+        ));
+        assert_eq!(session.document(), &original);
+        Ok(())
+    }
+    #[test]
+    fn sealed_none_and_invalid_bookmarks_do_not_clear_live_selection_during_ime_or_failure()
+    -> TestResult {
+        let mut session = EditorSession::new(Document::plain("p", "ABC")?, Revision(0));
+        let empty = session.capture_selection_bookmark()?;
+        selected(&mut session, 1)?;
+        let before = session.selection_state()?;
+        session.composition = Some(crate::Composition {
+            document: session.document().clone(),
+            commands: vec![],
+            before_selection: session.selection.clone(),
+        });
+        assert!(session.capture_selection_bookmark().is_err());
+        assert!(matches!(
+            session.restore_selection_bookmark(&empty),
+            Err(Error::CompositionActive)
+        ));
+        assert_eq!(session.selection_state()?, before);
+        session.composition = None;
+        let mut invalid = session.capture_selection_bookmark()?;
+        invalid.selection = Some(SelectionState::Text(Selection {
+            anchor: DocPoint {
+                block_id: "missing".into(),
+                offset: ScalarOffset(0),
+            },
+            head: DocPoint {
+                block_id: "missing".into(),
+                offset: ScalarOffset(0),
+            },
+        }));
+        assert!(session.restore_selection_bookmark(&invalid).is_err());
+        assert_eq!(session.selection_state()?, before);
+        assert!(!session.can_undo());
+        session.restore_selection_bookmark(&empty)?;
+        assert_eq!(session.selection_state()?, None);
+        Ok(())
+    }
+}

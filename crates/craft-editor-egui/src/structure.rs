@@ -562,17 +562,15 @@ impl EditorSession {
                 Bookmark::Text(selected),
             )
         };
-        let mut candidate = Editor::new(self.document().clone(), self.revision());
+        let ids = ids.into_iter().collect::<std::collections::HashSet<_>>();
+        let projection = Projection::new(self.document())?;
         let mut commands = Vec::new();
-        for id in ids {
-            let projection = Projection::new(candidate.document())?;
-            let path = projection
-                .spans
-                .iter()
-                .find(|span| span.id == id && !span.atom)
-                .map(|span| NodePath(span.path.clone()))
-                .ok_or(Error::InvalidSelection)?;
-            let target = candidate.document().node_ref(&path)?;
+        for span in projection
+            .spans
+            .iter()
+            .filter(|span| !span.atom && ids.contains(&span.id))
+        {
+            let target = self.document().node_ref(&NodePath(span.path.clone()))?;
             let mut replacement = target.expected.as_ref().clone();
             let from_code = replacement.node_type == "codeBlock";
             if from_code {
@@ -631,12 +629,7 @@ impl EditorSession {
                         .insert("level".into(), serde_json::json!(level));
                 }
             }
-            let command = candidate.document().replace_node(&target, replacement)?;
-            candidate.apply(Transaction {
-                base_revision: candidate.revision(),
-                commands: vec![command.clone()],
-            })?;
-            commands.push(command);
+            commands.push(self.document().replace_node(&target, replacement)?);
         }
         bookmark.commit(self, commands)
     }

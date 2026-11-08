@@ -596,14 +596,20 @@ fn source_cell_block_list_quote_and_insertion_policies_preserve_exact_rectangle_
             "ordered" => session.toggle_list(ListKind::Ordered)?,
             "quote" => session.toggle_blockquote()?,
             _ => {
-                let source = Document::from_json(case["output"].clone())?;
-                let table = source.node(&selected.table_path)?;
+                let table = original.node(&selected.table_path)?;
                 let grid = TableGrid::new(table)?;
                 let cell = grid
                     .cell_at(head.row, head.column)
                     .ok_or("missing source head cell")?;
                 let path = selected.table_path.child(cell.row).child(cell.cell_index);
-                let nodes = source.node(&path)?.children().to_vec();
+                let mut source = &case["output"];
+                for index in &path.0 {
+                    source = &source["content"][*index];
+                }
+                // Raw source null identities are intentional: native insertion must allocate fresh
+                // IDs before validating its full canonical candidate. The source identity plugin
+                // is not mounted by the independent headless command probe.
+                let nodes: Vec<Node> = serde_json::from_value(source["content"].clone())?;
                 let slice = if action == "formula" || action == "writing" {
                     ContentSlice::Inline(nodes[0].children().to_vec())
                 } else {

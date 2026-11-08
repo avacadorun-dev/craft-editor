@@ -33,7 +33,7 @@ pub mod decorations;
 mod insertion;
 mod selection_state;
 /// One revision-local selection form for host dialogs and command bookmarks.
-pub use selection_state::SelectionState;
+pub use selection_state::{SelectionBookmark, SelectionState};
 mod structure;
 /// Canonical prose block kinds used by the source-compatible format command.
 pub use structure::TextBlockKind;
@@ -82,6 +82,9 @@ pub enum Error {
     /// The supplied document-level selection cannot be resolved against this revision.
     #[error("invalid_selection")]
     InvalidSelection,
+    /// A positional host bookmark belongs to another native session or revision.
+    #[error("stale_selection_bookmark")]
+    StaleSelectionBookmark,
     /// The operation crosses a structural boundary whose transaction is not implemented yet.
     #[error("unsupported_structural_edit")]
     UnsupportedStructuralEdit,
