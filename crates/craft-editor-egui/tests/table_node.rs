@@ -72,6 +72,14 @@ fn comparable(mut value: Value, retained: &HashSet<String>) -> Value {
             {
                 attrs.remove("sourceRefs");
             }
+            if kind == "orderedList" {
+                if attrs.get("start") == Some(&serde_json::json!(1)) {
+                    attrs.remove("start");
+                }
+                if attrs.get("type").is_some_and(Value::is_null) {
+                    attrs.remove("type");
+                }
+            }
             if attrs.is_empty()
                 && let Some(object) = value.as_object_mut()
             {
