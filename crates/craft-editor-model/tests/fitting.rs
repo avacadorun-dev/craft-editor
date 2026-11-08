@@ -66,7 +66,8 @@ fn generic_fitter_matches_twelve_actual_original_replace_selection_cases_and_nat
                     next += 1;
                     Ok(format!("fit-{next}"))
                 },
-            )?;
+            )
+            .map_err(|error| format!("{} reversed={reversed} plan: {error}", case["name"]))?;
             let mut editor = Editor::new(document.clone(), Revision(0));
             let change = editor.apply(Transaction {
                 base_revision: Revision(0),

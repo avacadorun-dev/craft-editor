@@ -614,7 +614,7 @@ pub(crate) fn fit<F: FnMut() -> Result<String>>(
     }
     let schema = DynamicSchema::from_json(&bridge.spec)
         .map_err(|_| Error::InvalidDocument("fitting_schema".into()))?;
-    schema.with_types(|| {
+    let (value, steps, incoming_size) = schema.with_types(|| -> Result<_> {
         let native = schema
             .node_from_json(&native_doc)
             .map_err(|_| Error::UnsupportedEdit)?;
@@ -628,193 +628,192 @@ pub(crate) fn fit<F: FnMut() -> Result<String>>(
             .collect::<Result<Vec<_>>>()?;
         let slice = Slice::new(Fragment::from(incoming), open_start, open_end);
         let incoming_size = slice.size();
-        if incoming_size == 0 && from_pos == to_pos {
-            let paths = bridge
-                .nodes
-                .iter()
-                .filter_map(|entry| entry.path.as_ref().map(|path| (path.clone(), path.clone())))
-                .collect();
-            let atoms = bridge
-                .nodes
-                .iter()
-                .filter(|entry| {
-                    !entry.incoming
-                        && is_atom(entry.node)
-                        && !matches!(entry.node.node_type.as_str(), "hardBreak" | "inlineMath")
-                })
-                .filter_map(|entry| entry.path.as_ref().map(|path| (entry.start, path.clone())))
-                .collect();
-            return Ok((
-                document.clone(),
-                FittedMap {
-                    before: before.clone(),
-                    after: before,
-                    steps: Vec::new(),
-                    paths,
-                    atoms,
-                    inserted_end: from_pos,
-                },
-            ));
-        }
         let mut transform = Transform::<Dyn>::new(native);
         transform.replace_range(from_pos, to_pos, slice);
         if transform.steps.is_empty() && (incoming_size > 0 || from_pos != to_pos) {
             return Err(Error::UnsupportedEdit);
         }
         let value = serde_json::to_value(&transform.doc)?;
-        let mut reserved = HashSet::new();
-        for entry in &bridge.nodes {
-            if let Some(id) = entry.node.block_id() {
-                reserved.insert(id.to_owned());
-            }
+        Ok((value, transform.mapping.maps, incoming_size))
+    })?;
+    if incoming_size == 0 && from_pos == to_pos {
+        let paths = bridge
+            .nodes
+            .iter()
+            .filter_map(|entry| entry.path.as_ref().map(|path| (path.clone(), path.clone())))
+            .collect();
+        let atoms = bridge
+            .nodes
+            .iter()
+            .filter(|entry| {
+                !entry.incoming
+                    && is_atom(entry.node)
+                    && !matches!(entry.node.node_type.as_str(), "hardBreak" | "inlineMath")
+            })
+            .filter_map(|entry| entry.path.as_ref().map(|path| (entry.start, path.clone())))
+            .collect();
+        return Ok((
+            document.clone(),
+            FittedMap {
+                before: before.clone(),
+                after: before,
+                steps: Vec::new(),
+                paths,
+                atoms,
+                inserted_end: from_pos,
+            },
+        ));
+    }
+    let mut reserved = HashSet::new();
+    for entry in &bridge.nodes {
+        if let Some(id) = entry.node.block_id() {
+            reserved.insert(id.to_owned());
         }
-        let mut rebuilt = Reconstruct {
-            bridge: &bridge,
-            allocate,
-            used: HashSet::new(),
-            reserved,
-            seen: vec![0; bridge.nodes.len()],
-            text: HashMap::new(),
-            paths: Vec::new(),
-            atoms: Vec::new(),
-        };
-        let mut root = rebuilt.node(&value, NodePath::root(), 0)?;
-        for (index, entry) in bridge.nodes.iter().enumerate() {
-            if entry.node.node_type == "text" {
-                let text = entry.node.text.as_deref().unwrap_or_default();
-                let expected = if entry.incoming {
-                    text.to_owned()
-                } else {
-                    let mut kept = String::new();
-                    let mut units = entry.start;
-                    for ch in text.chars() {
-                        let end = units + ch.len_utf16();
-                        if end <= from_pos || units >= to_pos {
-                            kept.push(ch);
-                        }
-                        units = end;
+    }
+    let mut rebuilt = Reconstruct {
+        bridge: &bridge,
+        allocate,
+        used: HashSet::new(),
+        reserved,
+        seen: vec![0; bridge.nodes.len()],
+        text: HashMap::new(),
+        paths: Vec::new(),
+        atoms: Vec::new(),
+    };
+    let mut root = rebuilt.node(&value, NodePath::root(), 0)?;
+    for (index, entry) in bridge.nodes.iter().enumerate() {
+        if entry.node.node_type == "text" {
+            let text = entry.node.text.as_deref().unwrap_or_default();
+            let expected = if entry.incoming {
+                text.to_owned()
+            } else {
+                let mut kept = String::new();
+                let mut units = entry.start;
+                for ch in text.chars() {
+                    let end = units + ch.len_utf16();
+                    if end <= from_pos || units >= to_pos {
+                        kept.push(ch);
                     }
-                    kept
-                };
-                if rebuilt
-                    .text
-                    .get(&index)
-                    .map(String::as_str)
-                    .unwrap_or_default()
-                    != expected
-                {
-                    return Err(Error::UnsupportedEdit);
+                    units = end;
                 }
-            } else if entry.incoming && is_atom(entry.node) && rebuilt.seen[index] != 1 {
+                kept
+            };
+            if rebuilt
+                .text
+                .get(&index)
+                .map(String::as_str)
+                .unwrap_or_default()
+                != expected
+            {
                 return Err(Error::UnsupportedEdit);
             }
+        } else if entry.incoming && is_atom(entry.node) && rebuilt.seen[index] != 1 {
+            return Err(Error::UnsupportedEdit);
         }
-        let required = root.required_schema_version()?;
-        let current = root
+    }
+    let required = root.required_schema_version()?;
+    let current = root
+        .attrs
+        .as_ref()
+        .and_then(|attrs| attrs.get("schemaVersion"))
+        .and_then(Value::as_f64)
+        .unwrap_or(1.0);
+    if current < required as f64 {
+        root.attrs
+            .get_or_insert_default()
+            .insert("schemaVersion".into(), json!(required));
+    }
+    let mut candidate = Document::from_root(root)?;
+    let after = coordinates(candidate.root());
+    let mut inserted_end = from_pos;
+    for step in &steps {
+        inserted_end = step.map(inserted_end, 1);
+    }
+    let mut map = FittedMap {
+        before,
+        after,
+        steps,
+        paths: rebuilt.paths,
+        atoms: rebuilt.atoms,
+        inserted_end,
+    };
+    let known: Value = serde_json::from_str(include_str!("fitting_schema.json"))?;
+    let mut incoming_refs = Vec::new();
+    for (index, entry) in bridge.nodes.iter().enumerate() {
+        if entry.node.node_type == "text" {
+            continue;
+        }
+        let survived = rebuilt.seen[bridge.node_tokens[index]] > 0;
+        let opaque = !entry.node.extra.is_empty()
+            || entry.node.attrs.as_ref().is_some_and(|attrs| {
+                attrs.keys().any(|key| {
+                    !matches!(key.as_str(), "blockId" | "sourceRefs")
+                        && known["nodes"][&entry.node.node_type]["attrs"]
+                            .get(key)
+                            .is_none()
+                })
+            })
+            || entry
+                .node
+                .marks
+                .as_ref()
+                .is_some_and(|marks| !marks.is_empty());
+        let deleted =
+            !entry.incoming && from_pos <= entry.start && to_pos >= entry.start + size(entry.node);
+        if !survived && opaque && !deleted {
+            let position = if entry.incoming {
+                from_pos
+            } else {
+                entry.start + 1
+            };
+            let mapped = map
+                .steps
+                .iter()
+                .fold(position, |pos, step| step.map(pos, -1));
+            let destination = map.resolve(mapped, false).ok_or(Error::UnsupportedEdit)?;
+            merge_context(&mut candidate, &destination.block_id, entry.node, &known)?;
+        }
+        let refs = entry
+            .node
             .attrs
             .as_ref()
-            .and_then(|attrs| attrs.get("schemaVersion"))
-            .and_then(Value::as_f64)
-            .unwrap_or(1.0);
-        if current < required as f64 {
-            root.attrs
-                .get_or_insert_default()
-                .insert("schemaVersion".into(), json!(required));
-        }
-        let mut candidate = Document::from_root(root)?;
-        let after = coordinates(candidate.root());
-        let mut inserted_end = from_pos;
-        for step in &transform.mapping.maps {
-            inserted_end = step.map(inserted_end, 1);
-        }
-        let mut map = FittedMap {
-            before,
-            after,
-            steps: transform.mapping.maps,
-            paths: rebuilt.paths,
-            atoms: rebuilt.atoms,
-            inserted_end,
-        };
-        let known: Value = serde_json::from_str(include_str!("fitting_schema.json"))?;
-        let mut incoming_refs = Vec::new();
-        for (index, entry) in bridge.nodes.iter().enumerate() {
-            if entry.node.node_type == "text" {
-                continue;
-            }
-            let survived = rebuilt.seen[bridge.node_tokens[index]] > 0;
-            let opaque = !entry.node.extra.is_empty()
-                || entry.node.attrs.as_ref().is_some_and(|attrs| {
-                    attrs.keys().any(|key| {
-                        !matches!(key.as_str(), "blockId" | "sourceRefs")
-                            && known["nodes"][&entry.node.node_type]["attrs"]
-                                .get(key)
-                                .is_none()
-                    })
-                })
-                || entry
-                    .node
-                    .marks
-                    .as_ref()
-                    .is_some_and(|marks| !marks.is_empty());
-            let deleted = !entry.incoming
-                && from_pos <= entry.start
-                && to_pos >= entry.start + size(entry.node);
-            if !survived && opaque && !deleted {
-                let position = if entry.incoming {
-                    from_pos
-                } else {
-                    entry.start + 1
-                };
-                let mapped = map
-                    .steps
-                    .iter()
-                    .fold(position, |pos, step| step.map(pos, -1));
-                let destination = map.resolve(mapped, false).ok_or(Error::UnsupportedEdit)?;
-                merge_context(&mut candidate, &destination.block_id, entry.node, &known)?;
-            }
-            let refs = entry
-                .node
-                .attrs
-                .as_ref()
-                .and_then(|attrs| attrs.get("sourceRefs"))
-                .and_then(Value::as_array);
-            if let Some(refs) = refs {
-                if entry.incoming && !survived {
-                    for reference in refs {
-                        if !incoming_refs.contains(reference) {
-                            incoming_refs.push(reference.clone());
-                        }
+            .and_then(|attrs| attrs.get("sourceRefs"))
+            .and_then(Value::as_array);
+        if let Some(refs) = refs {
+            if entry.incoming && !survived {
+                for reference in refs {
+                    if !incoming_refs.contains(reference) {
+                        incoming_refs.push(reference.clone());
                     }
-                } else if !entry.incoming && !deleted {
-                    let mut left = entry.start + 1;
-                    let mut right = entry.start + size(entry.node) - 1;
-                    for step in &map.steps {
-                        left = step.map(left, -1);
-                        right = step.map(right, 1);
-                    }
-                    for block in &map.after {
-                        if block.start <= right && block.end() >= left {
-                            merge_refs(&mut candidate.root, &block.id, refs)?;
-                        }
+                }
+            } else if !entry.incoming && !deleted {
+                let mut left = entry.start + 1;
+                let mut right = entry.start + size(entry.node) - 1;
+                for step in &map.steps {
+                    left = step.map(left, -1);
+                    right = step.map(right, 1);
+                }
+                for block in &map.after {
+                    if block.start <= right && block.end() >= left {
+                        merge_refs(&mut candidate.root, &block.id, refs)?;
                     }
                 }
             }
         }
-        if !incoming_refs.is_empty()
-            && let Some(point) = map.resolve(
-                map.steps
-                    .iter()
-                    .fold(from_pos, |pos, step| step.map(pos, -1)),
-                false,
-            )
-        {
-            merge_refs(&mut candidate.root, &point.block_id, &incoming_refs)?;
-        }
-        candidate.validate()?;
-        map.paths
-            .retain(|(before, after)| document.node(before).ok() == candidate.node(after).ok());
-        Ok((candidate, map))
-    })
+    }
+    if !incoming_refs.is_empty()
+        && let Some(point) = map.resolve(
+            map.steps
+                .iter()
+                .fold(from_pos, |pos, step| step.map(pos, -1)),
+            false,
+        )
+    {
+        merge_refs(&mut candidate.root, &point.block_id, &incoming_refs)?;
+    }
+    candidate.validate()?;
+    map.paths.retain(|(before,after)|matches!((document.node(before),candidate.node(after)),(Ok(left),Ok(right)) if left==right));
+    Ok((candidate, map))
 }
 
 fn merge_refs(node: &mut Node, id: &str, refs: &[Value]) -> Result<()> {
