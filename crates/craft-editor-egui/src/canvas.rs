@@ -5,7 +5,7 @@
 //! checkpoint: unsupported nodes fail explicitly; rich clipboard, full accessibility and native
 //! platform IME acceptance are not implied by the headless tests.
 
-use craft_editor_model::{Document, Mark, Revision, ScalarOffset};
+use craft_editor_model::{Document, Mark, PositionMap, Revision, ScalarOffset};
 use egui::{Color32, Event, Key, Modifiers, Pos2, Rect, Sense, TextureHandle, Vec2};
 
 use crate::{
@@ -82,6 +82,7 @@ struct Preedit {
     document: Document,
     caret: DocPoint,
     text: String,
+    mappings: Vec<PositionMap>,
 }
 #[derive(PartialEq)]
 struct MeasurementKey {
@@ -115,6 +116,20 @@ pub(crate) struct CanvasState {
 impl CanvasState {
     pub(crate) fn request_scroll_to_caret(&mut self) {
         self.scroll_to_caret = true;
+    }
+    pub(crate) fn caret_rect(&self, session: &EditorSession, origin: Pos2) -> Result<Option<Rect>> {
+        let Some(geometry) = &self.geometry else {
+            return Ok(None);
+        };
+        let point = self
+            .preedit
+            .as_ref()
+            .map(|preedit| &preedit.caret)
+            .or_else(|| session.selection.as_ref().map(|selection| &selection.head));
+        let Some(point) = point else {
+            return Ok(None);
+        };
+        Ok(geometry.caret(point)?.map(|rect| on_screen(origin, rect)))
     }
     #[cfg(test)]
     fn measure(&mut self, session: &EditorSession, width: f32, style: &CanvasStyle) -> Result<()> {
@@ -301,11 +316,15 @@ impl CanvasState {
                         crate::decorations::validate(session.document(), &decorations)
                     {
                         errors.push(error);
-                    } else if self.preedit.is_none()
-                        && let Some(geometry) = &self.geometry
-                    {
+                    } else if let Some(geometry) = &self.geometry {
                         for decoration in decorations {
-                            match geometry.selection_rects(&decoration.range) {
+                            let Some(range) = transient_decoration_range(
+                                &decoration.range,
+                                self.preedit.as_ref(),
+                            ) else {
+                                continue;
+                            };
+                            match geometry.selection_rects(&range) {
                                 Ok(rectangles) => {
                                     let tint = Color32::from_rgba_unmultiplied(
                                         decoration.color.r(),
@@ -558,11 +577,12 @@ impl CanvasState {
                 if text.is_empty() {
                     self.cancel_preedit(session);
                 } else {
-                    let (document, caret) = preedit_document(session, &text)?;
+                    let (document, caret, mappings) = preedit_document(session, &text)?;
                     self.preedit = Some(Preedit {
                         document,
                         caret,
                         text,
+                        mappings,
                     });
                     session.canvas_composing = true;
                 }
@@ -1029,7 +1049,32 @@ fn editor_event(event: &Event) -> bool {
     }
 }
 
-fn preedit_document(session: &EditorSession, text: &str) -> Result<(Document, DocPoint)> {
+// Purely visual mapping through the private IME shadow transaction. This never
+// changes host metadata, publishes arbitrary maps or treats preedit as a save.
+fn transient_decoration_range(range: &Selection, preedit: Option<&Preedit>) -> Option<Selection> {
+    let mut result = range.clone();
+    if let Some(preedit) = preedit {
+        for mapping in &preedit.mappings {
+            let (id, offset) =
+                mapping.map_existing_caret(&result.anchor.block_id, result.anchor.offset, true)?;
+            result.anchor = DocPoint {
+                block_id: id,
+                offset,
+            };
+            let (id, offset) =
+                mapping.map_existing_caret(&result.head.block_id, result.head.offset, false)?;
+            result.head = DocPoint {
+                block_id: id,
+                offset,
+            };
+        }
+    }
+    (result.anchor != result.head).then_some(result)
+}
+fn preedit_document(
+    session: &EditorSession,
+    text: &str,
+) -> Result<(Document, DocPoint, Vec<PositionMap>)> {
     let mut shadow = EditorSession::new(session.document().clone(), session.revision());
     shadow.selection.clone_from(&session.selection);
     shadow.node_selection.clone_from(&session.node_selection);
@@ -1042,7 +1087,12 @@ fn preedit_document(session: &EditorSession, text: &str) -> Result<(Document, Do
         .ok_or(Error::InvalidSelection)?
         .head
         .clone();
-    Ok((shadow.document().clone(), caret))
+    let mappings = shadow
+        .take_pending_changes()
+        .into_iter()
+        .flat_map(|change| change.mappings)
+        .collect();
+    Ok((shadow.document().clone(), caret, mappings))
 }
 fn replace(session: &mut EditorSession, text: &str) -> Result<()> {
     session.insert_plain_text(text).map(|_| ())

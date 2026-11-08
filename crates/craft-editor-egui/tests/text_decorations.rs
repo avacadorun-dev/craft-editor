@@ -253,3 +253,46 @@ fn clicking_a_persistent_mark_returns_opaque_identity_without_mutating_prose() -
     assert!(output.changes.is_empty());
     Ok(())
 }
+#[test]
+fn ime_shadow_keeps_persistent_marks_visible_without_changing_canonical_authority() -> TestResult {
+    let (mut session, mut source, ctx) = fixture()?;
+    let original = session.document().clone();
+    let (first, _) = frame(&mut session, &ctx, &mut source, vec![]);
+    session.set_selection(Selection {
+        anchor: point(0),
+        head: point(0),
+    })?;
+    first.response.request_focus();
+    let (preedit, painted) = frame(
+        &mut session,
+        &ctx,
+        &mut source,
+        vec![Event::Ime(egui::ImeEvent::Preedit {
+            text: "文字".into(),
+            active_range_chars: Some(0..2),
+        })],
+    );
+    assert!(preedit.errors.is_empty(), "{:?}", preedit.errors);
+    assert!(has_note_ink(&painted));
+    assert!(preedit.changes.is_empty());
+    assert_eq!(session.document(), &original);
+    assert_eq!(source.seen_pending, 0);
+    let caret = session
+        .canvas_caret_rect(&preedit.response)?
+        .ok_or("missing measured preedit caret")?;
+    assert!(preedit.response.rect.intersects(caret));
+    let (cancelled, painted) = frame(
+        &mut session,
+        &ctx,
+        &mut source,
+        vec![Event::Ime(egui::ImeEvent::Preedit {
+            text: String::new(),
+            active_range_chars: None,
+        })],
+    );
+    assert!(cancelled.errors.is_empty());
+    assert!(has_note_ink(&painted));
+    assert_eq!(session.document(), &original);
+    assert!(!session.is_composing());
+    Ok(())
+}

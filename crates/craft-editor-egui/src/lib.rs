@@ -581,6 +581,15 @@ impl EditorSession {
         let selection = candidate.document().node_ref(&path)?;
         self.apply_commands_with_node_selection(commands, selection)
     }
+    /// Resolve the current measured native caret in screen coordinates for anchored menus.
+    /// This is a read-only query over the last canvas frame, including transient IME.
+    ///
+    /// # Errors
+    /// Returns an error if measured native geometry cannot resolve the current caret.
+    #[cfg(feature = "wordcraft-canvas")]
+    pub fn canvas_caret_rect(&self, response: &egui::Response) -> Result<Option<egui::Rect>> {
+        self.canvas_state.caret_rect(self, response.rect.min)
+    }
     /// Reveal the semantic caret on the next canvas frame without changing selection or focus.
     #[cfg(feature = "wordcraft-canvas")]
     pub fn request_scroll_to_caret(&mut self) {
