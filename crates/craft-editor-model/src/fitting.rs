@@ -817,6 +817,9 @@ pub(crate) fn fit<F: FnMut() -> Result<String>>(
 }
 
 fn merge_refs(node: &mut Node, id: &str, refs: &[Value]) -> Result<()> {
+    if refs.is_empty() {
+        return Ok(());
+    }
     if node.block_id() == Some(id) {
         let attrs = node.attrs.get_or_insert_default();
         let mut merged = attrs

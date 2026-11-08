@@ -36,11 +36,10 @@ fn normalize(value: &mut Value) {
     }
 }
 #[test]
-fn generic_fitter_matches_twelve_actual_original_replace_selection_cases_and_native_maps()
--> TestResult {
+fn generic_fitter_matches_actual_original_replace_selection_cases_and_native_maps() -> TestResult {
     let fixture: Value = serde_json::from_str(include_str!("fixtures/source_slice_fitting.json"))?;
     let cases = fixture["cases"].as_array().ok_or("missing source corpus")?;
-    assert_eq!(cases.len(), 12);
+    assert_eq!(cases.len(), 22);
     for case in cases {
         let document = Document::from_json(
             json!({"type":"doc","attrs":{"schemaVersion":4},"content":case["target"]}),

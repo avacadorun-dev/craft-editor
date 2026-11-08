@@ -2,7 +2,7 @@
 
 Status: implementation in progress; no full editor or native acceptance claim. WriterCraft issue7/epic4 remain open for owner acceptance.
 
-The source uses ProseMirror replaceSelection/replaceRange and a separate prosemirror-tables handlePaste path. Read-only synthetic probes against the actual original editorExtensions schema cover unequal list edges, nested list/quote/callout contexts, cross-wrapper selections, Unicode, closed tables/images, rectangular cell paste and colspan expansion. The curated model fixture records twelve generic cases; three table-plugin cases remain a separate required seam. These are source fixtures, not owner document data or mounted UI results.
+The source uses ProseMirror replaceSelection/replaceRange and a separate prosemirror-tables handlePaste path. Read-only synthetic probes against the actual original editorExtensions schema cover unequal list edges, nested list/quote/callout contexts, cross-wrapper selections, Unicode, closed tables/images, rectangular cell paste and colspan expansion. The curated model fixture records twenty-two generic cases; three table-plugin cases remain a separate required seam. These are source fixtures, not owner document data or mounted UI results.
 
 Reuse pinned MIT prosemirror0.5.2 native Transform::replace_range as a structural planner. Keep defining/isolating/code/linebreakReplacement behavior from the actual source schema. Direct native serialization is prohibited: upstream text cuts rebuild text nodes without outer attributes and would lose unknown canonical metadata.
 

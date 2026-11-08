@@ -1637,6 +1637,877 @@
           "inverted": false
         }
       ]
+    },
+    {
+      "name": "open-heading-in-empty-paragraph",
+      "target": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "blockId": "target",
+            "sourceRefs": []
+          },
+          "content": []
+        }
+      ],
+      "from": [
+        "target",
+        0
+      ],
+      "slice": [
+        {
+          "type": "heading",
+          "attrs": {
+            "blockId": "source",
+            "sourceRefs": [],
+            "level": 2
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "Title"
+            }
+          ]
+        }
+      ],
+      "openStart": 1,
+      "openEnd": 1,
+      "output": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "heading",
+            "attrs": {
+              "blockId": "source",
+              "sourceRefs": [],
+              "level": 2
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Title"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "text",
+        "anchor": 6,
+        "head": 6
+      },
+      "maps": [
+        {
+          "ranges": [
+            0,
+            2,
+            7
+          ],
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "name": "open-heading-in-middle-of-prose",
+      "target": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "blockId": "target",
+            "sourceRefs": []
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "leftright"
+            }
+          ]
+        }
+      ],
+      "from": [
+        "target",
+        4
+      ],
+      "slice": [
+        {
+          "type": "heading",
+          "attrs": {
+            "blockId": "source",
+            "sourceRefs": [],
+            "level": 2
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "Title"
+            }
+          ]
+        }
+      ],
+      "openStart": 1,
+      "openEnd": 1,
+      "output": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "target",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "leftTitleright"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "text",
+        "anchor": 10,
+        "head": 10
+      },
+      "maps": [
+        {
+          "ranges": [
+            5,
+            0,
+            5
+          ],
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "name": "open-code-in-empty-paragraph",
+      "target": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "blockId": "target",
+            "sourceRefs": []
+          },
+          "content": []
+        }
+      ],
+      "from": [
+        "target",
+        0
+      ],
+      "slice": [
+        {
+          "type": "codeBlock",
+          "attrs": {
+            "blockId": "source",
+            "language": "rust"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "one\ntwo"
+            }
+          ]
+        }
+      ],
+      "openStart": 1,
+      "openEnd": 1,
+      "output": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "codeBlock",
+            "attrs": {
+              "blockId": "source",
+              "language": "rust"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "one\ntwo"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "text",
+        "anchor": 8,
+        "head": 8
+      },
+      "maps": [
+        {
+          "ranges": [
+            0,
+            2,
+            9
+          ],
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "name": "open-code-in-middle-of-prose",
+      "target": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "blockId": "target",
+            "sourceRefs": []
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "leftright"
+            }
+          ]
+        }
+      ],
+      "from": [
+        "target",
+        4
+      ],
+      "slice": [
+        {
+          "type": "codeBlock",
+          "attrs": {
+            "blockId": "source",
+            "language": "rust"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "one\ntwo"
+            }
+          ]
+        }
+      ],
+      "openStart": 1,
+      "openEnd": 1,
+      "output": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "target",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "leftone\ntworight"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "text",
+        "anchor": 12,
+        "head": 12
+      },
+      "maps": [
+        {
+          "ranges": [
+            5,
+            0,
+            7
+          ],
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "name": "open-code-in-heading",
+      "target": [
+        {
+          "type": "heading",
+          "attrs": {
+            "blockId": "target",
+            "sourceRefs": [],
+            "level": 3
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "left right"
+            }
+          ]
+        }
+      ],
+      "from": [
+        "target",
+        4
+      ],
+      "slice": [
+        {
+          "type": "codeBlock",
+          "attrs": {
+            "blockId": "source",
+            "language": "rust"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "one\ntwo"
+            }
+          ]
+        }
+      ],
+      "openStart": 1,
+      "openEnd": 1,
+      "output": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "heading",
+            "attrs": {
+              "blockId": "target",
+              "sourceRefs": [],
+              "level": 3
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "leftone\ntwo right"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "text",
+        "anchor": 12,
+        "head": 12
+      },
+      "maps": [
+        {
+          "ranges": [
+            5,
+            0,
+            7
+          ],
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "name": "single-open-list-item-context",
+      "target": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "blockId": "target",
+            "sourceRefs": []
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "leftright"
+            }
+          ]
+        }
+      ],
+      "from": [
+        "target",
+        4
+      ],
+      "slice": [
+        {
+          "type": "bulletList",
+          "content": [
+            {
+              "type": "listItem",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "source",
+                    "sourceRefs": []
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "A"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "openStart": 3,
+      "openEnd": 3,
+      "output": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "target",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "leftAright"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "text",
+        "anchor": 6,
+        "head": 6
+      },
+      "maps": [
+        {
+          "ranges": [
+            5,
+            0,
+            1
+          ],
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "name": "quote-paste-in-existing-quote",
+      "target": [
+        {
+          "type": "blockquote",
+          "attrs": {
+            "blockId": "q",
+            "sourceRefs": []
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {
+                "blockId": "target",
+                "sourceRefs": []
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "leftright"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "from": [
+        "target",
+        4
+      ],
+      "slice": [
+        {
+          "type": "blockquote",
+          "attrs": {
+            "blockId": "sourceq",
+            "sourceRefs": []
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {
+                "blockId": "a",
+                "sourceRefs": []
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "A"
+                }
+              ]
+            },
+            {
+              "type": "paragraph",
+              "attrs": {
+                "blockId": "b",
+                "sourceRefs": []
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "B"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "openStart": 2,
+      "openEnd": 2,
+      "output": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "blockquote",
+            "attrs": {
+              "blockId": "q",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "blockId": "target",
+                  "sourceRefs": []
+                },
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "leftA"
+                  }
+                ]
+              },
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "blockId": "b",
+                  "sourceRefs": []
+                },
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Bright"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "text",
+        "anchor": 10,
+        "head": 10
+      },
+      "maps": [
+        {
+          "ranges": [
+            6,
+            0,
+            4
+          ],
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "name": "heading-range-to-prose",
+      "target": [
+        {
+          "type": "heading",
+          "attrs": {
+            "blockId": "target",
+            "sourceRefs": [],
+            "level": 2
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "ABC"
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "blockId": "end",
+            "sourceRefs": []
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "DEF"
+            }
+          ]
+        }
+      ],
+      "from": [
+        "target",
+        1
+      ],
+      "to": [
+        "end",
+        1
+      ],
+      "slice": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "blockId": "source",
+            "sourceRefs": []
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "X"
+            }
+          ]
+        }
+      ],
+      "openStart": 1,
+      "openEnd": 1,
+      "output": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "heading",
+            "attrs": {
+              "blockId": "target",
+              "sourceRefs": [],
+              "level": 2
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "AXEF"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "text",
+        "anchor": 3,
+        "head": 3
+      },
+      "maps": [
+        {
+          "ranges": [
+            2,
+            5,
+            1
+          ],
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "name": "same-block-text-range-replacement",
+      "target": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "blockId": "target",
+            "sourceRefs": []
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "leftright"
+            }
+          ]
+        }
+      ],
+      "from": [
+        "target",
+        2
+      ],
+      "to": [
+        "target",
+        6
+      ],
+      "slice": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "blockId": "source",
+            "sourceRefs": []
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "A"
+            }
+          ]
+        }
+      ],
+      "openStart": 1,
+      "openEnd": 1,
+      "output": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "target",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "leAght"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "text",
+        "anchor": 4,
+        "head": 4
+      },
+      "maps": [
+        {
+          "ranges": [
+            3,
+            4,
+            1
+          ],
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "name": "replace-range-through-inline-math-and-hard-break",
+      "target": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "blockId": "target",
+            "sourceRefs": []
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "AB"
+            },
+            {
+              "type": "inlineMath",
+              "attrs": {
+                "latex": "x",
+                "description": "old"
+              }
+            },
+            {
+              "type": "hardBreak"
+            },
+            {
+              "type": "text",
+              "text": "CD"
+            }
+          ]
+        }
+      ],
+      "from": [
+        "target",
+        1
+      ],
+      "to": [
+        "target",
+        5
+      ],
+      "slice": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "blockId": "source",
+            "sourceRefs": []
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "X"
+            },
+            {
+              "type": "inlineMath",
+              "attrs": {
+                "latex": "y",
+                "description": "new"
+              }
+            },
+            {
+              "type": "text",
+              "text": "Y"
+            }
+          ]
+        }
+      ],
+      "openStart": 1,
+      "openEnd": 1,
+      "output": {
+        "type": "doc",
+        "attrs": {
+          "schemaVersion": 4
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "blockId": "target",
+              "sourceRefs": []
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "AX"
+              },
+              {
+                "type": "inlineMath",
+                "attrs": {
+                  "latex": "y",
+                  "description": "new"
+                }
+              },
+              {
+                "type": "text",
+                "text": "YD"
+              }
+            ]
+          }
+        ]
+      },
+      "selection": {
+        "type": "text",
+        "anchor": 5,
+        "head": 5
+      },
+      "maps": [
+        {
+          "ranges": [
+            2,
+            4,
+            3
+          ],
+          "inverted": false
+        }
+      ]
     }
   ]
 }
