@@ -182,6 +182,13 @@ impl EditorSession {
     pub fn revision(&self) -> Revision {
         self.editor.revision()
     }
+    /// Drain acknowledged canonical changes before painting, for durable save/close bridges.
+    ///
+    /// This is the same queue returned by `ViewResponse`; a drained change is not reported twice.
+    /// Immutable engine replay proofs remain attached to the returned changes.
+    pub fn take_pending_changes(&mut self) -> Vec<Change> {
+        std::mem::take(&mut self.pending)
+    }
     /// Whether one acknowledged canonical transaction can be undone now.
     pub fn can_undo(&self) -> bool {
         !self.is_composing() && self.editor.can_undo()
@@ -791,7 +798,7 @@ impl EditorSession {
             Err(error) => {
                 return ViewResponse {
                     response: ui.allocate_response(Vec2::ZERO, egui::Sense::hover()),
-                    changes: std::mem::take(&mut self.pending),
+                    changes: self.take_pending_changes(),
                     errors: vec![error],
                 };
             }
@@ -890,7 +897,7 @@ impl EditorSession {
         }
         ViewResponse {
             response: output.response.response,
-            changes: std::mem::take(&mut self.pending),
+            changes: self.take_pending_changes(),
             errors,
         }
     }
@@ -1367,6 +1374,24 @@ mod tests {
             matches!(result.errors.first(), Some(Error::UnsupportedBlockKind(kind)) if kind == "mathBlock")
         );
         assert_eq!(session.document().to_json()?, before);
+        Ok(())
+    }
+    #[test]
+    fn durable_pending_drain_retains_proof_and_is_not_reported_again_by_paint() -> TestResult {
+        let original = Document::plain("p", "AB")?;
+        let mut session = EditorSession::new(original.clone(), Revision(1));
+        session.set_selection(Selection {
+            anchor: point("p", 0),
+            head: point("p", 1),
+        })?;
+        session.format_selection(Mark::new("bold"), MarkMode::Add)?;
+        let changes = session.take_pending_changes();
+        assert_eq!(changes.len(), 1);
+        let (verified, _) = changes[0].replay_proof().verify(&original)?;
+        assert_eq!(&verified, session.document());
+        let painted = frame(&mut session, &egui::Context::default(), vec![]);
+        assert!(painted.changes.is_empty());
+        assert!(session.take_pending_changes().is_empty());
         Ok(())
     }
 }

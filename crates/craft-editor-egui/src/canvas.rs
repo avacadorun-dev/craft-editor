@@ -162,7 +162,7 @@ impl CanvasState {
             return ViewResponse {
                 response: ui
                     .allocate_response(Vec2::new(width, style.min_height.max(0.0)), Sense::hover()),
-                changes: std::mem::take(&mut session.pending),
+                changes: session.take_pending_changes(),
                 errors: vec![error],
             };
         }
@@ -353,7 +353,7 @@ impl CanvasState {
         response.widget_info(|| egui::WidgetInfo::text_edit(!style.read_only, "", "", ""));
         ViewResponse {
             response,
-            changes: std::mem::take(&mut session.pending),
+            changes: session.take_pending_changes(),
             errors,
         }
     }
