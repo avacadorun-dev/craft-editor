@@ -28,3 +28,21 @@ No parser opens URLs, reads files, fetches image bytes or introduces another run
 ## Verification
 
 Required evidence includes actual-source synthetic corpus, exact rich/opaque metadata preservation, code/internal exclusions, link-on-paste, atomic Undo/Redo selection and revision maps, stale/error no-mutation paths, and full hosted Rust fmt/Clippy/tests. Native OS interoperability and workspace interaction stay independent gates. No local Cargo/fetch/build or author clipboard access is used.
+
+## Captured preparation and host image policy
+
+`ClipboardRequest::Paste` carries the exact immutable raw bundle, a small private `PasteContext`, and a one-shot destination guard. `PasteContext::prepare` may run on a bounded host worker. It parses and transforms once, distinguishes private/internal HTML from external representations, and records whole-URL intent before marker conversion. `PreparedPaste` is neither mutable canonical authority nor deserializable: its only mutation API patches exact image `src`/`assetId` bindings. The host validates and acquires scoped image bytes against `source()` and `source_asset_references()`; it must not rebuild or reparse transformed content. `finish_prepared_paste` verifies private context identity plus original session, generation, revision, selection, node selection, typing marks, and IME state. Equal text or equal raw bytes cannot correlate two different captures.
+
+The synchronous `paste_bundle` path uses the same preparation pipeline. Compatibility `finish_paste` accepts only the unchanged captured bundle. Hosts that normalize media must migrate to `prepare` → scoped `bind_images` → `finish_prepared_paste`; otherwise completion fails without document mutation. This is an intentional API migration inside the unreleased editor workstream, not a claim that the consuming app has migrated or passed native acceptance.
+
+Input and output preparation retain the existing 100000-node/64-depth canonical bounds and explicit host byte budget. Metadata sizes are measured with a counting serializer before candidate/envelope expansion; repeated rich envelopes cannot grow past the budget by fragmenting markers. Text templates retain canonical null/omitted/opaque fields without copying the original writing payload. Image bindings are exact, bounded, unique, used, and applied atomically; no scheme, UUID or origin hint grants project access.
+
+## Deliberate source bug fixes
+
+The installed source regex leaves the first same-marker span literal in `**one** **two**` because of its trailing negative lookahead. The successor converts both independent spans; this exception is separate from the frozen actual-source comparison corpus. A clipboard payload containing images or inline/block atoms cannot be collapsed to a URL mark solely because its textContent happens to be one URL. That would discard opaque content. Such payloads retain structural insertion semantics. These fixes do not add new Markdown features.
+
+Inline math and hard breaks remain canonical inline nodes when a text mark range crosses them. A selected inline-math node can receive a link/format mark or be replaced by formatted paste in place; Undo restores its exact original node selection. Source code blocks remain excluded from mark operations and ordinary paste conversion, including mixed code/prose ranges.
+
+## Qualification boundary
+
+The frozen corpus covers 46 raw URL cases and 20 enabled mark/autolink cases from synthetic installed-source probes. These are bounded evidence, not exhaustive URI grammar or OS/UI acceptance. Complex open-list/table slice fitting, remote media acquisition, native keymaps, cross-widget OS ownership ordering and full app workflows remain required workstreams under WriterCraft issue7/epic4. Product issues stay open until owner acceptance.

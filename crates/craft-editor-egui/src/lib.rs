@@ -597,6 +597,23 @@ impl EditorSession {
     }
     /// Query real formatting across selected runs, including pending marks at a caret.
     pub fn mark_state(&self, kind: &str) -> Result<MarkState> {
+        if let Some(reference) = &self.node_selection {
+            let node = self.document().node(&reference.path)?;
+            return Ok(
+                if node.node_type == "inlineMath"
+                    && node
+                        .marks
+                        .as_deref()
+                        .unwrap_or_default()
+                        .iter()
+                        .any(|mark| mark.mark_type == kind)
+                {
+                    MarkState::On
+                } else {
+                    MarkState::Off
+                },
+            );
+        }
         let Some(selection) = self.selection.as_ref() else {
             return Ok(MarkState::Off);
         };
@@ -624,7 +641,13 @@ impl EditorSession {
             let mut offset = 0;
             for inline in span.node.children() {
                 let end = offset + inline.inline_text().chars().count();
-                if offset < to && end > from && inline.node_type == "text" {
+                if offset < to
+                    && end > from
+                    && matches!(
+                        inline.node_type.as_str(),
+                        "text" | "hardBreak" | "inlineMath"
+                    )
+                {
                     if inline
                         .marks
                         .as_deref()
@@ -684,24 +707,84 @@ impl EditorSession {
             let end = offset + inline.inline_text().chars().count();
             if inline.node_type == "text" {
                 if point.offset.0 <= end && (point.offset.0 > offset || point.offset.0 == 0) {
-                    return Ok(inline.clone());
+                    return Ok(inline.text_envelope()?);
                 }
-                previous = Some(inline.clone());
+                previous = Some(inline);
             }
             offset = end;
         }
-        Ok(previous.unwrap_or_else(|| craft_editor_model::Node::text("")))
+        Ok(previous
+            .map(craft_editor_model::Node::text_envelope)
+            .transpose()?
+            .unwrap_or_else(|| craft_editor_model::Node::text("")))
+    }
+    fn inline_node_text_selection(&self) -> Result<Option<Selection>> {
+        let Some(reference) = &self.node_selection else {
+            return Ok(None);
+        };
+        if reference.expected.node_type != "inlineMath" {
+            return Ok(None);
+        }
+        if self.document().node(&reference.path)? != reference.expected.as_ref() {
+            return Err(craft_editor_model::Error::NodeReferenceConflict.into());
+        }
+        let parent = self
+            .document()
+            .node(&reference.path.parent().ok_or(Error::InvalidSelection)?)?;
+        let index = *reference.path.0.last().ok_or(Error::InvalidSelection)?;
+        let block_id = parent
+            .block_id()
+            .ok_or(Error::MissingBlockIdentity)?
+            .to_owned();
+        let offset = parent.children()[..index]
+            .iter()
+            .map(|node| node.inline_text().chars().count())
+            .sum::<usize>();
+        Ok(Some(Selection {
+            anchor: DocPoint {
+                block_id: block_id.clone(),
+                offset: ScalarOffset(offset),
+            },
+            head: DocPoint {
+                block_id,
+                offset: ScalarOffset(offset + 1),
+            },
+        }))
     }
     /// Add or remove a mark across the exact selection's text-block ranges atomically.
     pub fn format_selection(&mut self, mark: Mark, mode: MarkMode) -> Result<Change> {
         if self.is_composing() {
             return Err(Error::CompositionActive);
         }
+        if let Some(reference) = self.node_selection.clone() {
+            let Some(selection) = self.inline_node_text_selection()? else {
+                return self.apply_commands(vec![]);
+            };
+            let commands = vec![Command::ApplyMarks {
+                range: TextRange {
+                    block_id: selection.anchor.block_id,
+                    start: selection.anchor.offset,
+                    end: selection.head.offset,
+                },
+                marks: vec![mark],
+                mode,
+            }];
+            let mut candidate = Editor::new(self.document().clone(), self.revision());
+            candidate.apply(Transaction {
+                base_revision: self.revision(),
+                commands: commands.clone(),
+            })?;
+            let after = candidate.document().node_ref(&reference.path)?;
+            return self.apply_commands_with_node_selection(commands, after);
+        }
         let projection = Projection::new(self.document())?;
         let selection = self.selection.as_ref().ok_or(Error::InvalidSelection)?;
         let a = projection.scalar(&selection.anchor)?;
         let b = projection.scalar(&selection.head)?;
         if a == b {
+            if self.document().block(&selection.anchor.block_id)?.node_type == "codeBlock" {
+                return self.apply_commands(vec![]);
+            }
             // Validate pending marks through the same canonical validator, without changing
             // the actual document or creating an empty formatting history entry.
             if mode != MarkMode::Patch {
@@ -761,7 +844,11 @@ impl EditorSession {
             return Ok(change);
         }
         let mut commands = vec![];
-        for span in projection.spans.iter().filter(|span| !span.atom) {
+        for span in projection
+            .spans
+            .iter()
+            .filter(|span| !span.atom && span.node.node_type != "codeBlock")
+        {
             let start = a.min(b).max(span.start);
             let end = a.max(b).min(span.end);
             if start < end {
@@ -802,6 +889,9 @@ impl EditorSession {
     /// Undo restores the original caret/range, rather than a separately expanded live selection.
     /// Missing mark ranges use the current selection, including validated stored marks at a caret.
     pub fn format_mark_range(&mut self, mark: Mark, mode: MarkMode) -> Result<Change> {
+        if self.node_selection.is_some() {
+            return self.format_selection(mark, mode);
+        }
         let selection = self
             .expanded_mark_selection(&mark.mark_type)?
             .or_else(|| self.selection.clone())
@@ -813,7 +903,11 @@ impl EditorSession {
         let a = projection.scalar(&selection.anchor)?;
         let b = projection.scalar(&selection.head)?;
         let mut commands = Vec::new();
-        for span in projection.spans.iter().filter(|span| !span.atom) {
+        for span in projection
+            .spans
+            .iter()
+            .filter(|span| !span.atom && span.node.node_type != "codeBlock")
+        {
             let start = a.min(b).max(span.start);
             let end = a.max(b).min(span.end);
             if start < end {

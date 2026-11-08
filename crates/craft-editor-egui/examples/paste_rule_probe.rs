@@ -8,7 +8,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut differences = Vec::new();
     for case in cases {
         let text = case["text"].as_str().ok_or("invalid source text")?;
-        let actual=link_spans(text).into_iter().map(|span|json!({"value":&text[span.bytes.clone()],"href":span.href,"from":text[..span.bytes.start].chars().count(),"to":text[..span.bytes.end].chars().count()})).collect::<Vec<_>>();
+        let actual=link_spans(text)?.into_iter().map(|span|json!({"value":&text[span.bytes.clone()],"href":span.href,"from":text[..span.bytes.start].chars().count(),"to":text[..span.bytes.end].chars().count()})).collect::<Vec<_>>();
         if json!(actual) != case["links"] {
             differences.push(json!({"text":text,"expected":case["links"],"actual":actual}));
         }

@@ -1,5 +1,8 @@
 //! Opt-in host jobs with one-shot session guards and real acknowledged writes.
-use super::{ClipboardBundle, ClipboardError, ClipboardProvider, ClipboardResult};
+use super::{
+    ClipboardBundle, ClipboardError, ClipboardProvider, ClipboardResult, PasteContext,
+    PreparedPaste,
+};
 use crate::{EditorSession, Error, Result, Selection};
 use craft_editor_model::{Change, NodeRef, Revision};
 use std::collections::VecDeque;
@@ -107,6 +110,8 @@ pub enum ClipboardRequest {
     Paste {
         /// Immutable raw multi-format snapshot captured once at the native command boundary.
         bundle: Arc<ClipboardBundle>,
+        /// Small immutable preparation context correlated with this exact captured payload.
+        context: PasteContext,
         /// One-shot exact destination guard; worker completion cannot retarget another session.
         guard: PasteGuard,
     },
@@ -117,6 +122,7 @@ struct Guard {
     revision: Revision,
     selection: Option<Selection>,
     node_selection: Option<NodeRef>,
+    stored_marks: Option<Vec<craft_editor_model::Mark>>,
 }
 /// Captured Cut destination; only a correlated successful native write can complete it.
 pub struct CutGuard {
@@ -126,6 +132,7 @@ pub struct CutGuard {
 /// Captured Paste destination; consumes a host-prepared immutable bundle only once.
 pub struct PasteGuard {
     guard: Guard,
+    context: PasteContext,
 }
 /// A one-shot capability to acknowledge an actual write of captured canonical source content.
 pub struct WriteTicket {
@@ -172,6 +179,7 @@ impl Guard {
             revision: session.revision(),
             selection: session.selection.clone(),
             node_selection: session.node_selection.clone(),
+            stored_marks: session.stored_marks.clone(),
         })
     }
     fn check(&self, session: &EditorSession) -> Result<()> {
@@ -183,6 +191,7 @@ impl Guard {
             || self.revision != session.revision()
             || self.selection != session.selection
             || self.node_selection != session.node_selection
+            || self.stored_marks != session.stored_marks
         {
             return Err(ClipboardError::StaleRequest.into());
         }
@@ -271,12 +280,21 @@ impl EditorSession {
         if self.clipboard_state.intent_gate.has_pending_write() {
             return Err(ClipboardError::WritePending.into());
         }
+        let source = Arc::new(bundle);
+        let (context, guard) = self.capture_paste_context(source.clone())?;
         Ok(ClipboardRequest::Paste {
-            bundle: Arc::new(bundle),
-            guard: PasteGuard {
-                guard: Guard::capture(self)?,
-            },
+            bundle: source,
+            context,
+            guard,
         })
+    }
+    pub(crate) fn capture_paste_context(
+        &self,
+        source: Arc<ClipboardBundle>,
+    ) -> Result<(PasteContext, PasteGuard)> {
+        let guard = Guard::capture(self)?;
+        let context = PasteContext::capture(self, source)?;
+        Ok((context.clone(), PasteGuard { guard, context }))
     }
     /// Complete Cut only after a matching real write and an unchanged exact session/selection.
     pub fn finish_cut(&mut self, guard: CutGuard, ack: WriteAck) -> Result<Change> {
@@ -290,7 +308,21 @@ impl EditorSession {
             self.insert_plain_text("")
         }
     }
-    /// Complete Paste from worker-prepared data only if its captured destination is still current.
+    /// Complete prepared input only when it belongs to this exact captured context and the
+    /// original live session/revision/selection/typing state is still current.
+    pub fn finish_prepared_paste(
+        &mut self,
+        guard: PasteGuard,
+        prepared: PreparedPaste,
+    ) -> Result<Change> {
+        guard.guard.check(self)?;
+        if !prepared.matches(&guard.context) {
+            return Err(ClipboardError::InvalidPasteContext.into());
+        }
+        self.apply_prepared_paste(prepared)
+    }
+    /// Compatibility completion for an unchanged captured bundle. Media/normalized payloads use
+    /// prepare on the request's PasteContext, bind_images, then finish_prepared_paste instead.
     pub fn finish_paste(
         &mut self,
         guard: PasteGuard,
@@ -298,7 +330,11 @@ impl EditorSession {
         max_bytes: usize,
     ) -> Result<Change> {
         guard.guard.check(self)?;
-        self.paste_bundle(bundle, max_bytes)
+        if guard.context.source() != bundle {
+            return Err(ClipboardError::InvalidPasteContext.into());
+        }
+        let prepared = guard.context.prepare(max_bytes)?;
+        self.finish_prepared_paste(guard, prepared)
     }
     #[cfg(feature = "wordcraft-canvas")]
     pub(crate) fn queue_clipboard_copy(&mut self, cut: bool) -> Result<()> {

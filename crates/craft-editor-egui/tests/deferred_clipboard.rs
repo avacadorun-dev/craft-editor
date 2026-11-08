@@ -166,7 +166,7 @@ fn identical_document_revision_and_selection_in_another_session_are_not_the_same
     let first = editor()?;
     let mut second = editor()?;
     let source = second.document().clone();
-    let ClipboardRequest::Paste { guard, bundle } = first.begin_paste(ClipboardBundle {
+    let ClipboardRequest::Paste { guard, bundle, .. } = first.begin_paste(ClipboardBundle {
         plain: "insert".into(),
         ..Default::default()
     })?
@@ -184,7 +184,7 @@ fn prepared_paste_restores_exact_selection_and_does_not_read_os_again() -> TestR
     let original = session.document().clone();
     let provider = Arc::new(Provider::default());
     session.set_clipboard_provider(Some(provider.clone()));
-    let ClipboardRequest::Paste { bundle, guard } = session.begin_paste(ClipboardBundle {
+    let ClipboardRequest::Paste { bundle, guard, .. } = session.begin_paste(ClipboardBundle {
         plain: "😀".into(),
         ..Default::default()
     })?
@@ -204,7 +204,7 @@ fn requests_are_worker_sendable_and_a_mode_change_invalidates_old_guards() -> Te
     fn assert_send<T: Send>() {}
     assert_send::<ClipboardRequest>();
     let mut session = editor()?;
-    let ClipboardRequest::Paste { bundle, guard } = session.begin_paste(ClipboardBundle {
+    let ClipboardRequest::Paste { bundle, guard, .. } = session.begin_paste(ClipboardBundle {
         plain: "X".into(),
         ..Default::default()
     })?
@@ -254,7 +254,7 @@ fn focused_canvas_captures_one_native_bundle_then_uses_that_snapshot_after_clipb
         .take_clipboard_requests()
         .pop()
         .ok_or("missing deferred paste")?;
-    let ClipboardRequest::Paste { bundle, guard } = request else {
+    let ClipboardRequest::Paste { bundle, guard, .. } = request else {
         return Err("wrong request kind".into());
     };
     *provider.bundle.lock().map_err(|_| "mock lock")? = ClipboardBundle {

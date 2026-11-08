@@ -1,0 +1,336 @@
+{
+  "source": {
+    "tiptap": "3.29.2",
+    "method": "Actual installed Tiptap starter marks + original Link.configure; headless registered state plugins, synthetic uiEvent paste, no browser clipboard or BlockIdentity/source custom full-fence handlers",
+    "coreSha256": "d789dabd5b98dd89c5c2fbb394b4a43910bf23e8b8ae83e1f6b7e3f69f1b284c",
+    "bugFixExclusion": "Adjacent same-marker spans are deliberately fixed; both spans convert. The source regex incorrectly leaves the first literal."
+  },
+  "cases": [
+    {
+      "text": "**bold**",
+      "content": [
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "bold"
+            }
+          ],
+          "text": "bold"
+        }
+      ]
+    },
+    {
+      "text": "__bold__",
+      "content": [
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "bold"
+            }
+          ],
+          "text": "bold"
+        }
+      ]
+    },
+    {
+      "text": "*italic*",
+      "content": [
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "italic"
+            }
+          ],
+          "text": "italic"
+        }
+      ]
+    },
+    {
+      "text": "_italic_",
+      "content": [
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "italic"
+            }
+          ],
+          "text": "italic"
+        }
+      ]
+    },
+    {
+      "text": "~~strike~~",
+      "content": [
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "strike"
+            }
+          ],
+          "text": "strike"
+        }
+      ]
+    },
+    {
+      "text": "`code`",
+      "content": [
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "code"
+            }
+          ],
+          "text": "code"
+        }
+      ]
+    },
+    {
+      "text": "before `code` after",
+      "content": [
+        {
+          "type": "text",
+          "text": "before "
+        },
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "code"
+            }
+          ],
+          "text": "code"
+        },
+        {
+          "type": "text",
+          "text": " after"
+        }
+      ]
+    },
+    {
+      "text": "foo**word**",
+      "content": [
+        {
+          "type": "text",
+          "text": "foo**word**"
+        }
+      ]
+    },
+    {
+      "text": "** bold **",
+      "content": [
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "bold"
+            }
+          ],
+          "text": " bold "
+        }
+      ]
+    },
+    {
+      "text": "***nested***",
+      "content": [
+        {
+          "type": "text",
+          "text": "***nested***"
+        }
+      ]
+    },
+    {
+      "text": "**a _b_ c**",
+      "content": [
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "bold"
+            }
+          ],
+          "text": "a "
+        },
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "bold"
+            },
+            {
+              "type": "italic"
+            }
+          ],
+          "text": "b"
+        },
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "bold"
+            }
+          ],
+          "text": " c"
+        }
+      ]
+    },
+    {
+      "text": "[label](https://example.com)",
+      "content": [
+        {
+          "type": "text",
+          "text": "[label]("
+        },
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "link",
+              "attrs": {
+                "href": "https://example.com",
+                "target": "_blank",
+                "rel": "noopener noreferrer",
+                "class": null,
+                "title": null
+              }
+            }
+          ],
+          "text": "https://example.com"
+        },
+        {
+          "type": "text",
+          "text": ")"
+        }
+      ]
+    },
+    {
+      "text": "https://example.com.",
+      "content": [
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "link",
+              "attrs": {
+                "href": "https://example.com",
+                "target": "_blank",
+                "rel": "noopener noreferrer",
+                "class": null,
+                "title": null
+              }
+            }
+          ],
+          "text": "https://example.com"
+        },
+        {
+          "type": "text",
+          "text": "."
+        }
+      ]
+    },
+    {
+      "text": "example.com",
+      "content": [
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "link",
+              "attrs": {
+                "href": "http://example.com",
+                "target": "_blank",
+                "rel": "noopener noreferrer",
+                "class": null,
+                "title": null
+              }
+            }
+          ],
+          "text": "example.com"
+        }
+      ]
+    },
+    {
+      "text": "127.0.0.1",
+      "content": [
+        {
+          "type": "text",
+          "text": "127.0.0.1"
+        }
+      ]
+    },
+    {
+      "text": "localhost",
+      "content": [
+        {
+          "type": "text",
+          "text": "localhost"
+        }
+      ]
+    },
+    {
+      "text": "a@example.com",
+      "content": [
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "link",
+              "attrs": {
+                "href": "mailto:a@example.com",
+                "target": "_blank",
+                "rel": "noopener noreferrer",
+                "class": null,
+                "title": null
+              }
+            }
+          ],
+          "text": "a@example.com"
+        }
+      ]
+    },
+    {
+      "text": "tel:1234",
+      "content": [
+        {
+          "type": "text",
+          "text": "tel:1234"
+        }
+      ]
+    },
+    {
+      "text": "https://例え.jp/道",
+      "content": [
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "link",
+              "attrs": {
+                "href": "https://例え.jp/道",
+                "target": "_blank",
+                "rel": "noopener noreferrer",
+                "class": null,
+                "title": null
+              }
+            }
+          ],
+          "text": "https://例え.jp/道"
+        }
+      ]
+    },
+    {
+      "text": "``double``",
+      "content": [
+        {
+          "type": "text",
+          "text": "``double``"
+        }
+      ]
+    }
+  ]
+}

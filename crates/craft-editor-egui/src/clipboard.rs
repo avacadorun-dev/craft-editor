@@ -19,6 +19,8 @@ mod html;
 #[cfg(feature = "native-clipboard")]
 mod native;
 mod plain;
+mod prepared;
+pub use prepared::{ImageBinding, PasteContext, PreparedPaste};
 /// Source-backed bounded URL and text paste-rule components.
 pub mod rules;
 #[cfg(feature = "native-clipboard")]
@@ -54,6 +56,9 @@ pub enum ClipboardError {
     /// The bounded host-request queue needs to be drained before another request is captured.
     #[error("clipboard_busy")]
     Busy,
+    /// Prepared input belongs to a different captured paste intent.
+    #[error("clipboard_prepared_context_mismatch")]
+    InvalidPasteContext,
     /// A private rich slice has an invalid envelope or open edge.
     #[error("clipboard_invalid_slice")]
     InvalidSlice,
@@ -136,7 +141,7 @@ pub struct ClipboardFormat {
 }
 
 /// An untrusted canonical image reference; the host owns project authorization and acquisition.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AssetReference {
     /// Optional local/project asset identity from the selected image.
     pub asset_id: Option<String>,
@@ -415,15 +420,11 @@ impl EditorSession {
     }
     /// Parse and apply a bounded bundle through one canonical transaction and rich history.
     pub fn paste_bundle(&mut self, bundle: &ClipboardBundle, max_bytes: usize) -> Result<Change> {
-        if let Some(slice) = bundle.canonical_slice(max_bytes)? {
-            return self.paste_rich_slice(slice);
-        }
-        if bundle.plain.is_empty() {
-            // Original ProseMirror parseFromClipboard returns no slice for an empty clipboard.
-            // An unavailable text representation must never mean "delete the selected writing".
-            return self.apply_commands(vec![]);
-        }
-        self.insert_plain_text(&bundle.plain.replace("\r\n", "\n"))
+        bundle.check_budget(max_bytes)?;
+        let source = Arc::new(bundle.clone());
+        let (context, guard) = self.capture_paste_context(source)?;
+        let prepared = context.prepare(max_bytes)?;
+        self.finish_prepared_paste(guard, prepared)
     }
     fn paste_rich_slice(&mut self, mut slice: RichSlice) -> Result<Change> {
         slice.validate_edges()?;

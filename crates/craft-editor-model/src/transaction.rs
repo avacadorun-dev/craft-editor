@@ -765,7 +765,7 @@ fn apply_command(
             let (prefix, rest) = split_inline(node.children(), range.start.0)?;
             let (mut selected, suffix) = split_inline(&rest, range.end.0 - range.start.0)?;
             for leaf in &mut selected {
-                if leaf.node_type != "text" {
+                if !matches!(leaf.node_type.as_str(), "text" | "hardBreak" | "inlineMath") {
                     return Err(Error::UnsupportedEdit);
                 }
                 let current = leaf.marks.get_or_insert_default();

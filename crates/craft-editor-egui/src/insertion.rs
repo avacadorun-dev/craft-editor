@@ -744,13 +744,18 @@ impl EditorSession {
         {
             return Err(Error::UnsupportedStructuralEdit);
         }
-        if self.node_selection.is_some() {
+        let inline_node_selection = self.inline_node_text_selection()?;
+        if self.node_selection.is_some() && inline_node_selection.is_none() {
             return self.insert_content(ContentSlice::Blocks(slice.content));
         }
         if self.is_composing() {
             return Err(Error::CompositionActive);
         }
-        let selection = self.selection.clone().ok_or(Error::InvalidSelection)?;
+        let selection = self
+            .selection
+            .clone()
+            .or(inline_node_selection)
+            .ok_or(Error::InvalidSelection)?;
         let mut plan = Plan::new(self, &slice.content)?;
         plan.identify_incoming(&mut slice.content)?;
         let point = plan.delete_range(&selection)?;

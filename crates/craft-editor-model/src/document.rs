@@ -117,6 +117,23 @@ impl Node {
         Ok(nodes)
     }
 
+    /// Clone only a text leaf's canonical envelope, without copying its writing payload.
+    /// Omitted/null metadata stays exact. The returned template needs text before insertion.
+    pub fn text_envelope(&self) -> Result<Self> {
+        if self.node_type != "text" {
+            return Err(Error::UnsupportedEdit);
+        }
+        Ok(Self {
+            node_type: self.node_type.clone(),
+            attrs: self.attrs.clone(),
+            marks: self.marks.clone(),
+            text: None,
+            content: self.content.clone(),
+            extra: self.extra.clone(),
+            null_fields: self.null_fields.clone(),
+        })
+    }
+
     /// Minimum canonical schema version needed by this complete subtree.
     /// This does not change or validate the node; transaction promotion still
     /// validates the complete resulting document before it can be committed.

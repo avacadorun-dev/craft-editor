@@ -217,3 +217,88 @@ fn atomic_mark_range_formatting_restores_the_original_collapsed_caret_on_undo() 
     assert_eq!(session.selection(), Some(&selection(0, 2)));
     Ok(())
 }
+
+#[test]
+fn inline_math_node_format_is_one_guarded_history_entry_with_exact_node_selection()
+-> Result<(), Box<dyn std::error::Error>> {
+    use craft_editor_model::{Document, Mark, MarkMode, NodePath, Revision};
+    let document = Document::from_json(
+        serde_json::json!({"type":"doc","attrs":{"schemaVersion":4},"content":[{"type":"paragraph","attrs":{"blockId":"p"},"content":[{"type":"text","text":"A"},{"type":"inlineMath","attrs":{"latex":"x^2","description":"keep","vendor":null},"opaque":true},{"type":"text","text":"B"}]}]}),
+    )?;
+    let mut session = craft_editor_egui::EditorSession::new(document.clone(), Revision(0));
+    let before = document.node_ref(&NodePath(vec![0, 1]))?;
+    session.select_node(before.clone())?;
+    let mut link = Mark::new("link");
+    link.attrs = Some(serde_json::Map::from_iter([(
+        "href".into(),
+        serde_json::json!("https://example.com"),
+    )]));
+    session.format_selection(link, MarkMode::Patch)?;
+    let after = session.document().clone();
+    assert_eq!(
+        session.node_selection().map(|reference| &reference.path),
+        Some(&NodePath(vec![0, 1]))
+    );
+    assert!(
+        session
+            .document()
+            .node(&NodePath(vec![0, 1]))?
+            .marks
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .any(|mark| mark.mark_type == "link")
+    );
+    session.undo()?;
+    assert_eq!(session.document(), &document);
+    assert_eq!(session.node_selection(), Some(&before));
+    session.redo()?;
+    assert_eq!(session.document(), &after);
+    Ok(())
+}
+#[test]
+fn mixed_code_and_prose_marks_only_prose_and_code_caret_does_not_leak_pending_marks()
+-> Result<(), Box<dyn std::error::Error>> {
+    use craft_editor_egui::{DocPoint, EditorSession, Selection};
+    use craft_editor_model::{Document, Mark, MarkMode, Revision, ScalarOffset};
+    let document = Document::from_json(
+        serde_json::json!({"type":"doc","attrs":{"schemaVersion":1},"content":[{"type":"codeBlock","attrs":{"blockId":"code","language":"rust","vendor":null},"content":[{"type":"text","text":"AB"}]},{"type":"paragraph","attrs":{"blockId":"p"},"content":[{"type":"text","text":"CD"}]}]}),
+    )?;
+    let mut session = EditorSession::new(document.clone(), Revision(0));
+    let point = |id: &str, n| DocPoint {
+        block_id: id.into(),
+        offset: ScalarOffset(n),
+    };
+    session.set_selection(Selection {
+        anchor: point("code", 1),
+        head: point("p", 1),
+    })?;
+    session.format_selection(Mark::new("bold"), MarkMode::Add)?;
+    assert_eq!(session.document().block("code")?, document.block("code")?);
+    assert!(
+        session.document().block("p")?.children()[0]
+            .marks
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .any(|mark| mark.mark_type == "bold")
+    );
+    session.undo()?;
+    assert_eq!(session.document(), &document);
+    session.set_selection(Selection {
+        anchor: point("code", 1),
+        head: point("code", 1),
+    })?;
+    session.format_selection(Mark::new("bold"), MarkMode::Add)?;
+    session.insert_plain_text("X")?;
+    assert_eq!(session.document().block_text("code")?, "AXB");
+    assert!(
+        session
+            .document()
+            .block("code")?
+            .children()
+            .iter()
+            .all(|leaf| leaf.marks.as_deref().unwrap_or_default().is_empty())
+    );
+    Ok(())
+}
