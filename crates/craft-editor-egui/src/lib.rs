@@ -1345,16 +1345,28 @@ mod tests {
         Ok(())
     }
     #[test]
-    fn complex_blocks_fail_explicitly_instead_of_silently_disappearing() -> TestResult {
+    fn opaque_atoms_remain_in_semantics_and_legacy_view_rejects_them() -> TestResult {
         let document = Document::from_json(
             json!({"type":"doc","attrs":{"schemaVersion":4},"content":[
                 {"type":"paragraph","attrs":{"blockId":"p"},"content":[{"type":"text","text":"Before"}]},
                 {"type":"mathBlock","attrs":{"blockId":"math","latex":"x^2"}}
             ]}),
         )?;
+        let before = document.to_json()?;
+        let projection = Projection::new(&document)?;
+        assert_eq!(projection.text, "Before\n\u{fffc}");
+        assert_eq!(projection.spans.len(), 2);
+        assert!(projection.spans[1].atom);
+        assert_eq!(projection.spans[1].node, document.blocks()[1]);
         assert!(
-            matches!(Projection::new(&document),Err(Error::UnsupportedBlockKind(kind)) if kind=="mathBlock")
+            matches!(Projection::linear_checkpoint(&document), Err(Error::UnsupportedBlockKind(kind)) if kind == "mathBlock")
         );
+        let mut session = EditorSession::new(document, Revision(1));
+        let result = frame(&mut session, &egui::Context::default(), vec![]);
+        assert!(
+            matches!(result.errors.first(), Some(Error::UnsupportedBlockKind(kind)) if kind == "mathBlock")
+        );
+        assert_eq!(session.document().to_json()?, before);
         Ok(())
     }
 }
