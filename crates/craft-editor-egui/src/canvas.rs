@@ -165,6 +165,38 @@ impl CanvasState {
         };
         Ok(geometry.caret(point)?.map(|rect| on_screen(origin, rect)))
     }
+    fn diagnostic_geometry(&self, revision: Revision) -> Option<&FlowGeometry> {
+        if self.preedit.is_some()
+            || self.table_scroll_pending
+            || !self
+                .measured
+                .as_ref()
+                .is_some_and(|measured| measured.revision == revision)
+        {
+            return None;
+        }
+        self.geometry.as_ref()
+    }
+    pub(crate) fn selected_node_rect(
+        &self,
+        session: &EditorSession,
+        origin: Pos2,
+    ) -> Result<Option<Rect>> {
+        let Some(reference) = session.node_selection() else {
+            return Ok(None);
+        };
+        if session.document().node(&reference.path)? != reference.expected.as_ref() {
+            return Err(craft_editor_model::Error::NodeReferenceConflict.into());
+        }
+        Ok(self
+            .diagnostic_geometry(session.revision())
+            .and_then(|geometry| geometry.node_bounds(&reference.path))
+            .map(|bounds| on_screen(origin, bounds)))
+    }
+    pub(crate) fn table_viewports(&self, revision: Revision) -> Vec<crate::layout::TableViewport> {
+        self.diagnostic_geometry(revision)
+            .map_or_else(Vec::new, FlowGeometry::table_viewports)
+    }
     #[cfg(test)]
     fn measure(&mut self, session: &EditorSession, width: f32, style: &CanvasStyle) -> Result<()> {
         self.measure_with_resolver(session, width, style, None)

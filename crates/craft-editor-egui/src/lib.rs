@@ -661,6 +661,27 @@ impl EditorSession {
     pub fn canvas_caret_rect(&self, response: &egui::Response) -> Result<Option<egui::Rect>> {
         self.canvas_state.caret_rect(self, response.rect.min)
     }
+    /// Resolve the selected whole-node frame in screen coordinates from actual canvas geometry.
+    /// Returns no rectangle until a consistent current-revision frame exists; an active IME
+    /// shadow or pending scrollbar update is not canonical-node presentation evidence.
+    ///
+    /// # Errors
+    /// Returns an error if the guarded selected node no longer matches its canonical occurrence.
+    #[cfg(feature = "wordcraft-canvas")]
+    pub fn canvas_selected_node_rect(
+        &self,
+        response: &egui::Response,
+    ) -> Result<Option<egui::Rect>> {
+        self.canvas_state
+            .selected_node_rect(self, response.rect.min)
+    }
+    /// Read actual last-frame table viewports in canvas-local logical points.
+    /// These cloned snapshots are presentation diagnostics, never edit authority. An empty list
+    /// also means geometry is stale, transient IME is active or a scroll update awaits repaint.
+    #[cfg(feature = "wordcraft-canvas")]
+    pub fn canvas_table_viewports(&self) -> Vec<layout::TableViewport> {
+        self.canvas_state.table_viewports(self.revision())
+    }
     /// Reveal the semantic caret on the next canvas frame without changing selection or focus.
     #[cfg(feature = "wordcraft-canvas")]
     pub fn request_scroll_to_caret(&mut self) {

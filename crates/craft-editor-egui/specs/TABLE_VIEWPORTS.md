@@ -21,3 +21,7 @@ Native horizontal controls retain a proportional rectangular thumb, keyboard/acc
 5. Resize, font/measure/theme changes, pending media completion and Undo preserve canonical widths/text, anchors and history; view offsets clamp coherently.
 6. Wheel/scrollbar/pointer/keyboard interactions alter only presentation. Verify exact JSON/revision/history before/after; rejected resize/paste operations still leave content unchanged.
 7. Real compiled native evidence at narrow/common widths, Light/Dark and long localized labels complements raw-event/layout/renderer tests. This contract does not imply complete OS IME/accessibility acceptance.
+
+## Consumer presentation diagnostics
+
+Read-only host queries may expose the actual last measured whole-node rectangle and table viewport snapshots for native acceptance. They use the same path-aware geometry as pixels/hits/caret, never an independently recomputed size or canonical edit authority. Rectangles explicitly distinguish screen and canvas-local coordinates. Queries refuse stale revisions, active IME shadow layouts and pending scrollbar offsets until the next consistent frame. A wide-table acceptance receipt must identify the final cell plus an actual nonzero table-local offset and clip; merely loading a wide table is insufficient.

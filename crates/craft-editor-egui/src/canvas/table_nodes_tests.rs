@@ -203,6 +203,15 @@ fn wide_table_node_selection_has_a_bounded_frame_and_survives_final_track_resize
         .node_bounds(&selected.path)
         .ok_or("bounded selection frame")?;
     assert!(bounds.width <= 684.0);
+    assert_eq!(
+        session.canvas_selected_node_rect(&paint.response)?,
+        Some(on_screen(paint.response.rect.min, bounds))
+    );
+    let presentation = session.canvas_table_viewports();
+    assert_eq!(presentation.len(), 1);
+    assert_eq!(presentation[0].table_path, selected.path);
+    assert_eq!(presentation[0].offset, viewport.offset);
+    assert_eq!(presentation[0].rect, viewport.rect);
     assert!(outlined(
         &output,
         on_screen(paint.response.rect.min, bounds)
@@ -257,5 +266,13 @@ fn wide_table_node_selection_has_a_bounded_frame_and_survives_final_track_resize
     session.undo()?;
     assert_eq!(session.document(), &original);
     assert_eq!(session.node_selection(), Some(&selected));
+    assert!(session.canvas_table_viewports().is_empty());
+    assert!(
+        session
+            .canvas_selected_node_rect(&paint.response)?
+            .is_none()
+    );
+    frame(&mut session, &ctx, vec![]);
+    assert_eq!(session.canvas_table_viewports().len(), 1);
     Ok(())
 }
