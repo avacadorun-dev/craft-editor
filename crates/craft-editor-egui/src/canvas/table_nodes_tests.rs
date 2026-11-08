@@ -216,6 +216,28 @@ fn wide_table_node_selection_has_a_bounded_frame_and_survives_final_track_resize
         &output,
         on_screen(paint.response.rect.min, bounds)
     ));
+    ctx.memory_mut(|memory| memory.request_focus(session.options.id));
+    for shifted in [false, true] {
+        let modifiers = Modifiers {
+            shift: shifted,
+            ..Modifiers::NONE
+        };
+        let (tabbed, _) = frame(
+            &mut session,
+            &ctx,
+            vec![Event::Key {
+                key: Key::Tab,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers,
+            }],
+        );
+        assert!(tabbed.errors.is_empty());
+        assert_eq!(session.document(), &original);
+        assert_eq!(session.node_selection(), Some(&selected));
+        assert!(!session.can_undo());
+    }
     let middle = on_screen(first.response.rect.min, viewport.rect).center();
     frame(
         &mut session,

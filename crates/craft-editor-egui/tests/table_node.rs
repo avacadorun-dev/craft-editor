@@ -179,6 +179,14 @@ fn source_table_node_copy_delete_and_arrow_boundaries_keep_one_selection_form() 
             assert_eq!(moving.document(), &original);
             assert!(!moving.can_undo());
         }
+        for (name, backward) in [("forward", false), ("backward", true)] {
+            assert_eq!(case["tabs"][name]["canonicalUnchanged"], true);
+            let mut tabbing = selected(&case["input"])?;
+            assert!(!tabbing.advance_table_cell(backward)?);
+            assert_eq!(tabbing.node_selection(), Some(&node));
+            assert_eq!(tabbing.document(), &original);
+            assert!(!tabbing.can_undo());
+        }
         session.delete_selected_node()?;
         let ids = input_ids(&case["input"]);
         assert_eq!(

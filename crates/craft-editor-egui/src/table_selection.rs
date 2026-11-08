@@ -691,6 +691,9 @@ impl EditorSession {
         if self.is_composing() {
             return Err(Error::CompositionActive);
         }
+        if self.selected_table_node()?.is_some() {
+            return Ok(false);
+        }
         let Some(mut selected) = self.current_table_cell()? else {
             return Ok(false);
         };

@@ -120,6 +120,30 @@
         },
         "head": null
       },
+      "tabs": {
+        "forward": {
+          "handled": false,
+          "canonicalUnchanged": true,
+          "selection": {
+            "raw": {
+              "type": "node",
+              "anchor": 11
+            },
+            "head": null
+          }
+        },
+        "backward": {
+          "handled": false,
+          "canonicalUnchanged": true,
+          "selection": {
+            "raw": {
+              "type": "node",
+              "anchor": 11
+            },
+            "head": null
+          }
+        }
+      },
       "copy": {
         "slice": {
           "content": [
@@ -640,6 +664,30 @@
         },
         "head": null
       },
+      "tabs": {
+        "forward": {
+          "handled": false,
+          "canonicalUnchanged": true,
+          "selection": {
+            "raw": {
+              "type": "node",
+              "anchor": 0
+            },
+            "head": null
+          }
+        },
+        "backward": {
+          "handled": false,
+          "canonicalUnchanged": true,
+          "selection": {
+            "raw": {
+              "type": "node",
+              "anchor": 0
+            },
+            "head": null
+          }
+        }
+      },
       "copy": {
         "slice": {
           "content": [
@@ -1055,6 +1103,30 @@
           "anchor": 0
         },
         "head": null
+      },
+      "tabs": {
+        "forward": {
+          "handled": false,
+          "canonicalUnchanged": true,
+          "selection": {
+            "raw": {
+              "type": "node",
+              "anchor": 0
+            },
+            "head": null
+          }
+        },
+        "backward": {
+          "handled": false,
+          "canonicalUnchanged": true,
+          "selection": {
+            "raw": {
+              "type": "node",
+              "anchor": 0
+            },
+            "head": null
+          }
+        }
       },
       "copy": {
         "slice": {
@@ -1617,6 +1689,34 @@
           "anchor": 26
         },
         "head": null
+      },
+      "tabs": {
+        "forward": {
+          "handled": true,
+          "canonicalUnchanged": true,
+          "selection": {
+            "raw": {
+              "type": "text",
+              "anchor": 68,
+              "head": 78
+            },
+            "head": {
+              "blockId": "sibling",
+              "offset": 10
+            }
+          }
+        },
+        "backward": {
+          "handled": false,
+          "canonicalUnchanged": true,
+          "selection": {
+            "raw": {
+              "type": "node",
+              "anchor": 26
+            },
+            "head": null
+          }
+        }
       },
       "copy": {
         "slice": {
@@ -2488,6 +2588,30 @@
           "anchor": 3
         },
         "head": null
+      },
+      "tabs": {
+        "forward": {
+          "handled": false,
+          "canonicalUnchanged": true,
+          "selection": {
+            "raw": {
+              "type": "node",
+              "anchor": 3
+            },
+            "head": null
+          }
+        },
+        "backward": {
+          "handled": false,
+          "canonicalUnchanged": true,
+          "selection": {
+            "raw": {
+              "type": "node",
+              "anchor": 3
+            },
+            "head": null
+          }
+        }
       },
       "copy": {
         "slice": {
