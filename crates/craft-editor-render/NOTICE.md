@@ -6,7 +6,7 @@ CraftEditor code is MIT. Its dependency and embedded-font licenses remain indepe
 
 Merman 0.9.3 is MIT OR Apache-2.0. Source release: [`3b915f69c02d55b873d252cf6c8a6048e7f3427d`](https://github.com/Latias94/merman/tree/3b915f69c02d55b873d252cf6c8a6048e7f3427d).
 
-The selected complete feature closure includes `merman-elk-layered`, whose translated Eclipse ELK source is EPL-2.0. Its [source and implementation boundary](https://github.com/Latias94/merman/tree/3b915f69c02d55b873d252cf6c8a6048e7f3427d/crates/merman-elk-layered) are separate from Merman's MIT/Apache code. The unmodified governing text is retained at [third_party/EPL-2.0.txt](third_party/EPL-2.0.txt).
+The selected complete feature closure includes `merman-elk-layered`, whose translated Eclipse ELK source is EPL-2.0. Its [source and implementation boundary](https://github.com/Latias94/merman/tree/3b915f69c02d55b873d252cf6c8a6048e7f3427d/crates/merman-elk-layered) are separate from Merman's MIT/Apache code. The unmodified governing text is retained at [third_party/licenses/EPL-2.0.txt](third_party/licenses/EPL-2.0.txt).
 
 Upstream records these derivation baselines:
 
