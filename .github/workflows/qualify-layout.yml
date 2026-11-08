@@ -45,7 +45,7 @@ jobs:
           cargo fmt --all -- --check
           cargo test -p craft-editor-egui --test progressive_atoms --all-features --locked
           cargo test -p craft-editor-render --test progressive_atoms --locked
-          cargo test --workspace --all-features --locked
+          cargo test --workspace --all-features --locked --no-fail-fast
           cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
           cargo run -p craft-editor-egui --example wordcraft_geometry --features wordcraft-geometry --locked > artifacts/geometry-report.json
           cargo run -p craft-editor-egui --example wordcraft_canvas --features wordcraft-canvas --locked > artifacts/canvas-report.json
@@ -56,6 +56,70 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-layout-qualification-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 14
+
+  clipboard-native:
+    needs: geometry
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: native-layout-qualification-${{ github.sha }}
+          path: qualified-engine
+      - name: Use the exact qualified hosted lock
+        run: |
+          test "$(cat qualified-engine/source-commit.txt)" = "$GITHUB_SHA"
+          cp qualified-engine/Cargo.lock Cargo.lock
+          mkdir -p artifacts
+          git rev-parse HEAD > artifacts/source-commit.txt
+      - name: Install hosted Rust checks
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: clipboard-native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            clipboard-native-${{ runner.os }}-${{ runner.arch }}-
+            layout-${{ runner.os }}-
+      - name: Install isolated X11 server
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb xauth
+      - name: Compile native clipboard probe
+        run: cargo build -p craft-editor-egui --example native_clipboard --features native-clipboard --locked
+      - name: Verify fresh synthetic formats on isolated X11
+        if: runner.os == 'Linux'
+        run: xvfb-run -a target/debug/examples/native_clipboard > artifacts/native-clipboard.json
+      - name: Verify fresh synthetic formats on hosted macOS pasteboard
+        if: runner.os == 'macOS'
+        run: target/debug/examples/native_clipboard > artifacts/native-clipboard.json
+      - name: Retain native ownership evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-clipboard-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
           path: artifacts/
           if-no-files-found: error
           retention-days: 14

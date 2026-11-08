@@ -44,3 +44,7 @@ required-features = ["wordcraft-canvas"]
 [[example]]
 name = "native_syntax"
 required-features = ["wordcraft-canvas"]
+
+[[example]]
+name = "native_clipboard"
+required-features = ["native-clipboard"]
