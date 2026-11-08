@@ -745,6 +745,8 @@ impl CanvasState {
                     });
                     session.canvas_composing = true;
                 }
+                // A new shadow caret may cross the local table viewport or visible line edge.
+                self.scroll_to_caret = true;
             }
             Event::Ime(egui::ImeEvent::Commit(text)) if !read_only => {
                 self.cancel_preedit(session);

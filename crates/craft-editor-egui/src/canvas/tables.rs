@@ -3,7 +3,9 @@ use super::*;
 
 impl CanvasState {
     pub(super) fn table_scroll_input(&mut self, ui: &mut egui::Ui, canvas: Rect) -> Result<bool> {
-        let pointer = ui.input(|input| input.pointer.interact_pos());
+        let pointer = ui
+            .input(|input| input.pointer.interact_pos())
+            .filter(|_| ui.rect_contains_pointer(canvas));
         let Some(geometry) = self.geometry.as_mut() else {
             return Ok(false);
         };
@@ -79,11 +81,15 @@ impl CanvasState {
                             aspect_ratio: thumb,
                         });
                     let response = ui.add_enabled(self.column_resize.is_none(), slider);
-                    if response.clicked() {
+                    if response.drag_started() || response.is_pointer_button_down_on() {
                         response.request_focus();
                     }
                     response.widget_info(|| {
-                        egui::WidgetInfo::slider(true, f64::from(offset), &style.table_scroll_label)
+                        egui::WidgetInfo::slider(
+                            response.enabled(),
+                            f64::from(offset),
+                            &style.table_scroll_label,
+                        )
                     });
                     dragged = response.dragged();
                     response.on_hover_text(&style.table_scroll_label);
@@ -156,6 +162,14 @@ mod tests {
         ctx: &egui::Context,
         events: Vec<Event>,
     ) -> (ViewResponse, egui::FullOutput) {
+        frame_with_clip(session, ctx, events, None)
+    }
+    fn frame_with_clip(
+        session: &mut EditorSession,
+        ctx: &egui::Context,
+        events: Vec<Event>,
+        clip: Option<Rect>,
+    ) -> (ViewResponse, egui::FullOutput) {
         let mut response = None;
         let mut output = ctx.run_ui(
             egui::RawInput {
@@ -166,6 +180,9 @@ mod tests {
             },
             |root| {
                 egui::CentralPanel::default().show(root, |ui| {
+                    if let Some(clip) = clip {
+                        ui.set_clip_rect(clip.intersect(ui.clip_rect()));
+                    }
                     response = Some(session.show_canvas(ui, &CanvasStyle::default()));
                 });
             },
@@ -202,6 +219,31 @@ mod tests {
             .table_viewports()
             .remove(0);
         let at = on_screen(first.response.rect.min, viewport.rect).center();
+        let (hidden, _) = frame_with_clip(
+            &mut session,
+            &ctx,
+            vec![
+                Event::PointerMoved(at),
+                Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    phase: egui::TouchPhase::Move,
+                    delta: Vec2::new(-150.0, 0.0),
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+            Some(Rect::from_min_size(Pos2::ZERO, Vec2::splat(1.0))),
+        );
+        assert!(hidden.errors.is_empty(), "{:?}", hidden.errors);
+        assert_eq!(
+            session
+                .canvas_state
+                .geometry
+                .as_ref()
+                .ok_or(Error::InvalidSelection)?
+                .table_viewports()[0]
+                .offset,
+            0.0
+        );
         let (wheel, _) = frame(
             &mut session,
             &ctx,
@@ -301,6 +343,7 @@ mod tests {
             vec![Event::PointerMoved(at), press(at, true)],
         );
         frame(&mut session, &ctx, vec![press(at, false)]);
+        assert!(ctx.memory(|memory| memory.has_focus(session.options.id)));
         assert_eq!(
             session
                 .selection()
@@ -316,6 +359,7 @@ mod tests {
             })],
         );
         assert!(preedit.errors.is_empty(), "{:?}", preedit.errors);
+        assert!(session.is_composing());
         assert_eq!(session.document(), &original);
         let ime = output
             .platform_output
@@ -340,6 +384,12 @@ mod tests {
         assert!(session.document().block_text("cell-62")?.contains('界'));
         session.undo()?;
         assert_eq!(session.document(), &original);
+        let cells = crate::TableSelection {
+            table_path: NodePath(vec![1]),
+            anchor: crate::CellPoint { row: 0, column: 62 },
+            head: crate::CellPoint { row: 0, column: 61 },
+        };
+        session.set_cell_selection(cells.clone())?;
         frame(&mut session, &ctx, vec![]);
         // A caret reveal exposes its exact position. Scroll to the far end to expose the
         // last track's right border, then resize through the real pointer route.
@@ -392,8 +442,10 @@ mod tests {
         assert!(resize.errors.is_empty(), "{:?}", resize.errors);
         let grid = TableGrid::new(session.document().node(&NodePath(vec![1]))?)?;
         assert_eq!(grid.column_widths.get(&62), Some(&120));
+        assert_eq!(session.cell_selection(), Some(&cells));
         session.undo()?;
         assert_eq!(session.document(), &original);
+        assert_eq!(session.cell_selection(), Some(&cells));
         Ok(())
     }
 }
