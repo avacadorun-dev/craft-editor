@@ -6,7 +6,7 @@
 use craft_editor_egui::{
     DocPoint, EditorSession, Selection, ViewResponse,
     canvas::CanvasStyle,
-    decorations::{DecorationSource, TextDecoration},
+    decorations::{DecorationSource, TextDecoration, TextUnderline},
     layout::{FlowGeometry, GeometryStyle},
 };
 use craft_editor_model::{Document, ReplayProof, Revision, ScalarOffset};
@@ -76,7 +76,7 @@ impl DecorationSource for Source {
 fn frame(
     session: &mut EditorSession,
     ctx: &egui::Context,
-    source: &mut Source,
+    source: &mut impl DecorationSource,
     events: Vec<Event>,
 ) -> (ViewResponse, egui::FullOutput) {
     let mut result = None;
@@ -294,5 +294,76 @@ fn ime_shadow_keeps_persistent_marks_visible_without_changing_canonical_authorit
     assert!(has_note_ink(&painted));
     assert_eq!(session.document(), &original);
     assert!(!session.is_composing());
+    Ok(())
+}
+
+struct PassiveSource {
+    range: Selection,
+}
+impl DecorationSource for PassiveSource {
+    fn decorations(
+        &mut self,
+        _: &Document,
+        _: Revision,
+        _: &[ReplayProof],
+    ) -> craft_editor_egui::Result<Vec<TextDecoration>> {
+        Ok(vec![])
+    }
+    fn underlines(
+        &mut self,
+        _: &Document,
+        _: Revision,
+        _: &[ReplayProof],
+    ) -> craft_editor_egui::Result<Vec<TextUnderline>> {
+        Ok(vec![TextUnderline {
+            range: self.range.clone(),
+            color: Color32::RED,
+            label: "Synthetic spelling concern".into(),
+        }])
+    }
+}
+
+#[test]
+fn passive_proofing_paints_without_activating_or_replacing_native_selection() -> TestResult {
+    let (mut session, _, ctx) = fixture()?;
+    let selection = Selection {
+        anchor: point(1),
+        head: point(2),
+    };
+    session.set_selection(selection.clone())?;
+    let canonical = session.document().clone();
+    let revision = session.revision();
+    let mut source = PassiveSource {
+        range: Selection {
+            anchor: point(8),
+            head: point(12),
+        },
+    };
+    let (view, painted) = frame(&mut session, &ctx, &mut source, vec![]);
+    assert!(view.errors.is_empty(), "{:?}", view.errors);
+    assert!(painted.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Path(path) if path.stroke.color == egui::epaint::ColorMode::Solid(Color32::RED))));
+    assert!(view.activated_decorations.is_empty());
+    assert!(view.changes.is_empty());
+    assert_eq!(session.selection(), Some(&selection));
+    assert_eq!(session.document(), &canonical);
+    assert_eq!(session.revision(), revision);
+    Ok(())
+}
+
+#[test]
+fn invalid_passive_range_is_not_painted_and_never_blocks_prose() -> TestResult {
+    let (mut session, _, ctx) = fixture()?;
+    let mut source = PassiveSource {
+        range: Selection {
+            anchor: point(8),
+            head: point(999),
+        },
+    };
+    let canonical = session.document().clone();
+    let (view, painted) = frame(&mut session, &ctx, &mut source, vec![]);
+    assert!(!view.errors.is_empty());
+    assert!(!painted.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Path(path) if path.stroke.color == egui::epaint::ColorMode::Solid(Color32::RED))));
+    assert_eq!(session.document(), &canonical);
+    assert!(view.activated_decorations.is_empty());
     Ok(())
 }

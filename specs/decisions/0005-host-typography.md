@@ -11,3 +11,7 @@ The canonical tree stores author content and formatting, not workspace reading p
 Standard ligatures can be explicitly disabled while contextual/required script shaping remains enabled. Font-specific localized-form equivalence requires a host font/glyph qualification; no unsupported no-op `locl` switch is advertised by this API.
 
 All inputs are finite, positive where required and nonnegative for gaps. Invalid typography fails layout without canonical mutation. Existing callers can opt in through the new fields or retain defaults. Actual supported viewport, language, font and IME behavior remains a consumer acceptance gate.
+
+## Passive proofing
+
+`DecorationSource::underlines` is an optional independent channel for exact revision-resolved passive proofing ranges. It never supplies an activation identity, takes pointer focus or replaces selection. The canvas paints bounded, clipped wavy strokes and an optional host-localized explanation; analysis availability, languages, cancellation, exclusions and business policy remain in the consumer. IME preedit receives the same transient position mapping as passage marks without becoming canonical authority.

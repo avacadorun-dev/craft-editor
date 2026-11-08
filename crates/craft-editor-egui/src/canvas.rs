@@ -375,6 +375,44 @@ impl CanvasState {
                 }
                 Err(error) => errors.push(error),
             }
+            match source.underlines(session.document(), session.revision(), &proofs) {
+                Ok(underlines) => {
+                    if let Err(error) =
+                        crate::decorations::validate_underlines(session.document(), &underlines)
+                    {
+                        errors.push(error);
+                    } else if let Some(geometry) = &self.geometry {
+                        for underline in underlines {
+                            let Some(range) =
+                                transient_decoration_range(&underline.range, self.preedit.as_ref())
+                            else {
+                                continue;
+                            };
+                            match geometry.selection_rects(&range) {
+                                Ok(rectangles) => {
+                                    let hovered = response.hover_pos().is_some_and(|pointer| {
+                                        rectangles.iter().any(|range| {
+                                            on_screen(rect.min, *range).contains(pointer)
+                                        })
+                                    });
+                                    for range in rectangles {
+                                        paint_passive_underline(
+                                            ui,
+                                            on_screen(rect.min, range),
+                                            underline.color,
+                                        );
+                                    }
+                                    if hovered && !underline.label.is_empty() {
+                                        response.clone().on_hover_text(&underline.label);
+                                    }
+                                }
+                                Err(error) => errors.push(error.into()),
+                            }
+                        }
+                    }
+                }
+                Err(error) => errors.push(error),
+            }
         }
         if let Some(geometry) = &self.geometry {
             let selection = session.selection.as_ref();
@@ -1065,6 +1103,28 @@ fn editor_event(event: &Event) -> bool {
 
 // Purely visual mapping through the private IME shadow transaction. This never
 // changes host metadata, publishes arbitrary maps or treats preedit as a save.
+fn paint_passive_underline(ui: &egui::Ui, range: Rect, color: Color32) {
+    let visible = range.intersect(ui.clip_rect());
+    let baseline = range.bottom() - 1.0;
+    if visible.width() <= 0.0
+        || baseline < ui.clip_rect().top()
+        || baseline > ui.clip_rect().bottom()
+    {
+        return;
+    }
+    let steps = (visible.width() / 2.0).ceil() as usize;
+    let points = (0..=steps)
+        .map(|step| {
+            egui::pos2(
+                (visible.left() + step as f32 * 2.0).min(visible.right()),
+                baseline - if step % 2 == 0 { 0.0 } else { 1.5 },
+            )
+        })
+        .collect::<Vec<_>>();
+    ui.painter()
+        .add(egui::Shape::line(points, egui::Stroke::new(1.0, color)));
+}
+
 fn transient_decoration_range(range: &Selection, preedit: Option<&Preedit>) -> Option<Selection> {
     let mut result = range.clone();
     if let Some(preedit) = preedit {

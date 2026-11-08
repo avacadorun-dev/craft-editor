@@ -24,6 +24,18 @@ pub struct TextDecoration {
     pub label: String,
 }
 
+/// Passive host-owned spelling/proofing range. It has no activation identity,
+/// never takes pointer focus, and never replaces the author's native selection.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TextUnderline {
+    /// Exact Unicode-scalar range in the current document.
+    pub range: Selection,
+    /// Theme-aware underline color.
+    pub color: Color32,
+    /// Host-localized hover explanation, separate from reader text.
+    pub label: String,
+}
+
 /// Resolve authoritative ephemeral ranges after this frame's native input.
 ///
 /// The host can combine its already drained proofs with the current undrained
@@ -41,6 +53,21 @@ pub trait DecorationSource {
         revision: Revision,
         pending: &[ReplayProof],
     ) -> Result<Vec<TextDecoration>>;
+
+    /// Resolve passive wavy underlines independently of interactive passage marks.
+    /// Existing sources need not provide any. The same exact revision and current
+    /// replay journal are supplied; callers must discard stale analysis themselves.
+    ///
+    /// # Errors
+    /// Invalid or unavailable analysis may fail without blocking manuscript input.
+    fn underlines(
+        &mut self,
+        _document: &Document,
+        _revision: Revision,
+        _pending: &[ReplayProof],
+    ) -> Result<Vec<TextUnderline>> {
+        Ok(Vec::new())
+    }
 }
 
 #[cfg(feature = "wordcraft-canvas")]
@@ -53,6 +80,19 @@ pub(crate) fn validate(document: &Document, decorations: &[TextDecoration]) -> R
         }
         let a = projection.scalar(&decoration.range.anchor)?;
         let b = projection.scalar(&decoration.range.head)?;
+        if a == b {
+            return Err(Error::InvalidDecoration);
+        }
+    }
+    Ok(())
+}
+
+#[cfg(feature = "wordcraft-canvas")]
+pub(crate) fn validate_underlines(document: &Document, underlines: &[TextUnderline]) -> Result<()> {
+    let projection = Projection::new(document)?;
+    for underline in underlines {
+        let a = projection.scalar(&underline.range.anchor)?;
+        let b = projection.scalar(&underline.range.head)?;
         if a == b {
             return Err(Error::InvalidDecoration);
         }
