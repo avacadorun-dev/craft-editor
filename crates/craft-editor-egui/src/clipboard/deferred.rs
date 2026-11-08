@@ -30,9 +30,25 @@ impl ClipboardIntentGate {
     pub fn has_pending_write(&self) -> bool {
         self.pending.load(Ordering::Acquire) != 0
     }
+    /// Create a Copy-only request for explicitly recovered captured content. This cannot create
+    /// a Cut guard or acknowledge a write, and does not inspect or retarget an editor selection.
+    pub fn copy_request(
+        self: &Arc<Self>,
+        bundle: ClipboardBundle,
+    ) -> ClipboardResult<ClipboardRequest> {
+        let bundle = Arc::new(bundle);
+        Ok(ClipboardRequest::Copy {
+            ticket: WriteTicket {
+                _pending: self.register()?,
+                source: bundle.clone(),
+                identity: Arc::new(()),
+            },
+            bundle,
+        })
+    }
     fn register(self: &Arc<Self>) -> ClipboardResult<PendingWrite> {
         self.pending
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |value| {
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |value| {
                 value.checked_add(1)
             })
             .map_err(|_| ClipboardError::ResourceLimit)?;

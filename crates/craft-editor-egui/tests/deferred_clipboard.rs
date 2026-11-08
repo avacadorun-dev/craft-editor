@@ -444,3 +444,24 @@ fn changing_gate_cannot_abandon_an_outstanding_local_intent() -> TestResult {
     assert!(Arc::ptr_eq(&replacement, &session.clipboard_intent_gate()));
     Ok(())
 }
+
+#[test]
+fn explicit_recovery_copy_keeps_captured_bytes_and_never_creates_a_cut_guard() -> TestResult {
+    let gate = Arc::new(craft_editor_egui::clipboard::ClipboardIntentGate::default());
+    let captured = ClipboardBundle {
+        plain: "captured earlier 😀".into(),
+        ..Default::default()
+    };
+    let provider = Provider::default();
+    let ClipboardRequest::Copy { bundle, ticket } = gate.copy_request(captured.clone())? else {
+        return Err("recovery created a mutable operation".into());
+    };
+    assert!(gate.has_pending_write());
+    ticket.write(&provider, &bundle)?;
+    assert!(!gate.has_pending_write());
+    assert_eq!(
+        provider.bundle.lock().map_err(|_| "mock lock")?.plain,
+        captured.plain
+    );
+    Ok(())
+}
