@@ -1,0 +1,400 @@
+{
+  "type": "doc",
+  "attrs": {
+    "schemaVersion": 4
+  },
+  "vendorRoot": {
+    "preserve": true
+  },
+  "content": [
+    {
+      "type": "paragraph",
+      "attrs": {
+        "blockId": "intro",
+        "sourceRefs": [
+          "source-a"
+        ]
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "A real native document canvas",
+          "marks": [
+            {
+              "type": "bold"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " — wrapped cells, one selection and semantic history."
+        },
+        {
+          "type": "text",
+          "text": " linked",
+          "marks": [
+            {
+              "type": "link",
+              "attrs": {
+                "href": "https://example.com"
+              }
+            }
+          ]
+        },
+        {
+          "type": "hardBreak"
+        },
+        {
+          "type": "text",
+          "text": "code",
+          "marks": [
+            {
+              "type": "code"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " marked",
+          "marks": [
+            {
+              "type": "underline"
+            },
+            {
+              "type": "strike"
+            }
+          ]
+        },
+        {
+          "type": "inlineMath",
+          "attrs": {
+            "latex": "x^2"
+          }
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "attrs": {
+        "blockId": "grid",
+        "vendor": {
+          "preserve": true
+        }
+      },
+      "content": [
+        {
+          "type": "tableRow",
+          "content": [
+            {
+              "type": "tableHeader",
+              "attrs": {
+                "colspan": 2,
+                "rowspan": 2
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "merged"
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Я😀 merged across two columns and two rows. Click here and write; the grid is retained.",
+                      "marks": [
+                        {
+                          "type": "italic"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "tableHeader",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "right"
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Right header"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tableRow",
+          "content": [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "bottom"
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "This cell wraps naturally inside its own column."
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tableRow",
+          "content": [
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 2,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "wide"
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Select from this cell back into the first paragraph, then apply bold."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "blockId": "corner"
+                  },
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Final cell"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "attrs": {
+        "blockId": "outro"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "The surrounding manuscript remains continuous. Undo restores the exact structured document."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": {
+        "blockId": "heading",
+        "level": 2
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Structured native content"
+        }
+      ]
+    },
+    {
+      "type": "blockquote",
+      "attrs": {
+        "blockId": "quote",
+        "vendor": 4
+      },
+      "content": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "blockId": "quoted"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "A real indented quote."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "callout",
+      "attrs": {
+        "blockId": "callout",
+        "kind": "info"
+      },
+      "content": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "blockId": "called"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "A native callout panel."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "orderedList",
+      "attrs": {
+        "start": -3
+      },
+      "content": [
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {
+                "blockId": "item-one"
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Numbered item"
+                }
+              ]
+            },
+            {
+              "type": "bulletList",
+              "content": [
+                {
+                  "type": "listItem",
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "blockId": "nested"
+                      },
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "Nested bullet"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {
+                "blockId": "item-two"
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Second item"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "codeBlock",
+      "attrs": {
+        "blockId": "code",
+        "language": "rust"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "let x = 1;\nlet y = 2;"
+        }
+      ]
+    },
+    {
+      "type": "horizontalRule"
+    },
+    {
+      "type": "sceneBreak"
+    },
+    {
+      "type": "imageBlock",
+      "attrs": {
+        "blockId": "figure",
+        "src": "asset:fixture",
+        "alt": "Native test image",
+        "caption": "Native caption"
+      }
+    },
+    {
+      "type": "mermaidBlock",
+      "attrs": {
+        "blockId": "diagram",
+        "code": "graph LR; A --> B",
+        "caption": "Flow caption"
+      }
+    },
+    {
+      "type": "mathBlock",
+      "attrs": {
+        "blockId": "equation",
+        "latex": "x^2",
+        "description": "Square"
+      }
+    },
+    {
+      "type": "paragraph",
+      "attrs": {
+        "blockId": "last"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "The final paragraph."
+        }
+      ]
+    }
+  ]
+}

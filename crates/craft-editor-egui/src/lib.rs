@@ -9,13 +9,17 @@
 #[cfg(feature = "wordcraft-geometry")]
 pub mod layout;
 
+/// Host-provided measured native atom output; source nodes remain canonical.
+#[cfg(feature = "wordcraft-geometry")]
+pub mod renderers;
+
 /// Native raster canvas with a single semantic caret and selection.
 #[cfg(feature = "wordcraft-canvas")]
 pub mod canvas;
 
 mod projection;
 use craft_editor_model::{
-    Change, Command, Document, Editor, Mark, MarkMode, Revision, ScalarOffset, TextRange,
+    Change, Command, Document, Editor, Mark, MarkMode, NodeRef, Revision, ScalarOffset, TextRange,
     Transaction,
 };
 use egui::{
@@ -28,6 +32,9 @@ use std::ops::Range;
 /// Content-free view diagnostic; hosts localize the error code.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// A host renderer could not produce real bounded output; the code contains no source text.
+    #[error("atom_rendering: {0}")]
+    AtomRendering(String),
     /// The native flow backend rejected a geometry or raster operation.
     #[cfg(feature = "wordcraft-geometry")]
     #[error(transparent)]
@@ -118,6 +125,8 @@ pub struct ViewResponse {
 struct SelectionHistory {
     before: Option<Selection>,
     after: Option<Selection>,
+    before_node: Option<NodeRef>,
+    after_node: Option<NodeRef>,
 }
 struct Composition {
     document: Document,
@@ -130,6 +139,7 @@ pub struct EditorSession {
     editor: Editor,
     selection: Option<Selection>,
     stored_marks: Option<Vec<Mark>>,
+    node_selection: Option<NodeRef>,
     undo_selection: Vec<SelectionHistory>,
     redo_selection: Vec<SelectionHistory>,
     pending: Vec<Change>,
@@ -150,6 +160,7 @@ impl EditorSession {
             editor: Editor::new(document, revision),
             selection: None,
             stored_marks: None,
+            node_selection: None,
             undo_selection: vec![],
             redo_selection: vec![],
             pending: vec![],
@@ -200,6 +211,37 @@ impl EditorSession {
     pub fn selection(&self) -> Option<&Selection> {
         self.selection.as_ref()
     }
+    /// Borrow an exact opaque-node selection, independent of transient renderer identities.
+    pub fn node_selection(&self) -> Option<&NodeRef> {
+        self.node_selection.as_ref()
+    }
+    /// Select one canonical opaque block/inline atom using its exact guarded path and snapshot.
+    pub fn select_node(&mut self, reference: NodeRef) -> Result<()> {
+        if self.is_composing() {
+            return Err(Error::CompositionActive);
+        }
+        let actual = self.document().node(&reference.path)?;
+        if actual != reference.expected.as_ref() {
+            return Err(craft_editor_model::Error::NodeReferenceConflict.into());
+        }
+        if !matches!(
+            actual.node_type.as_str(),
+            "imageBlock"
+                | "mathBlock"
+                | "mermaidBlock"
+                | "horizontalRule"
+                | "sceneBreak"
+                | "inlineMath"
+        ) {
+            return Err(Error::InvalidSelection);
+        }
+        self.selection = None;
+        self.stored_marks = None;
+        self.node_selection = Some(reference);
+        #[cfg(feature = "wordcraft-canvas")]
+        self.request_scroll_to_caret();
+        Ok(())
+    }
     /// Set an exact semantic selection; rejects points not present in this revision.
     pub fn set_selection(&mut self, selection: Selection) -> Result<()> {
         if self.is_composing() {
@@ -212,6 +254,7 @@ impl EditorSession {
             self.stored_marks = None;
         }
         self.selection = Some(selection);
+        self.node_selection = None;
         self.restore_cursor = true;
         Ok(())
     }
@@ -219,6 +262,9 @@ impl EditorSession {
     pub fn selected_text(&self) -> Result<String> {
         if self.is_composing() {
             return Err(Error::CompositionActive);
+        }
+        if self.node_selection.is_some() {
+            return Ok("\u{fffc}".into());
         }
         let Some(selection) = &self.selection else {
             return Ok(String::new());
@@ -239,6 +285,7 @@ impl EditorSession {
             return Err(Error::CompositionActive);
         }
         let before = self.selection.clone();
+        let before_node = self.node_selection.clone();
         let change = self.editor.apply(Transaction {
             base_revision: self.revision(),
             commands,
@@ -273,12 +320,22 @@ impl EditorSession {
             }) {
                 self.selection = None;
             }
+            if self.node_selection.as_ref().is_some_and(|reference| {
+                !self
+                    .document()
+                    .node(&reference.path)
+                    .is_ok_and(|actual| actual == reference.expected.as_ref())
+            }) {
+                self.node_selection = None;
+            }
             if self.undo_selection.len() >= 100 {
                 self.undo_selection.remove(0);
             }
             self.undo_selection.push(SelectionHistory {
                 before,
                 after: self.selection.clone(),
+                before_node,
+                after_node: self.node_selection.clone(),
             });
             self.redo_selection.clear();
             self.pending.push(change.clone());
@@ -321,15 +378,167 @@ impl EditorSession {
             self.stored_marks = None;
         }
         self.selection = Some(selection);
+        self.node_selection = None;
         self.restore_cursor = true;
         if change.before_revision != change.after_revision
             && let Some(history) = self.undo_selection.last_mut()
         {
             history.after = self.selection.clone();
+            history.after_node = None;
         }
         #[cfg(feature = "wordcraft-canvas")]
         self.request_scroll_to_caret();
         Ok(change)
+    }
+    /// Commit commands with one exact post-edit opaque-node selection in the same rich history.
+    pub fn apply_commands_with_node_selection(
+        &mut self,
+        commands: Vec<Command>,
+        selection: NodeRef,
+    ) -> Result<Change> {
+        if self.is_composing() {
+            return Err(Error::CompositionActive);
+        }
+        let mut candidate = EditorSession::new(self.document().clone(), self.revision());
+        candidate.apply_commands(commands.clone())?;
+        candidate.select_node(selection.clone())?;
+        let change = self.apply_commands(commands)?;
+        self.selection = None;
+        self.node_selection = Some(selection);
+        self.stored_marks = None;
+        if change.before_revision != change.after_revision
+            && let Some(history) = self.undo_selection.last_mut()
+        {
+            history.after = None;
+            history.after_node = self.node_selection.clone();
+        }
+        #[cfg(feature = "wordcraft-canvas")]
+        self.request_scroll_to_caret();
+        Ok(change)
+    }
+    /// Delete the exact selected canonical atom, retaining a valid surrounding document and Undo.
+    pub fn delete_selected_node(&mut self) -> Result<Change> {
+        self.replace_selected_node("")
+    }
+    /// Replace the selected atom by literal text as one canonical transaction and selection change.
+    pub fn replace_selected_node(&mut self, text: &str) -> Result<Change> {
+        if self.is_composing() {
+            return Err(Error::CompositionActive);
+        }
+        let target = self.node_selection.clone().ok_or(Error::InvalidSelection)?;
+        if self.document().node(&target.path)? != target.expected.as_ref() {
+            return Err(craft_editor_model::Error::NodeReferenceConflict.into());
+        }
+        let parent_path = target.path.parent().ok_or(Error::InvalidSelection)?;
+        let index = *target.path.0.last().ok_or(Error::InvalidSelection)?;
+        let parent = self.document().node_ref(&parent_path)?;
+        if target.expected.node_type == "inlineMath" {
+            let block_id = parent
+                .expected
+                .block_id()
+                .ok_or(Error::MissingBlockIdentity)?
+                .to_owned();
+            let offset: usize = parent
+                .expected
+                .children()
+                .iter()
+                .take(index)
+                .map(|node| node.inline_text().chars().count())
+                .sum();
+            let projection = Projection::new(self.document())?;
+            let at = projection.scalar(&DocPoint {
+                block_id: block_id.clone(),
+                offset: ScalarOffset(offset),
+            })?;
+            let mut buffer = SemanticBuffer::new(
+                self.document().clone(),
+                self.revision(),
+                projection,
+                self.next_id,
+            );
+            buffer.delete(at..at + 1)?;
+            buffer.insert(text, at)?;
+            self.next_id = buffer.next_id;
+            let after = buffer.projection.point(at + text.chars().count(), true)?;
+            return self.apply_commands_with_selection(
+                buffer.commands,
+                Selection {
+                    anchor: after.clone(),
+                    head: after,
+                },
+            );
+        }
+        let old_projection = Projection::new(self.document())?;
+        let at = old_projection
+            .spans
+            .iter()
+            .find(|span| span.path == target.path.0)
+            .map_or(0, |span| span.start);
+        let mut children = Vec::new();
+        if !text.is_empty() || parent.expected.children().len() == 1 {
+            for line in text.split('\n') {
+                self.next_id = self
+                    .next_id
+                    .checked_add(1)
+                    .ok_or(craft_editor_model::Error::ResourceLimit)?;
+                let id = format!("craft-view-{}-{}", self.revision().0, self.next_id);
+                children.push(craft_editor_model::Node::paragraph(id, line));
+            }
+        }
+        let explicit = children.last().and_then(|node| {
+            node.block_id().map(|id| DocPoint {
+                block_id: id.into(),
+                offset: ScalarOffset(node.inline_text().chars().count()),
+            })
+        });
+        let commands = vec![Command::ReplaceChildren {
+            parent,
+            from: index,
+            to: index + 1,
+            children,
+        }];
+        let mut candidate = Editor::new(self.document().clone(), self.revision());
+        candidate.apply(Transaction {
+            base_revision: self.revision(),
+            commands: commands.clone(),
+        })?;
+        let projection = Projection::new(candidate.document())?;
+        let after = explicit.or_else(|| {
+            projection
+                .point(at.min(projection.text.chars().count()), true)
+                .ok()
+        });
+        if let Some(point) = after {
+            return self.apply_commands_with_selection(
+                commands,
+                Selection {
+                    anchor: point.clone(),
+                    head: point,
+                },
+            );
+        }
+        fn first_atom(
+            node: &craft_editor_model::Node,
+            path: craft_editor_model::NodePath,
+        ) -> Option<craft_editor_model::NodePath> {
+            if matches!(
+                node.node_type.as_str(),
+                "imageBlock" | "mathBlock" | "mermaidBlock" | "horizontalRule" | "sceneBreak"
+            ) {
+                return Some(path);
+            }
+            node.children()
+                .iter()
+                .enumerate()
+                .find_map(|(index, node)| first_atom(node, path.child(index)))
+        }
+        let path = first_atom(
+            candidate.document().root(),
+            craft_editor_model::NodePath::root(),
+        )
+        .ok_or(Error::InvalidSelection)?;
+        let selection = candidate.document().node_ref(&path)?;
+        self.apply_commands_with_node_selection(commands, selection)
     }
     /// Reveal the semantic caret on the next canvas frame without changing selection or focus.
     #[cfg(feature = "wordcraft-canvas")]
@@ -459,7 +668,7 @@ impl EditorSession {
             return Ok(change);
         }
         let mut commands = vec![];
-        for span in &projection.spans {
+        for span in projection.spans.iter().filter(|span| !span.atom) {
             let start = a.min(b).max(span.start);
             let end = a.max(b).min(span.end);
             if start < end {
@@ -485,6 +694,7 @@ impl EditorSession {
         self.stored_marks = None;
         if let Some(entry) = self.undo_selection.pop() {
             self.selection = entry.before.clone();
+            self.node_selection = entry.before_node.clone();
             self.redo_selection.push(entry);
         }
         self.pending.push(change.clone());
@@ -500,6 +710,7 @@ impl EditorSession {
         self.stored_marks = None;
         if let Some(entry) = self.redo_selection.pop() {
             self.selection = entry.after.clone();
+            self.node_selection = entry.after_node.clone();
             self.undo_selection.push(entry);
         }
         self.pending.push(change.clone());
@@ -513,7 +724,20 @@ impl EditorSession {
     #[cfg(feature = "wordcraft-canvas")]
     pub fn show_canvas(&mut self, ui: &mut egui::Ui, style: &canvas::CanvasStyle) -> ViewResponse {
         let mut state = std::mem::take(&mut self.canvas_state);
-        let response = state.show(self, ui, style);
+        let response = state.show(self, ui, style, None);
+        self.canvas_state = state;
+        response
+    }
+    /// Display the same semantic canvas with actual host-resolved images, diagrams and formulas.
+    #[cfg(feature = "wordcraft-canvas")]
+    pub fn show_canvas_with_resolver(
+        &mut self,
+        ui: &mut egui::Ui,
+        style: &canvas::CanvasStyle,
+        resolver: &dyn renderers::AtomResolver,
+    ) -> ViewResponse {
+        let mut state = std::mem::take(&mut self.canvas_state);
+        let response = state.show(self, ui, style, Some(resolver));
         self.canvas_state = state;
         response
     }
@@ -562,7 +786,7 @@ impl EditorSession {
             .map(|composition| &composition.document)
             .unwrap_or_else(|| self.document())
             .clone();
-        let projection = match Projection::new(&working_document) {
+        let projection = match Projection::linear_checkpoint(&working_document) {
             Ok(projection) => projection,
             Err(error) => {
                 return ViewResponse {
@@ -817,7 +1041,9 @@ impl SemanticBuffer {
             .position(|s| s.id == last.block_id)
             .ok_or(Error::InvalidSelection)?;
         let spans = &self.projection.spans[first_index..=last_index];
-        if spans.len() > 1 && spans.iter().any(|s| s.table || s.path.len() != 1) {
+        if spans.iter().any(|s| s.atom)
+            || (spans.len() > 1 && spans.iter().any(|s| s.table || s.path.len() != 1))
+        {
             return Err(Error::UnsupportedStructuralEdit);
         }
         let mut commands = vec![];

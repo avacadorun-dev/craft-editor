@@ -85,6 +85,8 @@ struct MeasurementKey {
     width: u32,
     style: GeometryStyle,
     preedit_epoch: u64,
+    resolver_generation: Option<u64>,
+    resolver_identity: Option<usize>,
 }
 struct Tile {
     column: i32,
@@ -109,19 +111,37 @@ impl CanvasState {
     pub(crate) fn request_scroll_to_caret(&mut self) {
         self.scroll_to_caret = true;
     }
+    #[cfg(test)]
     fn measure(&mut self, session: &EditorSession, width: f32, style: &CanvasStyle) -> Result<()> {
+        self.measure_with_resolver(session, width, style, None)
+    }
+    fn measure_with_resolver(
+        &mut self,
+        session: &EditorSession,
+        width: f32,
+        style: &CanvasStyle,
+        resolver: Option<&dyn crate::renderers::AtomResolver>,
+    ) -> Result<()> {
         let key = MeasurementKey {
             revision: session.revision(),
             width: width.to_bits(),
             style: style.geometry(),
             preedit_epoch: self.preedit_epoch,
+            resolver_generation: resolver.map(crate::renderers::AtomResolver::generation),
+            resolver_identity: resolver.map(|resolver| {
+                (resolver as *const dyn crate::renderers::AtomResolver).cast::<()>() as usize
+            }),
         };
         if self.measured.as_ref() != Some(&key) {
             let document = self
                 .preedit
                 .as_ref()
                 .map_or_else(|| session.document(), |p| &p.document);
-            let geometry = FlowGeometry::with_style(document, width, &|_| None, Some(&key.style))?;
+            let geometry = if let Some(resolver) = resolver {
+                FlowGeometry::with_resolver(document, width, &key.style, resolver)?
+            } else {
+                FlowGeometry::with_style(document, width, &|_| None, Some(&key.style))?
+            };
             self.geometry = Some(geometry);
             self.measured = Some(key);
             self.tiles.clear();
@@ -134,10 +154,11 @@ impl CanvasState {
         session: &mut EditorSession,
         ui: &mut egui::Ui,
         style: &CanvasStyle,
+        resolver: Option<&dyn crate::renderers::AtomResolver>,
     ) -> ViewResponse {
         let mut errors = Vec::new();
         let width = ui.available_width().max(144.0);
-        if let Err(error) = self.measure(session, width, style) {
+        if let Err(error) = self.measure_with_resolver(session, width, style, resolver) {
             return ViewResponse {
                 response: ui
                     .allocate_response(Vec2::new(width, style.min_height.max(0.0)), Sense::hover()),
@@ -146,6 +167,7 @@ impl CanvasState {
             };
         }
         if session.selection.is_none()
+            && session.node_selection.is_none()
             && let Some(geometry) = &self.geometry
         {
             match geometry.edge(false) {
@@ -154,7 +176,21 @@ impl CanvasState {
                         errors.push(error);
                     }
                 }
-                Err(error) => errors.push(error.into()),
+                Err(error) => {
+                    if let Some(node) = geometry.nodes().first() {
+                        match session
+                            .document()
+                            .node_ref(&node.canonical_path)
+                            .map_err(Error::from)
+                            .and_then(|reference| session.select_node(reference))
+                        {
+                            Ok(()) => {}
+                            Err(error) => errors.push(error),
+                        }
+                    } else {
+                        errors.push(error.into());
+                    }
+                }
             }
         }
         let extent = self.geometry.as_ref().and_then(FlowGeometry::extent);
@@ -171,7 +207,7 @@ impl CanvasState {
         {
             response.request_focus();
             self.cancel_preedit(session);
-            if let Err(error) = self.measure(session, width, style) {
+            if let Err(error) = self.measure_with_resolver(session, width, style, resolver) {
                 errors.push(error);
             }
             if let Err(error) = self.pointer(
@@ -214,13 +250,13 @@ impl CanvasState {
                 if let Err(error) = self.event(session, ui, event, style.read_only) {
                     errors.push(error);
                 }
-                if let Err(error) = self.measure(session, width, style) {
+                if let Err(error) = self.measure_with_resolver(session, width, style, resolver) {
                     errors.push(error);
                     break;
                 }
             }
         }
-        if let Err(error) = self.measure(session, width, style) {
+        if let Err(error) = self.measure_with_resolver(session, width, style, resolver) {
             errors.push(error);
         }
         ui.painter().rect_filled(rect, 0.0, style.background);
@@ -229,6 +265,24 @@ impl CanvasState {
         }
         if let Some(geometry) = &self.geometry {
             let selection = session.selection.as_ref();
+            if let Some(reference) = &session.node_selection
+                && let Some(node) = geometry
+                    .nodes()
+                    .iter()
+                    .find(|node| node.canonical_path == reference.path)
+            {
+                let selected = on_screen(rect.min, node.rect);
+                ui.painter().rect_stroke(
+                    selected.expand(2.0),
+                    3.0,
+                    egui::Stroke::new(2.0, style.selection),
+                    egui::StrokeKind::Outside,
+                );
+                if self.scroll_to_caret {
+                    ui.scroll_to_rect(selected.expand(12.0), None);
+                    self.scroll_to_caret = false;
+                }
+            }
             if self.preedit.is_none()
                 && let Some(selection) = selection
             {
@@ -314,6 +368,15 @@ impl CanvasState {
         triple: bool,
     ) -> Result<()> {
         let geometry = self.geometry.as_ref().ok_or(Error::InvalidSelection)?;
+        if !shift
+            && !dragging
+            && let Some(path) = geometry.hit_node(0, local.x, local.y)
+        {
+            let reference = session.document().node_ref(&path)?;
+            session.select_node(reference)?;
+            self.goal_x = None;
+            return Ok(());
+        }
         let Some(point) = geometry.hit(0, local.x, local.y)? else {
             return Ok(());
         };
@@ -364,15 +427,27 @@ impl CanvasState {
             }
             Event::Cut if !read_only => {
                 let text = session.selected_text()?;
-                replace(session, "")?;
+                if session.node_selection.is_some() {
+                    session.delete_selected_node()?;
+                } else {
+                    replace(session, "")?;
+                }
                 ui.ctx().copy_text(text);
                 self.scroll_to_caret = true;
             }
             Event::Text(text) | Event::Paste(text) if !read_only && self.preedit.is_none() => {
-                replace(session, &text.replace("\r\n", "\n"))?;
+                let text = text.replace("\r\n", "\n");
+                if session.node_selection.is_some() {
+                    session.replace_selected_node(&text)?;
+                } else {
+                    replace(session, &text)?;
+                }
                 self.scroll_to_caret = true;
             }
             Event::Ime(egui::ImeEvent::Preedit { text, .. }) if !read_only => {
+                if session.node_selection.is_some() {
+                    return Err(Error::UnsupportedStructuralEdit);
+                }
                 self.preedit_epoch = self.preedit_epoch.wrapping_add(1);
                 if text.is_empty() {
                     self.cancel_preedit(session);
@@ -389,7 +464,11 @@ impl CanvasState {
             Event::Ime(egui::ImeEvent::Commit(text)) if !read_only => {
                 self.cancel_preedit(session);
                 if !text.is_empty() {
-                    replace(session, &text)?;
+                    if session.node_selection.is_some() {
+                        session.replace_selected_node(&text)?;
+                    } else {
+                        replace(session, &text)?;
+                    }
                 }
                 self.scroll_to_caret = true;
             }
@@ -465,7 +544,7 @@ impl CanvasState {
                     self.scroll_to_caret = true;
                     return Ok(());
                 }
-                Key::B | Key::I | Key::U if !read_only => {
+                Key::B | Key::I | Key::U if !read_only && session.node_selection.is_none() => {
                     let kind = match key {
                         Key::B => "bold",
                         Key::I => "italic",
@@ -477,7 +556,44 @@ impl CanvasState {
                 _ => {}
             }
         }
+        if session.node_selection.is_some()
+            && !read_only
+            && matches!(key, Key::Backspace | Key::Delete)
+        {
+            session.delete_selected_node()?;
+            self.scroll_to_caret = true;
+            return Ok(());
+        }
         let geometry = self.geometry.as_ref().ok_or(Error::InvalidSelection)?;
+        if let Some(reference) = &session.node_selection {
+            if let Some(node) = geometry
+                .nodes()
+                .iter()
+                .find(|node| node.canonical_path == reference.path)
+            {
+                let before = matches!(key, Key::ArrowLeft | Key::ArrowUp | Key::Home);
+                if matches!(
+                    key,
+                    Key::ArrowLeft
+                        | Key::ArrowUp
+                        | Key::Home
+                        | Key::ArrowRight
+                        | Key::ArrowDown
+                        | Key::End
+                ) {
+                    let y = if before {
+                        node.rect.y - 1.0
+                    } else {
+                        node.rect.y + node.rect.height + 1.0
+                    };
+                    if let Some(point) = geometry.hit(node.rect.page, node.rect.x, y)? {
+                        session.set_selection(collapsed(point))?;
+                        self.scroll_to_caret = true;
+                    }
+                }
+            }
+            return Ok(());
+        }
         let selection = session
             .selection
             .clone()
@@ -718,6 +834,9 @@ fn replacement_buffer(session: &EditorSession, text: &str) -> Result<(SemanticBu
             .filter(|span| span.end >= at && span.start <= a.max(b))
             .cloned()
             .collect();
+        if spans.iter().any(|span| span.atom) {
+            return Err(Error::UnsupportedStructuralEdit);
+        }
         if spans.len() > 1 && spans.iter().any(|span| span.table || span.path.len() != 1) {
             // Text-range deletion through cells clears their content, preserving the grid and
             // durable cell/block identities. Joining cells is a separate structural command.
@@ -1332,6 +1451,97 @@ mod tests {
         assert_eq!(session.selection(), Some(&before));
         session.redo()?;
         assert_eq!(session.selection(), Some(&after));
+        Ok(())
+    }
+    struct ContractResolver;
+    impl crate::renderers::AtomResolver for ContractResolver {
+        fn resolve(
+            &self,
+            node: &craft_editor_model::Node,
+            _: f32,
+        ) -> Result<crate::renderers::ResolvedAtom> {
+            Ok(crate::renderers::ResolvedAtom {
+                size: crate::layout::AtomSize {
+                    width: 48.0,
+                    height: 24.0,
+                },
+                baseline: (node.node_type == "inlineMath").then_some(18.0),
+                encoded: std::sync::Arc::new(
+                    include_bytes!("../examples/atom_contract_pixel.png").to_vec(),
+                ),
+            })
+        }
+        fn generation(&self) -> u64 {
+            1
+        }
+    }
+    #[test]
+    fn all_schema_nodes_have_native_geometry_with_explicit_contract_atom_pixels() -> TestResult {
+        // This deterministic pixel fixture verifies the resolver boundary, not TeX/Mermaid
+        // correctness. The separate renderer crate qualifies actual diagram/formula output.
+        let source = Document::from_json(serde_json::from_str(include_str!(
+            "../examples/all_nodes_fixture.json"
+        ))?)?;
+        let before = source.to_json()?;
+        let geometry = FlowGeometry::with_resolver(
+            &source,
+            650.0,
+            &CanvasStyle::default().geometry(),
+            &ContractResolver,
+        )?;
+        assert_eq!(geometry.page_count(), 1);
+        assert_eq!(geometry.nodes().len(), 6); // inline math, rule, scene, image, diagram, block math
+        assert_eq!(geometry.cells()?.len(), 6);
+        let base = geometry
+            .caret(&point("last", 0))?
+            .ok_or(Error::InvalidSelection)?;
+        let quote = geometry
+            .caret(&point("quoted", 0))?
+            .ok_or(Error::InvalidSelection)?;
+        let nested = geometry
+            .caret(&point("nested", 0))?
+            .ok_or(Error::InvalidSelection)?;
+        assert!(quote.x > base.x && nested.x > quote.x);
+        assert_eq!(source.to_json()?, before);
+        Ok(())
+    }
+    #[test]
+    fn anonymous_node_delete_and_redo_preserve_exact_node_selection() -> TestResult {
+        let original = Document::from_json(
+            serde_json::json!({"type":"doc","attrs":{"schemaVersion":4},"content":[{"type":"horizontalRule"}]}),
+        )?;
+        let mut session = EditorSession::new(original.clone(), Revision(3));
+        let reference = session
+            .document()
+            .node_ref(&craft_editor_model::NodePath(vec![0]))?;
+        session.select_node(reference.clone())?;
+        session.delete_selected_node()?;
+        assert_eq!(session.document().blocks()[0].node_type, "paragraph");
+        assert!(session.node_selection().is_none());
+        assert!(session.selection().is_some());
+        session.undo()?;
+        assert_eq!(session.document(), &original);
+        assert_eq!(session.node_selection(), Some(&reference));
+        session.redo()?;
+        assert!(session.node_selection().is_none());
+        Ok(())
+    }
+    #[test]
+    fn selected_inline_formula_type_replacement_is_one_rich_transaction() -> TestResult {
+        let original = Document::from_json(
+            serde_json::json!({"type":"doc","attrs":{"schemaVersion":4},"content":[{"type":"paragraph","attrs":{"blockId":"p"},"content":[{"type":"text","text":"A"},{"type":"inlineMath","attrs":{"latex":"x^2","vendor":9}},{"type":"text","text":"B"}]}]}),
+        )?;
+        let mut session = EditorSession::new(original.clone(), Revision(3));
+        let reference = session
+            .document()
+            .node_ref(&craft_editor_model::NodePath(vec![0, 1]))?;
+        session.select_node(reference.clone())?;
+        session.replace_selected_node("字")?;
+        assert_eq!(session.document().block_text("p")?, "A字B");
+        assert_eq!(session.revision(), Revision(4));
+        session.undo()?;
+        assert_eq!(session.document(), &original);
+        assert_eq!(session.node_selection(), Some(&reference));
         Ok(())
     }
 }

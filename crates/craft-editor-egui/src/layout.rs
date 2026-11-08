@@ -5,7 +5,10 @@
 //! Source: WordCraft `da914ce674f18ebc4e08cca425cc8f8acca3372f` (MIT OR Apache-2.0).
 //! No upstream source is copied here. Git dependencies retain their own font/license files.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
 use craft_editor_model::{
     ByteOffset, Document, Node, NodePath, ScalarOffset, byte_to_scalar, scalar_to_byte,
@@ -24,6 +27,9 @@ pub const UPSTREAM_REVISION: &str = "da914ce674f18ebc4e08cca425cc8f8acca3372f";
 /// Content-free geometry diagnostic. A failure never rewrites the canonical document.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// Host atom rendering failed with a content-free code.
+    #[error("atom_rendering: {0}")]
+    AtomRendering(String),
     /// The canonical model rejected a position or document.
     #[error(transparent)]
     Model(#[from] craft_editor_model::Error),
@@ -140,6 +146,15 @@ pub struct CellGeometry {
     pub rect: GeometryRect,
 }
 
+/// Bounds of a canonical opaque atom, including its native caption where present.
+#[derive(Debug, Clone)]
+pub struct NodeGeometry {
+    /// Exact source tree location; no transient view ID is written into canonical data.
+    pub canonical_path: NodePath,
+    /// Native logical document rectangle.
+    pub rect: GeometryRect,
+}
+
 struct BlockMap {
     id: String,
     path: Path,
@@ -162,6 +177,8 @@ pub struct FlowGeometry {
     measured: DocLayout,
     blocks: Vec<BlockMap>,
     cell_paths: HashMap<(Path, usize, usize), NodePath>,
+    atom_paths: HashMap<String, NodePath>,
+    node_paths: HashMap<Path, NodePath>,
 }
 
 impl FlowGeometry {
@@ -187,6 +204,26 @@ impl FlowGeometry {
         atom_size: &impl Fn(&Node) -> Option<AtomSize>,
         style: Option<&GeometryStyle>,
     ) -> Result<Self> {
+        Self::build(source, width, atom_size, style, None)
+    }
+
+    /// Measure actual host-resolved native image/diagram/formula output.
+    pub fn with_resolver(
+        source: &Document,
+        width: f32,
+        style: &GeometryStyle,
+        resolver: &dyn crate::renderers::AtomResolver,
+    ) -> Result<Self> {
+        Self::build(source, width, &|_| None, Some(style), Some(resolver))
+    }
+
+    fn build(
+        source: &Document,
+        width: f32,
+        atom_size: &impl Fn(&Node) -> Option<AtomSize>,
+        style: Option<&GeometryStyle>,
+        resolver: Option<&dyn crate::renderers::AtomResolver>,
+    ) -> Result<Self> {
         if !width.is_finite() || width <= 0.0 {
             return Err(Error::InvalidSize);
         }
@@ -205,6 +242,11 @@ impl FlowGeometry {
             cell_paths: HashMap::new(),
             atom_size,
             style,
+            resolver,
+            media: BTreeMap::new(),
+            numbering: wordcraft_doc::numbering::Numbering::default(),
+            atom_paths: HashMap::new(),
+            node_paths: HashMap::new(),
         };
         // Web flow reserves 18 points on each side; tracks occupy the actual text column.
         let body = builder.blocks(
@@ -215,6 +257,8 @@ impl FlowGeometry {
         )?;
         let mut upstream = wordcraft_doc::Document::new();
         upstream.body = body;
+        upstream.media = builder.media;
+        upstream.numbering = Arc::new(builder.numbering);
         if let Some(style) = style {
             let sheet = Arc::make_mut(&mut upstream.styles);
             sheet.default_chr.size = Some(style.font_size);
@@ -243,6 +287,8 @@ impl FlowGeometry {
             measured,
             blocks: builder.blocks,
             cell_paths: builder.cell_paths,
+            atom_paths: builder.atom_paths,
+            node_paths: builder.node_paths,
         })
     }
 
@@ -259,12 +305,16 @@ impl FlowGeometry {
 
     /// First or last exact canonical text position in document order.
     pub fn edge(&self, end: bool) -> Result<DocPoint> {
-        let native = if end {
-            self.upstream.end_of(StoryRef::Body)
+        let block = if end {
+            self.blocks.last()
         } else {
-            self.upstream.start_of(StoryRef::Body)
-        };
-        self.resolve_native(&native)
+            self.blocks.first()
+        }
+        .ok_or(Error::UnmappedPosition)?;
+        Ok(DocPoint {
+            block_id: block.id.clone(),
+            offset: ScalarOffset(if end { block.text.chars().count() } else { 0 }),
+        })
     }
 
     /// Logical grapheme/word motion with shaped visual movement inside a line.
@@ -501,6 +551,63 @@ impl FlowGeometry {
         Ok(cells)
     }
 
+    /// Actual selectable opaque-node bounds, with native caption and separator line geometry.
+    pub fn nodes(&self) -> Vec<NodeGeometry> {
+        use wordcraft_layout::display::{DisplayOptions, Draw, page_display};
+        let mut output: Vec<NodeGeometry> = Vec::new();
+        for (page, layout) in self.measured.pages.iter().enumerate() {
+            for draw in page_display(&self.upstream, layout, &DisplayOptions::default()) {
+                if let Draw::Image { rect, media, .. } = draw
+                    && let Some(path) = self.atom_paths.get(&media)
+                {
+                    merge_node_rect(&mut output, path, GeometryRect::from_rect(page, rect));
+                }
+            }
+            for item in &layout.items {
+                if let Placed::Lines {
+                    path,
+                    para,
+                    l0,
+                    l1,
+                    x,
+                    y,
+                    ..
+                } = item
+                    && let Some(canonical) = self.node_paths.get(path)
+                {
+                    let first_top = para.lines.get(*l0).map_or(0.0, |line| line.top);
+                    for line in para.lines.iter().take(*l1).skip(*l0) {
+                        merge_node_rect(
+                            &mut output,
+                            canonical,
+                            GeometryRect {
+                                page,
+                                x: *x + line.left,
+                                y: *y + line.top - first_top,
+                                width: (line.right - line.left).max(1.0),
+                                height: line.height.max(1.0),
+                            },
+                        );
+                    }
+                }
+            }
+        }
+        output
+    }
+    /// Resolve a pointer inside a real atom/caption/separator to its exact canonical tree path.
+    pub fn hit_node(&self, page: usize, x: f32, y: f32) -> Option<NodePath> {
+        self.nodes()
+            .into_iter()
+            .find(|node| {
+                node.rect.page == page
+                    && x >= node.rect.x
+                    && x <= node.rect.x + node.rect.width
+                    && y >= node.rect.y
+                    && y <= node.rect.y + node.rect.height
+            })
+            .map(|node| node.canonical_path)
+    }
+
     /// Reserved inline atom rectangles emitted by the real native display-list pass.
     /// Only untransformed probe atoms are qualified here; painting is a separate host service.
     pub fn atom_rects(&self) -> Vec<GeometryRect> {
@@ -538,11 +645,27 @@ impl FlowGeometry {
         if pos.story != StoryRef::Body {
             return Err(Error::UnmappedPosition);
         }
-        let block = self
-            .blocks
-            .iter()
-            .find(|block| block.path == pos.path)
+        let Some(block) = self.blocks.iter().find(|block| block.path == pos.path) else {
+            let previous = self
+                .blocks
+                .iter()
+                .rev()
+                .find(|block| block.path.0 < pos.path.0);
+            let next = self.blocks.iter().find(|block| block.path.0 > pos.path.0);
+            let (block, end) = if pos.off == 0 {
+                previous
+                    .map(|block| (block, true))
+                    .or_else(|| next.map(|block| (block, false)))
+            } else {
+                next.map(|block| (block, false))
+                    .or_else(|| previous.map(|block| (block, true)))
+            }
             .ok_or(Error::UnmappedPosition)?;
+            return Ok(DocPoint {
+                block_id: block.id.clone(),
+                offset: ScalarOffset(if end { block.text.chars().count() } else { 0 }),
+            });
+        };
         let offset = byte_to_scalar(&block.text, ByteOffset(pos.off))?;
         Ok(DocPoint {
             block_id: block.id.clone(),
@@ -551,11 +674,25 @@ impl FlowGeometry {
     }
 }
 
+#[derive(Clone, Default)]
+struct ParagraphContext {
+    indent: f32,
+    list_depth: usize,
+    label: Option<String>,
+    quote: bool,
+    callout: bool,
+}
+
 struct Builder<'a, F> {
     blocks: Vec<BlockMap>,
     cell_paths: HashMap<(Path, usize, usize), NodePath>,
     atom_size: &'a F,
     style: Option<&'a GeometryStyle>,
+    resolver: Option<&'a dyn crate::renderers::AtomResolver>,
+    media: BTreeMap<String, Arc<Vec<u8>>>,
+    numbering: wordcraft_doc::numbering::Numbering,
+    atom_paths: HashMap<String, NodePath>,
+    node_paths: HashMap<Path, NodePath>,
 }
 impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
     fn blocks(
@@ -565,34 +702,161 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
         canonical_parent: &[usize],
         width: f32,
     ) -> Result<Blocks> {
-        nodes
-            .iter()
-            .enumerate()
-            .map(|(index, node)| {
-                let mut native_path = native_parent.to_vec();
-                native_path.push(u32::try_from(index).map_err(|_| Error::InvalidGrid)?);
-                let mut canonical_path = canonical_parent.to_vec();
-                canonical_path.push(index);
-                match node.node_type.as_str() {
-                    "paragraph" | "heading" | "codeBlock" => {
-                        self.paragraph(node, Path(native_path))
-                    }
-                    "table" if native_path.len() == 1 => Ok(Arc::new(Block::Table(self.table(
-                        node,
-                        &native_path,
-                        &canonical_path,
-                        width,
-                    )?))),
-                    _ => Err(Error::UnsupportedNode(node.node_type.clone())),
-                }
-            })
-            .collect()
+        let mut output = Vec::new();
+        self.append_nodes(
+            nodes,
+            native_parent,
+            canonical_parent,
+            width,
+            &ParagraphContext::default(),
+            &mut output,
+        )?;
+        Ok(output)
     }
 
-    fn paragraph(&mut self, node: &Node, path: Path) -> Result<Arc<Block>> {
+    fn append_nodes(
+        &mut self,
+        nodes: &[Node],
+        native_parent: &[u32],
+        canonical_parent: &[usize],
+        width: f32,
+        context: &ParagraphContext,
+        output: &mut Blocks,
+    ) -> Result<()> {
+        for (index, node) in nodes.iter().enumerate() {
+            let mut canonical = canonical_parent.to_vec();
+            canonical.push(index);
+            let mut current = context.clone();
+            if index > 0 {
+                current.label = None;
+            }
+            match node.node_type.as_str() {
+                "blockquote" | "callout" => {
+                    current.indent += 18.0;
+                    current.quote |= node.node_type == "blockquote";
+                    current.callout |= node.node_type == "callout";
+                    self.append_nodes(
+                        node.children(),
+                        native_parent,
+                        &canonical,
+                        width,
+                        &current,
+                        output,
+                    )?;
+                }
+                "bulletList" | "orderedList" => {
+                    let start = node
+                        .attrs
+                        .as_ref()
+                        .and_then(|attrs| attrs.get("start"))
+                        .and_then(Value::as_i64)
+                        .unwrap_or(1);
+                    for (item_index, item) in node.children().iter().enumerate() {
+                        if item.node_type != "listItem" {
+                            return Err(Error::UnsupportedNode(item.node_type.clone()));
+                        }
+                        let mut item_path = canonical.clone();
+                        item_path.push(item_index);
+                        let mut item_context = current.clone();
+                        item_context.indent += 24.0;
+                        item_context.list_depth += 1;
+                        item_context.label = Some(if node.node_type == "bulletList" {
+                            wordcraft_doc::numbering::default_bullet(current.list_depth).to_string()
+                        } else {
+                            let value = start
+                                .checked_add(
+                                    i64::try_from(item_index).map_err(|_| Error::InvalidGrid)?,
+                                )
+                                .ok_or(Error::InvalidGrid)?;
+                            ordered_label(value, node.string_attr("type"))
+                        });
+                        self.append_nodes(
+                            item.children(),
+                            native_parent,
+                            &item_path,
+                            width,
+                            &item_context,
+                            output,
+                        )?;
+                    }
+                }
+                "paragraph" | "heading" | "codeBlock" => {
+                    let mut native = native_parent.to_vec();
+                    native.push(u32::try_from(output.len()).map_err(|_| Error::InvalidGrid)?);
+                    output.push(self.paragraph(node, Path(native), width, &current, &canonical)?);
+                }
+                "table" => {
+                    let mut native = native_parent.to_vec();
+                    native.push(u32::try_from(output.len()).map_err(|_| Error::InvalidGrid)?);
+                    let mut table =
+                        self.table(node, &native, &canonical, (width - current.indent).max(1.0))?;
+                    if current.indent > 0.0 {
+                        table.props.indent = Some(current.indent);
+                    }
+                    output.push(Arc::new(Block::Table(table)));
+                }
+                "imageBlock" | "mathBlock" | "mermaidBlock" | "horizontalRule" | "sceneBreak" => {
+                    let mut native = native_parent.to_vec();
+                    native.push(u32::try_from(output.len()).map_err(|_| Error::InvalidGrid)?);
+                    self.block_atom(node, Path(native), NodePath(canonical), width, output)?;
+                }
+                _ => return Err(Error::UnsupportedNode(node.node_type.clone())),
+            }
+        }
+        Ok(())
+    }
+
+    fn paragraph(
+        &mut self,
+        node: &Node,
+        path: Path,
+        width: f32,
+        context: &ParagraphContext,
+        canonical_path: &[usize],
+    ) -> Result<Arc<Block>> {
         let id = node.block_id().ok_or(Error::MissingIdentity)?.to_owned();
         let mut paragraph = Paragraph::new();
         let body_size = self.style.map_or(18.0, |style| style.font_size);
+        if context.indent > 0.0 {
+            paragraph.props.indent_left = Some(context.indent);
+        }
+        if context.quote || context.callout {
+            let mut border =
+                wordcraft_doc::props::Border::single(if context.callout { 2.0 } else { 1.5 });
+            border.color = Some(rgb(self
+                .style
+                .map_or([139, 148, 163], |style| style.table_border)));
+            border.space = 8.0;
+            paragraph.props.borders = Some(wordcraft_doc::props::Borders {
+                left: Some(border),
+                ..Default::default()
+            });
+            if context.callout {
+                paragraph.props.shading = Some(rgb(self
+                    .style
+                    .map_or([234, 238, 244], |style| style.table_header)));
+            }
+        }
+        if let Some(label) = &context.label {
+            let level = wordcraft_doc::numbering::Level {
+                format: wordcraft_doc::section::NumFormat::Bullet,
+                text: label.clone(),
+                indent: context.indent,
+                hanging: 18.0,
+                chr: CharProps {
+                    size: Some(body_size),
+                    font: self.style.and_then(|style| style.font_family.clone()),
+                    color: self
+                        .style
+                        .map(|style| wordcraft_doc::props::TextColor::Rgb(rgb(style.text_color))),
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            let num = self.numbering.try_add_levels(None, vec![level])?;
+            paragraph.props.numbering = Some(wordcraft_doc::props::NumRef { num, level: 0 });
+        }
+
         let mut inherited = CharProps::default();
         if node.node_type == "heading" {
             let level = integer_attr(node, "level").clamp(1, 6);
@@ -621,13 +885,15 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
             Some("justify") => Some(wordcraft_doc::props::Align::Justify),
             _ => None,
         };
-        for inline in node.children() {
+        for (inline_index, inline) in node.children().iter().enumerate() {
             let mut props = inherited.clone();
             for mark in inline.marks.as_deref().unwrap_or_default() {
                 match mark.mark_type.as_str() {
                     "bold" => props.bold = Some(true),
                     "italic" => props.italic = Some(true),
-                    "underline" => props.underline = Some(wordcraft_doc::props::Underline::Single),
+                    "underline" | "link" => {
+                        props.underline = Some(wordcraft_doc::props::Underline::Single)
+                    }
                     "strike" => props.strike = Some(true),
                     "code" => props.font = Some("JetBrains Mono".into()),
                     // Annotation/link interaction and decoration remain host duties. Their
@@ -651,8 +917,35 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
                     )?;
                 }
                 "inlineMath" => {
-                    let size = (self.atom_size)(inline)
-                        .ok_or_else(|| Error::UnsupportedNode("unmeasured_inline_atom".into()))?;
+                    let media = format!("craft-geometry-atom:{}:{}", id, paragraph.len());
+                    let size = if let Some(resolver) = self.resolver {
+                        let resolved =
+                            resolver
+                                .resolve(inline, width)
+                                .map_err(|error| match error {
+                                    crate::Error::AtomRendering(code) => Error::AtomRendering(code),
+                                    _ => Error::AtomRendering("atom_resolution_failed".into()),
+                                })?;
+                        if resolved.encoded.is_empty() || resolved.encoded.len() > 16 * 1024 * 1024
+                        {
+                            return Err(Error::AtomRendering("atom_encoded_size".into()));
+                        }
+                        if let Some(baseline) = resolved.baseline {
+                            if !baseline.is_finite()
+                                || baseline < 0.0
+                                || baseline > resolved.size.height
+                            {
+                                return Err(Error::InvalidSize);
+                            }
+                            props.position = Some(baseline - resolved.size.height);
+                        }
+                        self.media.insert(media.clone(), resolved.encoded);
+                        resolved.size
+                    } else {
+                        (self.atom_size)(inline).ok_or_else(|| {
+                            Error::UnsupportedNode("unmeasured_inline_atom".into())
+                        })?
+                    };
                     if !size.width.is_finite()
                         || !size.height.is_finite()
                         || size.width <= 0.0
@@ -660,8 +953,11 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
                     {
                         return Err(Error::InvalidSize);
                     }
+                    let mut atom_path = canonical_path.to_vec();
+                    atom_path.push(inline_index);
+                    self.atom_paths.insert(media.clone(), NodePath(atom_path));
                     let object = InlineObject::Image {
-                        media: format!("craft-geometry-atom:{}:{}", id, paragraph.len()),
+                        media,
                         w: size.width,
                         h: size.height,
                         alt: String::new(),
@@ -681,6 +977,107 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
             text: node.inline_text(),
         });
         Ok(para_block(paragraph))
+    }
+
+    fn block_atom(
+        &mut self,
+        node: &Node,
+        path: Path,
+        canonical: NodePath,
+        width: f32,
+        output: &mut Blocks,
+    ) -> Result<()> {
+        let mut paragraph = Paragraph::new();
+        self.node_paths.insert(path.clone(), canonical.clone());
+        let body_size = self.style.map_or(18.0, |style| style.font_size);
+        if matches!(node.node_type.as_str(), "horizontalRule" | "sceneBreak") {
+            paragraph.props.space_before = Some(12.0);
+            paragraph.props.space_after = Some(12.0);
+            if node.node_type == "horizontalRule" {
+                let mut border = wordcraft_doc::props::Border::single(1.0);
+                border.color = Some(rgb(self
+                    .style
+                    .map_or([139, 148, 163], |style| style.table_border)));
+                paragraph.props.borders = Some(wordcraft_doc::props::Borders {
+                    bottom: Some(border),
+                    ..Default::default()
+                });
+            } else {
+                paragraph.props.align = Some(wordcraft_doc::props::Align::Center);
+                paragraph.insert_text(
+                    0,
+                    "* * *",
+                    &CharProps {
+                        size: Some(body_size),
+                        ..Default::default()
+                    },
+                )?;
+            }
+        } else {
+            let resolver = self
+                .resolver
+                .ok_or_else(|| Error::UnsupportedNode("unresolved_block_atom".into()))?;
+            let resolved = resolver.resolve(node, width).map_err(|error| match error {
+                crate::Error::AtomRendering(code) => Error::AtomRendering(code),
+                _ => Error::AtomRendering("atom_resolution_failed".into()),
+            })?;
+            if !resolved.size.width.is_finite()
+                || !resolved.size.height.is_finite()
+                || resolved.size.width <= 0.0
+                || resolved.size.height <= 0.0
+                || resolved.encoded.is_empty()
+                || resolved.encoded.len() > 16 * 1024 * 1024
+            {
+                return Err(Error::InvalidSize);
+            }
+            let media = format!("craft-geometry-atom:block:{:?}", canonical.0);
+            self.media.insert(media.clone(), resolved.encoded);
+            self.atom_paths.insert(media.clone(), canonical.clone());
+            paragraph.props.align = Some(wordcraft_doc::props::Align::Center);
+            paragraph.insert_object(
+                0,
+                InlineObject::Image {
+                    media,
+                    w: resolved.size.width,
+                    h: resolved.size.height,
+                    alt: node
+                        .string_attr("alt")
+                        .or_else(|| node.string_attr("description"))
+                        .unwrap_or_default()
+                        .into(),
+                    float: Default::default(),
+                    crop: [0.0; 4],
+                    fx: Default::default(),
+                    ole: None,
+                },
+                &CharProps::default(),
+            )?;
+        }
+        output.push(para_block(paragraph));
+        if let Some(caption) = node
+            .string_attr("caption")
+            .filter(|caption| !caption.is_empty())
+        {
+            let mut caption_path = path.0;
+            if let Some(index) = caption_path.last_mut() {
+                *index = index.checked_add(1).ok_or(Error::InvalidGrid)?;
+            }
+            self.node_paths.insert(Path(caption_path), canonical);
+            let mut paragraph = Paragraph::new();
+            paragraph.props.align = Some(wordcraft_doc::props::Align::Center);
+            paragraph.props.space_after = Some(14.0);
+            paragraph.insert_text(
+                0,
+                caption,
+                &CharProps {
+                    size: Some(body_size * 0.82),
+                    italic: Some(true),
+                    ..Default::default()
+                },
+            )?;
+            output.push(para_block(paragraph));
+        }
+        Ok(())
     }
 
     fn table(
@@ -789,6 +1186,79 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
         }
         Ok(table)
     }
+}
+
+fn merge_node_rect(output: &mut Vec<NodeGeometry>, path: &NodePath, rect: GeometryRect) {
+    if let Some(existing) = output
+        .iter_mut()
+        .find(|node| node.canonical_path == *path && node.rect.page == rect.page)
+    {
+        let right = (existing.rect.x + existing.rect.width).max(rect.x + rect.width);
+        let bottom = (existing.rect.y + existing.rect.height).max(rect.y + rect.height);
+        existing.rect.x = existing.rect.x.min(rect.x);
+        existing.rect.y = existing.rect.y.min(rect.y);
+        existing.rect.width = right - existing.rect.x;
+        existing.rect.height = bottom - existing.rect.y;
+    } else {
+        output.push(NodeGeometry {
+            canonical_path: path.clone(),
+            rect,
+        });
+    }
+}
+
+fn ordered_label(value: i64, kind: Option<&str>) -> String {
+    if value <= 0 {
+        return format!("{value}.");
+    }
+    let label = match kind {
+        Some("a" | "A") => {
+            let mut number = value as u64;
+            let mut letters = Vec::new();
+            while number > 0 {
+                number -= 1;
+                letters.push(b'a' + (number % 26) as u8);
+                number /= 26;
+            }
+            let text: String = letters.into_iter().rev().map(char::from).collect();
+            if kind == Some("A") {
+                text.to_uppercase()
+            } else {
+                text
+            }
+        }
+        Some("i" | "I") if value <= 3999 => {
+            let mut number = value;
+            let mut text = String::new();
+            for (amount, label) in [
+                (1000, "M"),
+                (900, "CM"),
+                (500, "D"),
+                (400, "CD"),
+                (100, "C"),
+                (90, "XC"),
+                (50, "L"),
+                (40, "XL"),
+                (10, "X"),
+                (9, "IX"),
+                (5, "V"),
+                (4, "IV"),
+                (1, "I"),
+            ] {
+                while number >= amount {
+                    text.push_str(label);
+                    number -= amount;
+                }
+            }
+            if kind == Some("i") {
+                text.to_lowercase()
+            } else {
+                text
+            }
+        }
+        _ => value.to_string(),
+    };
+    format!("{label}.")
 }
 
 fn rgb(value: [u8; 3]) -> wordcraft_doc::props::Rgb {

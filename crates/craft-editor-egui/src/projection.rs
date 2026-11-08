@@ -10,6 +10,7 @@ pub(crate) struct Span {
     pub path: Vec<usize>,
     pub node: Node,
     pub table: bool,
+    pub atom: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -50,12 +51,30 @@ impl Projection {
                 path: path.clone(),
                 node: node.clone(),
                 table,
+                atom: false,
             });
         } else if matches!(
             node.node_type.as_str(),
             "imageBlock" | "mathBlock" | "mermaidBlock" | "horizontalRule" | "sceneBreak"
         ) {
-            return Err(Error::UnsupportedBlockKind(node.node_type.clone()));
+            if !self.spans.is_empty() {
+                self.text.push('\n');
+                self.scalar_len += 1;
+            }
+            let start = self.scalar_len;
+            self.text.push('\u{fffc}');
+            self.scalar_len += 1;
+            self.spans.push(Span {
+                id: node
+                    .block_id()
+                    .map_or_else(|| format!("craft-view-atom:{path:?}"), str::to_owned),
+                start,
+                end: self.scalar_len,
+                path: path.clone(),
+                node: node.clone(),
+                table,
+                atom: true,
+            });
         } else {
             for (index, child) in node.children().iter().enumerate() {
                 path.push(index);
@@ -66,34 +85,50 @@ impl Projection {
         Ok(())
     }
     pub fn point(&self, scalar: usize, right_bias: bool) -> Result<DocPoint> {
-        for (index, span) in self.spans.iter().enumerate() {
+        let mut previous: Option<&Span> = None;
+        for span in self.spans.iter().filter(|span| !span.atom) {
             if (span.start..=span.end).contains(&scalar) {
                 return Ok(DocPoint {
                     block_id: span.id.clone(),
                     offset: ScalarOffset(scalar - span.start),
                 });
             }
-            if scalar < span.start && right_bias {
+            if scalar < span.start {
+                let (block, offset) = if right_bias || previous.is_none() {
+                    (span, 0)
+                } else {
+                    let block = previous.ok_or(Error::InvalidSelection)?;
+                    (block, block.end - block.start)
+                };
                 return Ok(DocPoint {
-                    block_id: span.id.clone(),
-                    offset: ScalarOffset(0),
+                    block_id: block.id.clone(),
+                    offset: ScalarOffset(offset),
                 });
             }
-            if scalar < span.start && index > 0 {
-                let previous = &self.spans[index - 1];
-                return Ok(DocPoint {
-                    block_id: previous.id.clone(),
-                    offset: ScalarOffset(previous.end - previous.start),
-                });
-            }
+            previous = Some(span);
+        }
+        if scalar <= self.scalar_len
+            && let Some(block) = previous
+        {
+            return Ok(DocPoint {
+                block_id: block.id.clone(),
+                offset: ScalarOffset(block.end - block.start),
+            });
         }
         Err(Error::InvalidSelection)
+    }
+    pub fn linear_checkpoint(document: &Document) -> Result<Self> {
+        let projection = Self::new(document)?;
+        if let Some(span) = projection.spans.iter().find(|span| span.atom) {
+            return Err(Error::UnsupportedBlockKind(span.node.node_type.clone()));
+        }
+        Ok(projection)
     }
     pub fn scalar(&self, point: &DocPoint) -> Result<usize> {
         let span = self
             .spans
             .iter()
-            .find(|span| span.id == point.block_id)
+            .find(|span| !span.atom && span.id == point.block_id)
             .ok_or(Error::InvalidSelection)?;
         if point.offset.0 > span.end - span.start {
             return Err(Error::InvalidSelection);

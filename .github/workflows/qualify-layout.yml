@@ -46,6 +46,7 @@ jobs:
           cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
           cargo run -p craft-editor-egui --example wordcraft_geometry --features wordcraft-geometry --locked > artifacts/geometry-report.json
           cargo run -p craft-editor-egui --example wordcraft_canvas --features wordcraft-canvas --locked > artifacts/canvas-report.json
+          cargo run -p craft-editor-render --example native_atoms --locked -- artifacts/native-atoms
       - name: Retain lock and qualification evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
