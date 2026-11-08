@@ -199,3 +199,21 @@ fn invalid_collapsed_patch_keeps_previous_pending_mark_attributes() -> TestResul
     );
     Ok(())
 }
+
+#[test]
+fn atomic_mark_range_formatting_restores_the_original_collapsed_caret_on_undo() -> TestResult {
+    let source = source()?;
+    let mut session = EditorSession::new(source.clone(), Revision(0));
+    session.set_selection(selection(1, 1))?;
+    session.format_mark_range(
+        link("https://new.example"),
+        craft_editor_model::MarkMode::Patch,
+    )?;
+    assert_eq!(session.selection(), Some(&selection(0, 2)));
+    session.undo()?;
+    assert_eq!(session.document(), &source);
+    assert_eq!(session.selection(), Some(&selection(1, 1)));
+    session.redo()?;
+    assert_eq!(session.selection(), Some(&selection(0, 2)));
+    Ok(())
+}

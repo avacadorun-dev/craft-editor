@@ -20,6 +20,9 @@ pub mod canvas;
 /// Native syntax tokens with explicit UTF-8 ranges and audited grammar coverage.
 pub mod syntax;
 
+/// Canonical rich clipboard slices, source paste rules and optional acknowledged native transport.
+pub mod clipboard;
+
 mod insertion;
 mod structure;
 pub use craft_editor_model::ListKind;
@@ -40,6 +43,9 @@ use std::ops::Range;
 /// Content-free view diagnostic; hosts localize the error code.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// Clipboard transport or envelope validation failed without discarding selected content.
+    #[error(transparent)]
+    Clipboard(#[from] clipboard::ClipboardError),
     /// A host renderer could not produce real bounded output; the code contains no source text.
     #[error("atom_rendering: {0}")]
     AtomRendering(String),
@@ -145,6 +151,7 @@ struct Composition {
 /// One canonical document, semantic selection and rich Undo/Redo history.
 pub struct EditorSession {
     editor: Editor,
+    clipboard_provider: Option<std::sync::Arc<dyn clipboard::ClipboardProvider>>,
     selection: Option<Selection>,
     stored_marks: Option<Vec<Mark>>,
     node_selection: Option<NodeRef>,
@@ -166,6 +173,7 @@ impl EditorSession {
     pub fn new(document: Document, revision: Revision) -> Self {
         Self {
             editor: Editor::new(document, revision),
+            clipboard_provider: None,
             selection: None,
             stored_marks: None,
             node_selection: None,
@@ -756,12 +764,53 @@ impl EditorSession {
     /// At a boundary the right marked run is preferred, then the left, matching the source
     /// editor. This only changes transient selection; canonical content and history stay intact.
     pub fn extend_mark_range(&mut self, kind: &str) -> Result<bool> {
+        let Some(expanded) = self.expanded_mark_selection(kind)? else {
+            return Ok(false);
+        };
+        let changed = self.selection.as_ref() != Some(&expanded);
+        self.set_selection(expanded)?;
+        Ok(changed)
+    }
+    /// Expand the current same-attribute mark range and format it in one rich history entry.
+    ///
+    /// Undo restores the original caret/range, rather than a separately expanded live selection.
+    /// Missing mark ranges use the current selection, including validated stored marks at a caret.
+    pub fn format_mark_range(&mut self, mark: Mark, mode: MarkMode) -> Result<Change> {
+        let selection = self
+            .expanded_mark_selection(&mark.mark_type)?
+            .or_else(|| self.selection.clone())
+            .ok_or(Error::InvalidSelection)?;
+        if selection.anchor == selection.head {
+            return self.format_selection(mark, mode);
+        }
+        let projection = Projection::new(self.document())?;
+        let a = projection.scalar(&selection.anchor)?;
+        let b = projection.scalar(&selection.head)?;
+        let mut commands = Vec::new();
+        for span in projection.spans.iter().filter(|span| !span.atom) {
+            let start = a.min(b).max(span.start);
+            let end = a.max(b).min(span.end);
+            if start < end {
+                commands.push(Command::ApplyMarks {
+                    range: TextRange {
+                        block_id: span.id.clone(),
+                        start: ScalarOffset(start - span.start),
+                        end: ScalarOffset(end - span.start),
+                    },
+                    marks: vec![mark.clone()],
+                    mode,
+                });
+            }
+        }
+        self.apply_commands_with_selection(commands, selection)
+    }
+    fn expanded_mark_selection(&self, kind: &str) -> Result<Option<Selection>> {
         if self.is_composing() {
             return Err(Error::CompositionActive);
         }
         let selection = self.selection.as_ref().ok_or(Error::InvalidSelection)?;
         if selection.anchor.block_id != selection.head.block_id {
-            return Ok(false);
+            return Ok(None);
         }
         let from = selection.anchor.offset.0.min(selection.head.offset.0);
         let to = selection.anchor.offset.0.max(selection.head.offset.0);
@@ -791,7 +840,7 @@ impl EditorSession {
             .iter()
             .rposition(|(start, end, mark)| *start < from && from <= *end && mark.is_some());
         let Some(index) = right.or(left) else {
-            return Ok(false);
+            return Ok(None);
         };
         let mark = runs[index].2.ok_or(Error::InvalidSelection)?;
         let matching = |candidate: Option<&Mark>| {
@@ -806,7 +855,7 @@ impl EditorSession {
             last += 1;
         }
         if runs[first].0 > from || runs[last].1 < to {
-            return Ok(false);
+            return Ok(None);
         }
         let id = selection.anchor.block_id.clone();
         let expanded = Selection {
@@ -819,9 +868,7 @@ impl EditorSession {
                 offset: ScalarOffset(runs[last].1),
             },
         };
-        let changed = self.selection.as_ref() != Some(&expanded);
-        self.set_selection(expanded)?;
-        Ok(changed)
+        Ok(Some(expanded))
     }
     /// Undo a rich transaction and restore its semantic selection.
     pub fn undo(&mut self) -> Result<Change> {

@@ -93,6 +93,30 @@ fn null_presence<T>(value: &Option<T>, null_fields: &HashSet<String>, field: &st
 }
 
 impl Node {
+    /// Decode bounded canonical nodes for a potentially open clipboard fragment.
+    ///
+    /// Attributes, marks, identities, wire shape and model resource bounds are checked. Open
+    /// edge wrappers may be incomplete; their child grammar and table grid must be validated
+    /// against the complete candidate document before any insertion transaction can commit.
+    pub fn decode_open_fragment(value: Value) -> Result<Vec<Self>> {
+        let values = value
+            .as_array()
+            .ok_or_else(|| Error::InvalidDocument("fragment_array".into()))?;
+        for value in values {
+            validate_wire(value, 0)?;
+        }
+        let nodes: Vec<Self> = serde_json::from_value(value)?;
+        let mut ids = HashSet::new();
+        let mut budget = 100_000;
+        for node in &nodes {
+            if node.node_type == "doc" {
+                return invalid("fragment_root");
+            }
+            validate_node(node, 4, 0, &mut ids, &mut budget, true)?;
+        }
+        Ok(nodes)
+    }
+
     /// Minimum canonical schema version needed by this complete subtree.
     /// This does not change or validate the node; transaction promotion still
     /// validates the complete resulting document before it can be committed.
@@ -320,7 +344,7 @@ impl Document {
         let version = schema_version(&self.root)?;
         let mut ids = HashSet::new();
         let mut budget = 100_000;
-        validate_node(&self.root, version, 0, &mut ids, &mut budget)?;
+        validate_node(&self.root, version, 0, &mut ids, &mut budget, false)?;
         let schema = DynamicSchema::from_json(&schema_spec(&self.root))
             .map_err(|_| Error::InvalidDocument("schema_spec".into()))?;
         let mut json = self.to_json()?;
@@ -390,6 +414,7 @@ fn validate_node(
     depth: usize,
     ids: &mut HashSet<String>,
     budget: &mut usize,
+    open_fragment: bool,
 ) -> Result<()> {
     if depth > 64 || *budget == 0 {
         return Err(Error::ResourceLimit);
@@ -493,7 +518,7 @@ fn validate_node(
             return invalid("table_width");
         }
     }
-    if node.node_type == "table" {
+    if node.node_type == "table" && !open_fragment {
         crate::tables::TableGrid::new(node)?;
     }
     if node.node_type == "imageBlock" {
@@ -539,10 +564,54 @@ fn validate_node(
         return invalid("schema_version_too_low");
     }
     for child in node.children() {
-        validate_node(child, version, depth + 1, ids, budget)?;
+        validate_node(child, version, depth + 1, ids, budget, open_fragment)?;
     }
     Ok(())
 }
+/// Match the original Tiptap Link default URI policy without opening or fetching the target.
+///
+/// The original application does not extend its default protocols. HTML clipboard import has
+/// an intentionally stricter source sanitizer policy and must not substitute this broader check.
+pub fn is_allowed_link_uri(uri: &str) -> bool {
+    let normalized = uri
+        .chars()
+        .filter(|ch| {
+            !matches!(
+                *ch, '\u{0000}'..='\u{0020}' | '\u{00a0}' | '\u{1680}' | '\u{180e}'
+                    | '\u{2000}'..='\u{2029}' | '\u{205f}' | '\u{3000}'
+            )
+        })
+        .collect::<String>()
+        .to_ascii_lowercase();
+    if normalized.is_empty() {
+        return true;
+    }
+    const PROTOCOLS: &[&str] = &[
+        "http", "https", "ftp", "ftps", "mailto", "tel", "callto", "sms", "cid", "xmpp",
+    ];
+    if PROTOCOLS.iter().any(|protocol| {
+        normalized
+            .strip_prefix(protocol)
+            .is_some_and(|tail| tail.starts_with(':'))
+    }) {
+        return true;
+    }
+    if normalized
+        .chars()
+        .next()
+        .is_some_and(|ch| !ch.is_ascii_alphabetic())
+    {
+        return true;
+    }
+    for ch in normalized.chars() {
+        if ch.is_ascii_alphanumeric() || matches!(ch, '+' | '.' | '-') {
+            continue;
+        }
+        return ch != ':';
+    }
+    true
+}
+
 pub(crate) fn validate_mark(mark: &Mark) -> Result<()> {
     if !MARKS.contains(&mark.mark_type.as_str()) {
         return invalid("mark_type");
@@ -561,12 +630,7 @@ pub(crate) fn validate_mark(mark: &Mark) -> Result<()> {
             .and_then(|attrs| attrs.get("href"))
             .and_then(Value::as_str)
             .ok_or_else(|| Error::InvalidDocument("link_href".into()))?;
-        let lower = href.trim().to_ascii_lowercase();
-        if !(lower.starts_with("https://")
-            || lower.starts_with("http://")
-            || lower.starts_with("mailto:")
-            || (lower.starts_with('/') && !lower.starts_with("//")))
-        {
+        if !is_allowed_link_uri(href) {
             return invalid("link_scheme");
         }
     }

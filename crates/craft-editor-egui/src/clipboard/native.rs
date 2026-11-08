@@ -1,0 +1,66 @@
+//! Safe optional OS transport; actual native interoperability is separately qualified.
+use super::{ClipboardBundle, ClipboardError, ClipboardProvider, ClipboardResult, RICH_MIME};
+use clipboard_rs::{Clipboard, ClipboardContent, ClipboardContext, ContentFormat};
+use std::sync::Mutex;
+
+/// A long-lived native multi-format clipboard. The host chooses its explicit input budget.
+pub struct NativeClipboard {
+    context: Mutex<ClipboardContext>,
+    max_bytes: usize,
+}
+impl NativeClipboard {
+    /// Open the native clipboard. Do not instantiate per copy on selection-owned desktops.
+    pub fn new(max_bytes: usize) -> ClipboardResult<Self> {
+        Ok(Self {
+            context: Mutex::new(ClipboardContext::new().map_err(|_| ClipboardError::Unavailable)?),
+            max_bytes,
+        })
+    }
+}
+impl ClipboardProvider for NativeClipboard {
+    fn read(&self) -> ClipboardResult<ClipboardBundle> {
+        let ctx = self
+            .context
+            .lock()
+            .map_err(|_| ClipboardError::Unavailable)?;
+        let rich = if ctx.has(ContentFormat::Other(RICH_MIME.into())) {
+            Some(
+                ctx.get_buffer(RICH_MIME)
+                    .map_err(|_| ClipboardError::Read)?,
+            )
+        } else {
+            None
+        };
+        let html = if ctx.has(ContentFormat::Html) {
+            Some(ctx.get_html().map_err(|_| ClipboardError::Read)?)
+        } else {
+            None
+        };
+        let plain = if ctx.has(ContentFormat::Text) {
+            ctx.get_text().map_err(|_| ClipboardError::Read)?
+        } else {
+            String::new()
+        };
+        let bundle = ClipboardBundle { rich, html, plain };
+        bundle.check_budget(self.max_bytes)?;
+        Ok(bundle)
+    }
+    fn write(&self, bundle: &ClipboardBundle) -> ClipboardResult<()> {
+        bundle.check_budget(self.max_bytes)?;
+        let ctx = self
+            .context
+            .lock()
+            .map_err(|_| ClipboardError::Unavailable)?;
+        let mut contents = vec![ClipboardContent::Text(bundle.plain.clone())];
+        if let Some(html) = &bundle.html {
+            contents.push(ClipboardContent::Html(html.clone()));
+        }
+        if let Some(rich) = &bundle.rich {
+            contents.push(ClipboardContent::Other(RICH_MIME.into(), rich.clone()));
+        }
+        ctx.set(contents).map_err(|_| ClipboardError::Write)
+    }
+    fn max_bytes(&self) -> usize {
+        self.max_bytes
+    }
+}

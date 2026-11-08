@@ -711,3 +711,171 @@ impl EditorSession {
         Ok(change)
     }
 }
+
+impl EditorSession {
+    pub(crate) fn insert_open_slice(
+        &mut self,
+        mut slice: crate::clipboard::RichSlice,
+    ) -> Result<Change> {
+        if slice.open_start == 0 && slice.open_end == 0 {
+            let inline = slice
+                .content
+                .iter()
+                .all(|node| matches!(node.node_type.as_str(), "text" | "hardBreak" | "inlineMath"));
+            return self.insert_content(if inline {
+                ContentSlice::Inline(slice.content)
+            } else {
+                ContentSlice::Blocks(slice.content)
+            });
+        }
+        let mut context_refs = Vec::new();
+        while slice.open_start > 1 && slice.open_end > 1 && slice.content.len() == 1 {
+            let wrapper = slice.content.pop().ok_or(Error::InvalidSelection)?;
+            collect_source_refs(&wrapper, &mut context_refs);
+            slice.content = wrapper.content.unwrap_or_default();
+            slice.open_start -= 1;
+            slice.open_end -= 1;
+        }
+        if slice.open_start != 1
+            || slice.open_end != 1
+            || slice.content.is_empty()
+            || !slice.content.first().is_some_and(is_text_block)
+            || !slice.content.last().is_some_and(is_text_block)
+        {
+            return Err(Error::UnsupportedStructuralEdit);
+        }
+        if self.node_selection.is_some() {
+            return self.insert_content(ContentSlice::Blocks(slice.content));
+        }
+        if self.is_composing() {
+            return Err(Error::CompositionActive);
+        }
+        let selection = self.selection.clone().ok_or(Error::InvalidSelection)?;
+        let mut plan = Plan::new(self, &slice.content)?;
+        plan.identify_incoming(&mut slice.content)?;
+        let point = plan.delete_range(&selection)?;
+        let first = slice.content.remove(0);
+        collect_source_refs(&first, &mut context_refs);
+        merge_source_refs(&mut plan, &point.block_id, &context_refs)?;
+        let first_len = first.inline_text().chars().count();
+        if slice.content.is_empty() {
+            plan.replace_inline(
+                &point.block_id,
+                point.offset.0,
+                point.offset.0,
+                first.content.unwrap_or_default(),
+            )?;
+            let caret = DocPoint {
+                block_id: point.block_id,
+                offset: ScalarOffset(point.offset.0 + first_len),
+            };
+            let next = plan.next_id;
+            let change = self.apply_commands_with_selection(
+                plan.commands,
+                Selection {
+                    anchor: caret.clone(),
+                    head: caret,
+                },
+            )?;
+            self.next_id = next;
+            return Ok(change);
+        }
+        let tail_id = plan.id()?;
+        plan.execute(vec![Command::SplitBlock {
+            block_id: point.block_id.clone(),
+            at: point.offset,
+            new_block_id: tail_id.clone(),
+        }])?;
+        plan.replace_inline(
+            &point.block_id,
+            point.offset.0,
+            point.offset.0,
+            first.content.unwrap_or_default(),
+        )?;
+        let last = slice.content.last().ok_or(Error::InvalidSelection)?;
+        let last_id = last
+            .block_id()
+            .ok_or(Error::MissingBlockIdentity)?
+            .to_owned();
+        let last_len = last.inline_text().chars().count();
+        let tail_path = plan.path(&tail_id)?;
+        let parent_path = tail_path.parent().ok_or(Error::InvalidSelection)?;
+        let index = *tail_path.0.last().ok_or(Error::InvalidSelection)?;
+        plan.execute(vec![Command::InsertChildren {
+            parent: plan.doc().node_ref(&parent_path)?,
+            index,
+            children: slice.content,
+        }])?;
+        // The old target's context remains on the left fragment. The source's final open
+        // wrapper owns the last fragment; retain the old target tail's exact rich runs and
+        // source provenance, then join with an actual scalar map for existing tail anchors.
+        let last = plan.doc().block(&last_id)?.clone();
+        let tail = plan.doc().block(&tail_id)?.clone();
+        let mut right_context = last;
+        right_context
+            .attrs
+            .get_or_insert_default()
+            .insert("blockId".into(), serde_json::Value::String(tail_id.clone()));
+        right_context.content = tail.content.clone();
+        let mut tail_refs = Vec::new();
+        collect_source_refs(&tail, &mut tail_refs);
+        let reference = plan.doc().node_ref(&plan.path(&tail_id)?)?;
+        let command = plan.doc().replace_node(&reference, right_context)?;
+        plan.execute(vec![command])?;
+        merge_source_refs(&mut plan, &tail_id, &tail_refs)?;
+        plan.execute(vec![Command::JoinBlocks {
+            left_id: last_id.clone(),
+            right_id: tail_id,
+        }])?;
+        let caret = DocPoint {
+            block_id: last_id,
+            offset: ScalarOffset(last_len),
+        };
+        let next = plan.next_id;
+        let change = self.apply_commands_with_selection(
+            plan.commands,
+            Selection {
+                anchor: caret.clone(),
+                head: caret,
+            },
+        )?;
+        self.next_id = next;
+        Ok(change)
+    }
+}
+fn is_text_block(node: &Node) -> bool {
+    matches!(
+        node.node_type.as_str(),
+        "paragraph" | "heading" | "codeBlock"
+    )
+}
+fn collect_source_refs(node: &Node, refs: &mut Vec<serde_json::Value>) {
+    if let Some(values) = node
+        .attrs
+        .as_ref()
+        .and_then(|attrs| attrs.get("sourceRefs"))
+        .and_then(serde_json::Value::as_array)
+    {
+        for value in values {
+            if !refs.contains(value) {
+                refs.push(value.clone());
+            }
+        }
+    }
+}
+fn merge_source_refs(plan: &mut Plan, id: &str, incoming: &[serde_json::Value]) -> Result<()> {
+    if incoming.is_empty() {
+        return Ok(());
+    }
+    let mut refs = Vec::new();
+    collect_source_refs(plan.doc().block(id)?, &mut refs);
+    for reference in incoming {
+        if !refs.contains(reference) {
+            refs.push(reference.clone());
+        }
+    }
+    plan.execute(vec![Command::SetBlockAttrs {
+        block_id: id.into(),
+        attrs: serde_json::Map::from_iter([("sourceRefs".into(), serde_json::Value::Array(refs))]),
+    }])
+}

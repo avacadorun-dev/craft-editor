@@ -633,3 +633,43 @@ fn coalescing_never_erases_null_empty_or_different_unknown_field_presence() {
         json!({"same":false})
     );
 }
+
+#[test]
+fn source_link_uri_policy_accepts_original_protocols_and_relative_targets() {
+    for value in [
+        "http://example.test",
+        "https://example.test",
+        "ftp://example.test",
+        "ftps://example.test",
+        "mailto:author@example.test",
+        "tel:+123",
+        "callto:author",
+        "sms:+123",
+        "cid:attachment",
+        "xmpp:author@example.test",
+        "/chapter",
+        "../chapter",
+        "chapter",
+        "#part",
+        "",
+        "HtTpS://example.test",
+    ] {
+        assert!(
+            craft_editor_model::is_allowed_link_uri(value),
+            "source-allowed URI rejected: {value}"
+        );
+    }
+    for value in [
+        "javascript:bad",
+        "java\u{0000}script:bad",
+        "data:text/html,bad",
+        "vbscript:bad",
+        "file:///private/file",
+        "custom:bad",
+    ] {
+        assert!(
+            !craft_editor_model::is_allowed_link_uri(value),
+            "source-disallowed URI accepted: {value}"
+        );
+    }
+}
