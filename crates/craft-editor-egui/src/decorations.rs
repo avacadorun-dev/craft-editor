@@ -68,6 +68,22 @@ pub trait DecorationSource {
     ) -> Result<Vec<TextUnderline>> {
         Ok(Vec::new())
     }
+
+    /// Viewport-bounded passive analysis. The ranges are measured visible native
+    /// lines in the exact current tree. During IME preedit this list is empty, so
+    /// a host need not analyze or retain uncommitted composition text.
+    ///
+    /// # Errors
+    /// Analysis failure leaves canonical writing and interactive notes available.
+    fn underlines_in_view(
+        &mut self,
+        document: &Document,
+        revision: Revision,
+        pending: &[ReplayProof],
+        _visible: &[Selection],
+    ) -> Result<Vec<TextUnderline>> {
+        self.underlines(document, revision, pending)
+    }
 }
 
 #[cfg(feature = "wordcraft-canvas")]

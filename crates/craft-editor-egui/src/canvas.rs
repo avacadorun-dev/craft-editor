@@ -375,7 +375,26 @@ impl CanvasState {
                 }
                 Err(error) => errors.push(error),
             }
-            match source.underlines(session.document(), session.revision(), &proofs) {
+            let visible = if self.preedit.is_none() {
+                self.geometry.as_ref().map_or_else(Vec::new, |geometry| {
+                    let clip = rect.intersect(ui.clip_rect());
+                    geometry.visible_text_ranges(GeometryRect {
+                        page: 0,
+                        x: clip.left() - rect.left(),
+                        y: clip.top() - rect.top(),
+                        width: clip.width(),
+                        height: clip.height(),
+                    })
+                })
+            } else {
+                vec![]
+            };
+            match source.underlines_in_view(
+                session.document(),
+                session.revision(),
+                &proofs,
+                &visible,
+            ) {
                 Ok(underlines) => {
                     if let Err(error) =
                         crate::decorations::validate_underlines(session.document(), &underlines)

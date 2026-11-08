@@ -230,6 +230,8 @@ pub struct FlowGeometry {
     placeholders: BTreeMap<String, crate::renderers::AtomPlaceholder>,
     node_geometry: Vec<NodeGeometry>,
     placeholder_geometry: Vec<AtomPlaceholderGeometry>,
+    text_windows: Vec<(GeometryRect, Selection)>,
+    text_window_max_height: f32,
 }
 
 impl FlowGeometry {
@@ -361,11 +363,19 @@ impl FlowGeometry {
             placeholders: builder.placeholders,
             node_geometry: vec![],
             placeholder_geometry: vec![],
+            text_windows: vec![],
+            text_window_max_height: 0.0,
         };
         // Viewport scheduling/overlays read these every native frame. The immutable measured
         // layout changes only with a new projection; do not rebuild its full display list on hover.
         geometry.node_geometry = geometry.measure_nodes();
         geometry.placeholder_geometry = geometry.measure_placeholders();
+        geometry.text_windows = geometry.measure_text_windows()?;
+        geometry.text_window_max_height = geometry
+            .text_windows
+            .iter()
+            .map(|(rect, _)| rect.height)
+            .fold(0.0_f32, f32::max);
         Ok(geometry)
     }
 
@@ -601,6 +611,89 @@ impl FlowGeometry {
             .into_iter()
             .map(|(page, rect)| GeometryRect::from_rect(page, rect))
             .collect())
+    }
+
+    /// Exact semantic ranges of measured text lines intersecting a viewport.
+    /// The immutable line index is built with geometry, not by rescanning manuscript
+    /// text on every repaint. Empty lines and opaque atom captions have no text range.
+    pub fn visible_text_ranges(&self, area: GeometryRect) -> Vec<Selection> {
+        if !area.x.is_finite()
+            || !area.y.is_finite()
+            || !area.width.is_finite()
+            || !area.height.is_finite()
+            || area.width <= 0.0
+            || area.height <= 0.0
+        {
+            return vec![];
+        }
+        let lower = area.y - self.text_window_max_height;
+        let start = self.text_windows.partition_point(|(rect, _)| {
+            rect.page < area.page || (rect.page == area.page && rect.y < lower)
+        });
+        self.text_windows[start..]
+            .iter()
+            .take_while(|(rect, _)| rect.page == area.page && rect.y <= area.y + area.height)
+            .filter(|(rect, _)| {
+                rect.y + rect.height >= area.y
+                    && rect.x < area.x + area.width
+                    && rect.x + rect.width > area.x
+            })
+            .map(|(_, range)| range.clone())
+            .collect()
+    }
+
+    fn measure_text_windows(&self) -> Result<Vec<(GeometryRect, Selection)>> {
+        let blocks: HashMap<_, _> = self
+            .blocks
+            .iter()
+            .map(|block| (&block.path, block))
+            .collect();
+        let mut windows = Vec::new();
+        for (page, layout) in self.measured.pages.iter().enumerate() {
+            for item in &layout.items {
+                if let Placed::Lines {
+                    path,
+                    para,
+                    l0,
+                    l1,
+                    x,
+                    y,
+                    ..
+                } = item
+                    && let Some(block) = blocks.get(path)
+                {
+                    let first_top = para.lines.get(*l0).map_or(0.0, |line| line.top);
+                    for line in para.lines.iter().take(*l1).skip(*l0) {
+                        let start = byte_to_scalar(&block.text, ByteOffset(line.start))?;
+                        let end = byte_to_scalar(&block.text, ByteOffset(line.stop))?;
+                        if start == end {
+                            continue;
+                        }
+                        windows.push((
+                            GeometryRect {
+                                page,
+                                x: *x + line.left,
+                                y: *y + line.top - first_top,
+                                width: (line.right - line.left).max(1.0),
+                                height: line.height.max(1.0),
+                            },
+                            Selection {
+                                anchor: DocPoint {
+                                    block_id: block.id.clone(),
+                                    offset: start,
+                                },
+                                head: DocPoint {
+                                    block_id: block.id.clone(),
+                                    offset: end,
+                                },
+                            },
+                        ));
+                    }
+                }
+            }
+        }
+        windows.sort_by(|(a, _), (b, _)| a.page.cmp(&b.page).then_with(|| a.y.total_cmp(&b.y)));
+        Ok(windows)
     }
 
     /// Return actual cell boxes emitted by the table layout engine.
@@ -1716,6 +1809,51 @@ mod tests {
             .y;
         assert!((loose_y - tight_y - 8.0).abs() < 0.05);
         assert_eq!(loose.upstream.styles.default_para.space_after, Some(40.0));
+        Ok(())
+    }
+
+    #[test]
+    fn visible_text_index_tracks_scrolled_unicode_lines_without_reader_rewrite() -> Result<()> {
+        let paragraphs: Vec<_> = (0..100)
+            .map(|index| {
+                json!({
+                    "type":"paragraph","attrs":{"blockId":format!("p{index}")},
+                    "content":[{"type":"text","text":format!("Paragraph {index} — Я😀 e\u{301}")}]
+                })
+            })
+            .collect();
+        let source = Document::from_json(
+            json!({"type":"doc","attrs":{"schemaVersion":1},"content":paragraphs}),
+        )?;
+        let before = source.to_json()?;
+        let geometry = FlowGeometry::new(&source, 700.0)?;
+        let first = geometry.visible_text_ranges(GeometryRect {
+            page: 0,
+            x: 0.0,
+            y: 0.0,
+            width: 700.0,
+            height: 80.0,
+        });
+        assert!(first.iter().any(|range| range.anchor.block_id == "p0"));
+        assert!(!first.iter().any(|range| range.anchor.block_id == "p99"));
+        let last = geometry
+            .caret(&point("p99", 0))?
+            .ok_or(Error::UnmappedPosition)?;
+        let scrolled = geometry.visible_text_ranges(GeometryRect {
+            page: 0,
+            x: 0.0,
+            y: last.y,
+            width: 700.0,
+            height: 80.0,
+        });
+        assert!(scrolled.iter().any(|range| range.anchor.block_id == "p99"));
+        assert!(!scrolled.iter().any(|range| range.anchor.block_id == "p0"));
+        for range in first.iter().chain(&scrolled) {
+            assert!(range.anchor.offset < range.head.offset);
+            geometry.to_native(&range.anchor)?;
+            geometry.to_native(&range.head)?;
+        }
+        assert_eq!(source.to_json()?, before);
         Ok(())
     }
 

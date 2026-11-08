@@ -15,3 +15,7 @@ All inputs are finite, positive where required and nonnegative for gaps. Invalid
 ## Passive proofing
 
 `DecorationSource::underlines` is an optional independent channel for exact revision-resolved passive proofing ranges. It never supplies an activation identity, takes pointer focus or replaces selection. The canvas paints bounded, clipped wavy strokes and an optional host-localized explanation; analysis availability, languages, cancellation, exclusions and business policy remain in the consumer. IME preedit receives the same transient position mapping as passage marks without becoming canonical authority.
+
+Viewport-aware hosts may override `underlines_in_view`. Its exact visible-line selections come from a geometry-time index, queried by page and vertical interval. The host can then analyze only readable text around visible lines with bounded chunk/caching budgets. No private note text or atom-source attributes are offered as reader text. During preedit the viewport analysis set is empty; existing non-viewport passive sources retain transient range mapping.
+
+`fonts::feature_changes_shaping` is a read-only qualification diagnostic for exact loaded faces. It compares native language-neutral glyph IDs, clusters and advances against an explicit feature value; it neither claims that a backend supports an unexposed feature switch nor changes registered font bytes.

@@ -135,6 +135,33 @@ pub fn zero_advance(family: &str, style: &str, size: f32) -> Result<f32> {
     Ok(advance as f32)
 }
 
+/// Diagnose whether an explicit OpenType feature value changes language-neutral
+/// native shaping for an exact loaded face and sample. This does not change any
+/// font, layout setting or canonical text; a host can qualify a migration policy.
+///
+/// # Errors
+/// Rejects a missing family/style instead of silently measuring a fallback.
+pub fn feature_changes_shaping(
+    family: &str,
+    style: &str,
+    text: &str,
+    tag: [u8; 4],
+    value: u32,
+) -> Result<bool> {
+    let database = FontDb::global();
+    if !database.is_loaded(family) {
+        return Err(Error::FamilyNotLoaded);
+    }
+    let face = database.face(family, style);
+    if !face.named(family) || !face.style.eq_ignore_ascii_case(style) {
+        return Err(Error::FamilyNotLoaded);
+    }
+    let baseline = wordcraft_fonts::shape(&face, text, &[], |scalar| scalar);
+    let feature = wordcraft_fonts::feature_value(&tag, value);
+    let explicit = wordcraft_fonts::shape(&face, text, &[feature], |scalar| scalar);
+    Ok(baseline != explicit)
+}
+
 /// Current shared native font generation. Include this in geometry/raster cache keys.
 pub fn generation() -> u64 {
     FontDb::global().generation()
