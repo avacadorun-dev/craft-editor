@@ -436,12 +436,142 @@ fn table_selection_return_is_an_exact_revision_bound_text_or_reverse_cell_occurr
         assert_eq!(session.document(), &before);
         assert!(!session.can_undo());
     }
-    session.select_current_table()?;
-    session.toggle_mark(Mark::new("bold"))?;
-    let before = session.document().clone();
-    let state = session.selection_state()?;
-    assert!(session.leave_table_node_selection().is_err());
-    assert_eq!(session.document(), &before);
-    assert_eq!(session.selection_state()?, state);
+    Ok(())
+}
+
+#[test]
+fn owned_formatting_and_history_keep_an_exact_exit_without_resealing_external_bookmarks()
+-> TestResult {
+    let fixture = source()?;
+    for case in fixture["cases"].as_array().ok_or("source cases")? {
+        for cells in [false, true] {
+            for action in ["bold", "heading", "quote"] {
+                let mut session = selected(&case["input"])?;
+                let previous = if cells {
+                    SelectionState::Cells(TableSelection {
+                        table_path: table_path(session.document())?,
+                        anchor: CellPoint { row: 0, column: 1 },
+                        head: CellPoint { row: 0, column: 0 },
+                    })
+                } else {
+                    SelectionState::Text(Selection {
+                        anchor: DocPoint {
+                            block_id: "a".into(),
+                            offset: ScalarOffset(1),
+                        },
+                        head: DocPoint {
+                            block_id: "a".into(),
+                            offset: ScalarOffset(3),
+                        },
+                    })
+                };
+                session.restore_selection_state(Some(previous.clone()))?;
+                let external = session.capture_selection_bookmark()?;
+                let original = session.document().clone();
+                session.select_current_table()?;
+                let selected = session.node_selection().cloned().ok_or("table")?;
+                match action {
+                    "bold" => session.toggle_mark(Mark::new("bold"))?,
+                    "heading" => {
+                        session.set_text_block_kind(TextBlockKind::Heading { level: 2 })?;
+                    }
+                    _ => {
+                        session.toggle_blockquote()?;
+                    }
+                }
+                let changed = session.document().clone();
+                let mut expected = previous.clone();
+                if let SelectionState::Cells(cells) = &mut expected {
+                    cells.table_path = table_path(session.document())?;
+                }
+                assert!(session.restore_selection_bookmark(&external).is_err());
+                assert!(session.node_selection().is_some());
+                assert!(
+                    session.leave_table_node_selection()?,
+                    "{} {action} cells={cells}",
+                    case["name"]
+                );
+                assert_eq!(session.selection_state()?, Some(expected.clone()));
+                assert_eq!(session.document(), &changed);
+                session.undo()?;
+                assert_eq!(session.document(), &original);
+                assert_eq!(session.node_selection(), Some(&selected));
+                assert!(session.leave_table_node_selection()?);
+                assert_eq!(session.selection_state()?, Some(previous));
+                session.redo()?;
+                assert_eq!(session.document(), &changed);
+                assert!(session.node_selection().is_some());
+                assert!(session.leave_table_node_selection()?);
+                assert_eq!(session.selection_state()?, Some(expected));
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn unrelated_edits_and_changed_return_writing_cannot_guess_a_new_exit() -> TestResult {
+    use craft_editor_model::{Command, Editor, Transaction};
+    let input = &source()?["cases"][0]["input"];
+    for controlled in [false, true] {
+        let mut session = selected(input)?;
+        let previous = SelectionState::Text(Selection {
+            anchor: DocPoint {
+                block_id: "a".into(),
+                offset: ScalarOffset(1),
+            },
+            head: DocPoint {
+                block_id: "a".into(),
+                offset: ScalarOffset(3),
+            },
+        });
+        session.restore_selection_state(Some(previous.clone()))?;
+        session.select_current_table()?;
+        let table = session.node_selection().cloned().ok_or("table")?;
+        let path = if controlled {
+            NodePath(vec![1, 0, 0, 0])
+        } else {
+            NodePath(vec![0])
+        };
+        let target = session.document().node_ref(&path)?;
+        let mut replacement = target.expected.as_ref().clone();
+        if controlled {
+            // A new identity with repeated writing is not the old selected occurrence.
+            replacement
+                .attrs
+                .get_or_insert_default()
+                .insert("blockId".into(), serde_json::json!("replacement-a"));
+        } else {
+            replacement
+                .attrs
+                .get_or_insert_default()
+                .insert("future".into(), serde_json::json!(true));
+        }
+        let commands = vec![Command::ReplaceNode {
+            target,
+            replacement: Box::new(replacement),
+        }];
+        if controlled {
+            let mut candidate = Editor::new(session.document().clone(), session.revision());
+            candidate.apply(Transaction {
+                base_revision: candidate.revision(),
+                commands: commands.clone(),
+            })?;
+            let after = candidate.document().node_ref(&table.path)?;
+            session.apply_commands_with_node_selection(commands, after)?;
+        } else {
+            session.apply_commands(commands)?;
+        }
+        let changed = session.document().clone();
+        let state = session.selection_state()?;
+        assert!(session.leave_table_node_selection().is_err());
+        assert_eq!(session.document(), &changed);
+        assert_eq!(session.selection_state()?, state);
+        session.undo()?;
+        assert_eq!(session.document().to_json()?, *input);
+        assert_eq!(session.node_selection(), Some(&table));
+        assert!(session.leave_table_node_selection()?);
+        assert_eq!(session.selection_state()?, Some(previous));
+    }
     Ok(())
 }

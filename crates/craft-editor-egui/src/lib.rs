@@ -38,6 +38,7 @@ mod structure;
 /// Canonical prose block kinds used by the source-compatible format command.
 pub use structure::{TextBlockKind, TextBlockState};
 mod table_node;
+mod table_return;
 mod table_selection;
 pub use craft_editor_model::ListKind;
 pub use insertion::ContentSlice;
@@ -177,6 +178,8 @@ struct SelectionHistory {
     after_node: Option<NodeRef>,
     before_cells: Option<TableSelection>,
     after_cells: Option<TableSelection>,
+    before_table_return: Option<SelectionBookmark>,
+    after_table_return: Option<SelectionBookmark>,
 }
 struct Composition {
     document: Document,
@@ -376,6 +379,7 @@ impl EditorSession {
         let before = self.selection.clone();
         let before_node = self.node_selection.clone();
         let before_cells = self.table_selection.clone();
+        let before_table_return = self.current_table_return();
         let change = self.editor.apply(Transaction {
             base_revision: self.revision(),
             commands,
@@ -438,6 +442,8 @@ impl EditorSession {
                 after_node: self.node_selection.clone(),
                 before_cells,
                 after_cells: self.table_selection.clone(),
+                before_table_return,
+                after_table_return: self.current_table_return(),
             });
             self.redo_selection.clear();
             self.pending.push(change.clone());
@@ -483,6 +489,7 @@ impl EditorSession {
         self.selection = Some(selection);
         self.node_selection = None;
         self.table_selection = None;
+        self.table_node_return = None;
         self.restore_cursor = true;
         if change.before_revision != change.after_revision
             && let Some(history) = self.undo_selection.last_mut()
@@ -508,10 +515,13 @@ impl EditorSession {
         candidate.apply_commands(commands.clone())?;
         self.validate_table_capacity(candidate.document())?;
         candidate.select_node(selection.clone())?;
+        let table_return =
+            self.retained_table_return(candidate.document(), candidate.revision(), &selection)?;
         let change = self.apply_commands(commands)?;
         self.selection = None;
         self.node_selection = Some(selection);
         self.table_selection = None;
+        self.table_node_return = table_return;
         self.stored_marks = None;
         if change.before_revision != change.after_revision
             && let Some(history) = self.undo_selection.last_mut()
@@ -519,6 +529,7 @@ impl EditorSession {
             history.after = None;
             history.after_node = self.node_selection.clone();
             history.after_cells = None;
+            history.after_table_return = self.table_node_return.clone();
         }
         #[cfg(feature = "wordcraft-canvas")]
         self.request_scroll_to_caret();
@@ -1099,6 +1110,7 @@ impl EditorSession {
             self.selection = entry.before.clone();
             self.node_selection = entry.before_node.clone();
             self.table_selection = entry.before_cells.clone();
+            self.table_node_return = self.history_table_return(entry.before_table_return.as_ref());
             self.redo_selection.push(entry);
         }
         self.pending.push(change.clone());
@@ -1116,6 +1128,7 @@ impl EditorSession {
             self.selection = entry.after.clone();
             self.node_selection = entry.after_node.clone();
             self.table_selection = entry.after_cells.clone();
+            self.table_node_return = self.history_table_return(entry.after_table_return.as_ref());
             self.undo_selection.push(entry);
         }
         self.pending.push(change.clone());

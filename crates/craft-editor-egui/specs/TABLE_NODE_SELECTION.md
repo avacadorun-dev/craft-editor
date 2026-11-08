@@ -35,3 +35,9 @@ An actual `goToNextCell` source probe returns false without canonical mutation f
 ## Native clipboard transport qualification
 
 The hosted macOS pasteboard and isolated X11 probes must also publish a fresh synthetic selected table, read back exact private/HTML/plain formats, acknowledge Cut only after ownership, and Undo to the exact canonical tree and table NodeRef. The fixture includes merged header widths, nested content, Unicode and retained unknown/provenance attributes. This establishes actual OS format ownership and session history; it does not establish native window gestures, IME or accessibility acceptance. Ambient clipboard contents are never read or printed before a fresh synthetic fixture is installed.
+
+## Reversible exit after controlled whole-table formatting
+
+Independent source UX review identified that a strictly old-revision internal return bookmark traps Escape after an ordinary owned Bold/Heading/Quote/resize, especially for a sole table. External host bookmarks remain strictly session/revision sealed. Only the session's private whole-table return may be reissued through its proven owned post-selection transaction: original text identities and exact inline text must remain; a cell return requires the same table topology plus unchanged originating endpoint identities/text; an opaque-node return must resolve one exact retained node. Ambiguous or changed occurrences invalidate the return without guessed replacement.
+
+Selection history stores the private pre/post return snapshots. Undo/Redo may reseal a validated snapshot only after the engine restores its corresponding exact canonical/selected-node history state. Test own formatting, resize, wrapper moves, reverse cells and sole-table Escape, alongside unrelated/stale/foreign and changed/deleted return refusals. A failed edit or clipboard publication never advances or reissues a bookmark.

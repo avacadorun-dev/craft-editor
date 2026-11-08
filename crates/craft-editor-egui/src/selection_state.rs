@@ -116,10 +116,10 @@ mod tests {
 /// ```
 #[derive(Debug, Clone)]
 pub struct SelectionBookmark {
-    session: std::sync::Arc<()>,
-    revision: craft_editor_model::Revision,
-    selection: Option<SelectionState>,
-    stored_marks: Option<Vec<craft_editor_model::Mark>>,
+    pub(crate) session: std::sync::Arc<()>,
+    pub(crate) revision: craft_editor_model::Revision,
+    pub(crate) selection: Option<SelectionState>,
+    pub(crate) stored_marks: Option<Vec<craft_editor_model::Mark>>,
 }
 impl EditorSession {
     /// Freeze one selection and its stored marks without cloning unrelated manuscript content.

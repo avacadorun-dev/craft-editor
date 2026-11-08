@@ -296,5 +296,26 @@ fn wide_table_node_selection_has_a_bounded_frame_and_survives_final_track_resize
     );
     frame(&mut session, &ctx, vec![]);
     assert_eq!(session.canvas_table_viewports().len(), 1);
+    let (exited, _) = frame(&mut session, &ctx, vec![key(Key::Escape)]);
+    assert!(exited.errors.is_empty());
+    assert_eq!(session.selection(), Some(&text("c-62", 0)));
+    session.select_current_table()?;
+    let (formatted, _) = frame(
+        &mut session,
+        &ctx,
+        vec![Event::Key {
+            key: Key::B,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::COMMAND,
+        }],
+    );
+    assert!(formatted.errors.is_empty());
+    assert!(session.node_selection().is_some());
+    let (exited, _) = frame(&mut session, &ctx, vec![key(Key::Escape)]);
+    assert!(exited.errors.is_empty());
+    assert_eq!(session.selection(), Some(&text("c-62", 0)));
+    assert!(session.node_selection().is_none());
     Ok(())
 }
