@@ -305,3 +305,142 @@ fn ordinary_dialog_text_edit_keeps_native_paste_without_intercepting_rich_canvas
     assert_eq!(session.document(), &original);
     Ok(())
 }
+
+#[test]
+fn pending_copy_refuses_paste_across_shared_sessions_then_real_ack_releases_the_gate() -> TestResult
+{
+    let gate = Arc::new(craft_editor_egui::clipboard::ClipboardIntentGate::default());
+    let mut source = editor()?;
+    let mut destination = editor()?;
+    source.set_clipboard_intent_gate(gate.clone())?;
+    destination.set_clipboard_intent_gate(gate.clone())?;
+    let original = destination.document().clone();
+    let Some(ClipboardRequest::Copy { bundle, ticket }) = source.begin_copy()? else {
+        return Err("missing copy".into());
+    };
+    let provider = Arc::new(Provider::default());
+    destination.set_clipboard_provider(Some(provider.clone()));
+    assert!(gate.has_pending_write());
+    assert!(matches!(
+        destination.paste_from_clipboard(),
+        Err(craft_editor_egui::Error::Clipboard(
+            ClipboardError::WritePending
+        ))
+    ));
+    assert!(matches!(
+        destination.begin_paste(ClipboardBundle {
+            plain: "old OS content".into(),
+            ..Default::default()
+        }),
+        Err(craft_editor_egui::Error::Clipboard(
+            ClipboardError::WritePending
+        ))
+    ));
+    assert_eq!(provider.reads.load(Ordering::Relaxed), 0);
+    assert_eq!(destination.document(), &original);
+    ticket.write(provider.as_ref(), &bundle)?;
+    assert!(!gate.has_pending_write());
+    destination.paste_from_clipboard()?;
+    assert_eq!(destination.document().block_text("p")?, "ABCDE");
+    assert_eq!(provider.reads.load(Ordering::Relaxed), 1);
+    Ok(())
+}
+#[test]
+fn failed_dropped_and_rejected_write_tickets_release_pending_state_without_fake_ack() -> TestResult
+{
+    for outcome in 0..3 {
+        let session = editor()?;
+        let gate = session.clipboard_intent_gate();
+        let Some(ClipboardRequest::Copy { bundle, ticket }) = session.begin_copy()? else {
+            return Err("missing copy".into());
+        };
+        assert!(gate.has_pending_write());
+        match outcome {
+            0 => drop(ticket),
+            1 => {
+                assert!(
+                    ticket
+                        .write(
+                            &Provider {
+                                fail: true,
+                                ..Default::default()
+                            },
+                            &bundle
+                        )
+                        .is_err()
+                );
+            }
+            _ => {
+                let mut changed = (*bundle).clone();
+                changed.plain = "different source".into();
+                assert!(ticket.write(&Provider::default(), &changed).is_err());
+            }
+        }
+        assert!(!gate.has_pending_write());
+        assert!(!session.can_undo());
+    }
+    Ok(())
+}
+#[test]
+#[cfg(feature = "wordcraft-canvas")]
+fn copy_then_paste_in_one_native_frame_refuses_before_reading_old_os_contents() -> TestResult {
+    let mut session = editor()?;
+    let original = session.document().clone();
+    let provider = Arc::new(Provider::default());
+    *provider.bundle.lock().map_err(|_| "mock lock")? = ClipboardBundle {
+        plain: "WRONG OLD CONTENT".into(),
+        ..Default::default()
+    };
+    session.set_clipboard_provider(Some(provider.clone()));
+    session.set_clipboard_mode(ClipboardMode::Deferred)?;
+    let context = egui::Context::default();
+    context.memory_mut(|memory| memory.request_focus(session.options.id));
+    let mut errors = Vec::new();
+    let mut output = context.run_ui(
+        egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::Vec2::new(700.0, 650.0),
+            )),
+            events: vec![
+                egui::Event::Copy,
+                egui::Event::Paste("WRONG OLD CONTENT".into()),
+            ],
+            focused: true,
+            ..Default::default()
+        },
+        |root| {
+            egui::CentralPanel::default().show(root, |ui| {
+                errors.extend(session.show_canvas(ui, &Default::default()).errors);
+            });
+        },
+    );
+    output.textures_delta.clear();
+    assert_eq!(errors.len(), 1);
+    assert!(matches!(
+        errors[0],
+        craft_editor_egui::Error::Clipboard(ClipboardError::WritePending)
+    ));
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.selection(), Some(&selection(1, 4)));
+    assert_eq!(provider.reads.load(Ordering::Relaxed), 0);
+    assert_eq!(session.take_clipboard_requests().len(), 1);
+    session.cancel_clipboard_requests()?;
+    assert!(!session.clipboard_intent_gate().has_pending_write());
+    Ok(())
+}
+#[test]
+fn changing_gate_cannot_abandon_an_outstanding_local_intent() -> TestResult {
+    let mut session = editor()?;
+    let request = session.begin_copy()?.ok_or("missing copy")?;
+    let replacement = Arc::new(craft_editor_egui::clipboard::ClipboardIntentGate::default());
+    assert!(
+        session
+            .set_clipboard_intent_gate(replacement.clone())
+            .is_err()
+    );
+    drop(request);
+    session.set_clipboard_intent_gate(replacement.clone())?;
+    assert!(Arc::ptr_eq(&replacement, &session.clipboard_intent_gate()));
+    Ok(())
+}

@@ -10,7 +10,10 @@ use crate::{EditorSession, Error, Result, insertion, projection::Projection};
 
 mod deferred;
 pub(crate) use deferred::DeferredState;
-pub use deferred::{ClipboardMode, ClipboardRequest, CutGuard, PasteGuard, WriteAck, WriteTicket};
+pub use deferred::{
+    ClipboardIntentGate, ClipboardMode, ClipboardRequest, CutGuard, PasteGuard, WriteAck,
+    WriteTicket,
+};
 
 mod html;
 #[cfg(feature = "native-clipboard")]
@@ -43,6 +46,9 @@ pub enum ClipboardError {
     /// A write acknowledgement does not match the captured content or Cut request.
     #[error("clipboard_invalid_acknowledgement")]
     InvalidAcknowledgement,
+    /// A local Copy/Cut has not acknowledged its write; retry Paste after publication completes.
+    #[error("clipboard_write_pending")]
+    WritePending,
     /// The bounded host-request queue needs to be drained before another request is captured.
     #[error("clipboard_busy")]
     Busy,
@@ -395,6 +401,9 @@ impl EditorSession {
     }
     /// Paste native representations without fetching resources or silently flattening rich input.
     pub fn paste_from_clipboard(&mut self) -> Result<Change> {
+        if self.clipboard_intent_gate().has_pending_write() {
+            return Err(ClipboardError::WritePending.into());
+        }
         let provider = self
             .clipboard_provider
             .clone()

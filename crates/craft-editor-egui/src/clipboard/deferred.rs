@@ -3,7 +3,10 @@ use super::{ClipboardBundle, ClipboardError, ClipboardProvider, ClipboardResult}
 use crate::{EditorSession, Error, Result, Selection};
 use craft_editor_model::{Change, NodeRef, Revision};
 use std::collections::VecDeque;
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
 
 /// Whether focused native canvas commands execute immediately or become host jobs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -14,8 +17,40 @@ pub enum ClipboardMode {
     /// Capture an immutable request; the host performs heavy media work off the UI thread.
     Deferred,
 }
+/// Shared application-local Copy/Cut intent state. It is independent of mutable OS contents.
+///
+/// Share one Arc across all application sessions. A pending local write causes Paste to refuse
+/// before reading an older OS buffer. This gate never treats matching plain text as identity.
+#[derive(Debug, Default)]
+pub struct ClipboardIntentGate {
+    pending: AtomicUsize,
+}
+impl ClipboardIntentGate {
+    /// Whether a captured local Copy/Cut still owns an unacknowledged write ticket.
+    pub fn has_pending_write(&self) -> bool {
+        self.pending.load(Ordering::Acquire) != 0
+    }
+    fn register(self: &Arc<Self>) -> ClipboardResult<PendingWrite> {
+        self.pending
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |value| {
+                value.checked_add(1)
+            })
+            .map_err(|_| ClipboardError::ResourceLimit)?;
+        Ok(PendingWrite { gate: self.clone() })
+    }
+}
+struct PendingWrite {
+    gate: Arc<ClipboardIntentGate>,
+}
+impl Drop for PendingWrite {
+    fn drop(&mut self) {
+        // Each increment creates exactly one private, non-cloneable registration.
+        self.gate.pending.fetch_sub(1, Ordering::AcqRel);
+    }
+}
 pub(crate) struct DeferredState {
     identity: Arc<()>,
+    intent_gate: Arc<ClipboardIntentGate>,
     generation: u64,
     mode: ClipboardMode,
     requests: VecDeque<ClipboardRequest>,
@@ -24,6 +59,7 @@ impl Default for DeferredState {
     fn default() -> Self {
         Self {
             identity: Arc::new(()),
+            intent_gate: Arc::new(ClipboardIntentGate::default()),
             generation: 0,
             mode: ClipboardMode::Synchronous,
             requests: VecDeque::new(),
@@ -77,6 +113,7 @@ pub struct PasteGuard {
 }
 /// A one-shot capability to acknowledge an actual write of captured canonical source content.
 pub struct WriteTicket {
+    _pending: PendingWrite,
     source: Arc<ClipboardBundle>,
     identity: Arc<()>,
 }
@@ -137,6 +174,19 @@ impl Guard {
     }
 }
 impl EditorSession {
+    /// Install one application-lifetime intent gate before dispatching clipboard jobs.
+    /// A session with its own outstanding tickets cannot abandon that pending intent state.
+    pub fn set_clipboard_intent_gate(&mut self, gate: Arc<ClipboardIntentGate>) -> Result<()> {
+        if self.clipboard_state.intent_gate.has_pending_write() {
+            return Err(ClipboardError::WritePending.into());
+        }
+        self.clipboard_state.intent_gate = gate;
+        Ok(())
+    }
+    /// Shared local intent state; hosts may consult it before a Paste into another native widget.
+    pub fn clipboard_intent_gate(&self) -> Arc<ClipboardIntentGate> {
+        self.clipboard_state.intent_gate.clone()
+    }
     /// Select the clipboard execution mode. Changing it invalidates old one-shot job guards.
     pub fn set_clipboard_mode(&mut self, mode: ClipboardMode) -> Result<()> {
         if self.clipboard_state.mode != mode {
@@ -172,6 +222,7 @@ impl EditorSession {
         let bundle = Arc::new(bundle);
         Ok(Some(ClipboardRequest::Copy {
             ticket: WriteTicket {
+                _pending: self.clipboard_state.intent_gate.register()?,
                 source: bundle.clone(),
                 identity: Arc::new(()),
             },
@@ -188,6 +239,7 @@ impl EditorSession {
         let identity = Arc::new(());
         Ok(Some(ClipboardRequest::Cut {
             ticket: WriteTicket {
+                _pending: self.clipboard_state.intent_gate.register()?,
                 source: bundle.clone(),
                 identity: identity.clone(),
             },
@@ -200,6 +252,9 @@ impl EditorSession {
     }
     /// Bind one already captured raw clipboard bundle to the exact current destination.
     pub fn begin_paste(&self, bundle: ClipboardBundle) -> Result<ClipboardRequest> {
+        if self.clipboard_state.intent_gate.has_pending_write() {
+            return Err(ClipboardError::WritePending.into());
+        }
         Ok(ClipboardRequest::Paste {
             bundle: Arc::new(bundle),
             guard: PasteGuard {
@@ -247,6 +302,9 @@ impl EditorSession {
         self.check_clipboard_queue()?;
         if self.is_composing() {
             return Err(Error::CompositionActive);
+        }
+        if self.clipboard_state.intent_gate.has_pending_write() {
+            return Err(ClipboardError::WritePending.into());
         }
         // Capture native representations ONCE, before the host queues media work. Do not use the
         // egui text event or an equal-plaintext cache as a surrogate identity for rich clipboard.
