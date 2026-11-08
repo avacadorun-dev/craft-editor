@@ -696,7 +696,7 @@ impl EditorSession {
         let header_row = grid
             .cells
             .iter()
-            .filter(|cell| cell.row <= grid.rows - 1 && grid.rows - 1 < cell.bottom())
+            .filter(|cell| cell.row < grid.rows && grid.rows - 1 < cell.bottom())
             .all(|cell| {
                 table.expected.children()[cell.row].children()[cell.cell_index].node_type
                     == "tableHeader"

@@ -290,7 +290,11 @@ mod tests {
             },
         );
         output.textures_delta.clear();
-        (result.expect("canvas frame"), output)
+        let result = match result {
+            Some(result) => result,
+            None => panic!("canvas frame did not run"),
+        };
+        (result, output)
     }
     fn key(key: Key, modifiers: Modifiers) -> Event {
         Event::Key {
@@ -500,11 +504,20 @@ mod tests {
             } else {
                 let selected = session.cell_selection().ok_or("missing rectangle")?;
                 assert_eq!(selected.anchor, anchor);
-                if case["handled"] == false {
-                    assert_eq!(selected.head, head);
-                } else {
-                    assert_ne!(selected.head, head);
-                }
+                let source_point = |field: &str| -> Result<CellPoint> {
+                    match case["cells"][field]
+                        .as_str()
+                        .ok_or(Error::InvalidSelection)?
+                    {
+                        "a" => Ok(CellPoint { row: 0, column: 0 }),
+                        "b" => Ok(CellPoint { row: 0, column: 1 }),
+                        "c" => Ok(CellPoint { row: 1, column: 0 }),
+                        "d" => Ok(CellPoint { row: 1, column: 1 }),
+                        _ => Err(Error::InvalidSelection),
+                    }
+                };
+                assert_eq!(selected.anchor, source_point("anchorId")?, "{case}");
+                assert_eq!(selected.head, source_point("headId")?, "{case}");
             }
             assert_eq!(session.document(), &original);
             assert!(!session.can_undo());
