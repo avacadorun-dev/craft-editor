@@ -161,6 +161,7 @@ impl CanvasState {
         ui: &mut egui::Ui,
         style: &CanvasStyle,
         resolver: Option<&dyn crate::renderers::AtomResolver>,
+        decorations: Option<&mut dyn crate::decorations::DecorationSource>,
     ) -> ViewResponse {
         let mut errors = Vec::new();
         let width = ui.available_width().max(144.0);
@@ -170,6 +171,7 @@ impl CanvasState {
                     .allocate_response(Vec2::new(width, style.min_height.max(0.0)), Sense::hover()),
                 changes: session.take_pending_changes(),
                 errors: vec![error],
+                activated_decorations: vec![],
             };
         }
         if session.selection.is_none()
@@ -286,6 +288,61 @@ impl CanvasState {
         if let Err(error) = self.paint(ui, rect, style, &response) {
             errors.push(error);
         }
+        let mut activated_decorations = Vec::new();
+        if let Some(source) = decorations {
+            let proofs: Vec<_> = session
+                .pending
+                .iter()
+                .map(|change| change.replay_proof())
+                .collect();
+            match source.decorations(session.document(), session.revision(), &proofs) {
+                Ok(decorations) => {
+                    if let Err(error) =
+                        crate::decorations::validate(session.document(), &decorations)
+                    {
+                        errors.push(error);
+                    } else if self.preedit.is_none()
+                        && let Some(geometry) = &self.geometry
+                    {
+                        for decoration in decorations {
+                            match geometry.selection_rects(&decoration.range) {
+                                Ok(rectangles) => {
+                                    let tint = Color32::from_rgba_unmultiplied(
+                                        decoration.color.r(),
+                                        decoration.color.g(),
+                                        decoration.color.b(),
+                                        decoration.color.a().min(65),
+                                    );
+                                    let hovered = response.hover_pos().is_some_and(|pointer| {
+                                        rectangles.iter().any(|range| {
+                                            on_screen(rect.min, *range).contains(pointer)
+                                        })
+                                    });
+                                    for range in rectangles {
+                                        let range = on_screen(rect.min, range);
+                                        ui.painter().rect_filled(range, 1.0, tint);
+                                        ui.painter().line_segment(
+                                            [range.left_bottom(), range.right_bottom()],
+                                            egui::Stroke::new(1.0, decoration.color),
+                                        );
+                                    }
+                                    if hovered {
+                                        response.clone().on_hover_text(&decoration.label);
+                                        if response.clicked()
+                                            && !ui.input(|input| input.modifiers.any())
+                                        {
+                                            activated_decorations.push(decoration.id);
+                                        }
+                                    }
+                                }
+                                Err(error) => errors.push(error.into()),
+                            }
+                        }
+                    }
+                }
+                Err(error) => errors.push(error),
+            }
+        }
         if let Some(geometry) = &self.geometry {
             let selection = session.selection.as_ref();
             if let Some(reference) = &session.node_selection
@@ -378,6 +435,7 @@ impl CanvasState {
             response,
             changes: session.take_pending_changes(),
             errors,
+            activated_decorations,
         }
     }
 

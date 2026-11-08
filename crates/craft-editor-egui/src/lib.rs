@@ -27,6 +27,9 @@ pub mod syntax;
 /// Canonical rich clipboard slices, source paste rules and optional acknowledged native transport.
 pub mod clipboard;
 
+/// Host-resolved text decoration and activation contracts.
+pub mod decorations;
+
 mod insertion;
 mod structure;
 pub use craft_editor_model::ListKind;
@@ -47,6 +50,12 @@ use std::ops::Range;
 /// Content-free view diagnostic; hosts localize the error code.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// A host decoration has duplicate identity or an invalid exact range.
+    #[error("invalid_text_decoration")]
+    InvalidDecoration,
+    /// Authoritative host metadata could not be resolved for the current revision.
+    #[error("text_decoration_source_failed")]
+    DecorationSource,
     /// Clipboard transport or envelope validation failed without discarding selected content.
     #[error(transparent)]
     Clipboard(#[from] clipboard::ClipboardError),
@@ -138,6 +147,8 @@ pub struct ViewResponse {
     pub changes: Vec<Change>,
     /// Rejected input or unsupported operations; canonical data remains unchanged on failure.
     pub errors: Vec<Error>,
+    /// Opaque host identities activated by a deliberate click on decorated text.
+    pub activated_decorations: Vec<String>,
 }
 #[derive(Clone)]
 struct SelectionHistory {
@@ -915,7 +926,7 @@ impl EditorSession {
     #[cfg(feature = "wordcraft-canvas")]
     pub fn show_canvas(&mut self, ui: &mut egui::Ui, style: &canvas::CanvasStyle) -> ViewResponse {
         let mut state = std::mem::take(&mut self.canvas_state);
-        let response = state.show(self, ui, style, None);
+        let response = state.show(self, ui, style, None, None);
         self.canvas_state = state;
         response
     }
@@ -928,10 +939,28 @@ impl EditorSession {
         resolver: &dyn renderers::AtomResolver,
     ) -> ViewResponse {
         let mut state = std::mem::take(&mut self.canvas_state);
-        let response = state.show(self, ui, style, Some(resolver));
+        let response = state.show(self, ui, style, Some(resolver), None);
         self.canvas_state = state;
         response
     }
+    /// Paint one native canvas with independently resolved atoms and host metadata.
+    ///
+    /// Decoration resolution runs after native input, so exact host anchors can be
+    /// verified against the same canonical revision used for geometry and painting.
+    #[cfg(feature = "wordcraft-canvas")]
+    pub fn show_canvas_with_sources(
+        &mut self,
+        ui: &mut egui::Ui,
+        style: &canvas::CanvasStyle,
+        atoms: Option<&dyn renderers::AtomResolver>,
+        decorations: Option<&mut dyn decorations::DecorationSource>,
+    ) -> ViewResponse {
+        let mut state = std::mem::take(&mut self.canvas_state);
+        let output = state.show(self, ui, style, atoms, decorations);
+        self.canvas_state = state;
+        output
+    }
+
     /// Display one native input surface for the complete editable traversal.
     ///
     /// Native egui caret, hit testing, shifted selection, IME and plain clipboard are reused.
@@ -984,6 +1013,7 @@ impl EditorSession {
                     response: ui.allocate_response(Vec2::ZERO, egui::Sense::hover()),
                     changes: self.take_pending_changes(),
                     errors: vec![error],
+                    activated_decorations: vec![],
                 };
             }
         };
@@ -1083,6 +1113,7 @@ impl EditorSession {
             response: output.response.response,
             changes: self.take_pending_changes(),
             errors,
+            activated_decorations: vec![],
         }
     }
 }

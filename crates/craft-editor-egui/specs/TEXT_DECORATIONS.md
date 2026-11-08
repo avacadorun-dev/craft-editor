@@ -1,0 +1,11 @@
+# Host-resolved native text decorations
+
+Status: implementation checkpoint, unqualified until hosted tests and actual native acceptance. Consumer tracking: WriterCraft issues #2 and #4. This generic library does not own note persistence, lifecycle, dictionary or project policy.
+
+`TextDecoration` contains an opaque host ID, exact directed scalar selection, semantic tint and localized label. It is ephemeral and never becomes a canonical mark, inserted text or an Undo item. Duplicate identities and invalid/empty ranges fail visibly before potentially stale marks are painted.
+
+`DecorationSource::decorations(document, revision, pending_proofs)` runs after the current frame's native events and geometry refresh. The consumer combines previously drained pending proofs with the fresh undrained journal, then resolves authoritative metadata in memory. Database/filesystem/network acquisition belongs outside paint. Consumer contexts must be immutable and revision-guarded; no public raw position map is granted persistence authority.
+
+`show_canvas_with_sources` keeps atom rendering and metadata independent. A metadata failure does not prevent prose input or replace the whole document. Overlay colors retain glyph readability. A deliberate unmodified primary click returns the opaque host identity through `ViewResponse::activated_decorations`; native caret/drag behavior remains governed by the same input surface. Existing view entrypoints opt out explicitly and preserve their behavior.
+
+Synthetic native-frame fixtures cover persistence after caret movement, same-frame proof delivery and paint after typing, readable prose during metadata failure, and exact identity activation without canonical mutation. These are not actual OS/IME/accessibility acceptance. During an in-flight native preedit, authoritative canonical decorations are withheld rather than painted at guessed offsets; full IME visual continuity remains a required integration check. Parent-block/legacy annotation projection is a separate exact-coordinate adapter, never quote search.
