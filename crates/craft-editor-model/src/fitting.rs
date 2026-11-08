@@ -3,7 +3,7 @@ use crate::{
     Command, Document, Error, Mark, Node, NodePath, NodeRef, Result, ScalarOffset, TextPoint,
 };
 use prosemirror::{
-    dynamic::{DynamicSchema, types::Dyn},
+    dynamic::{DynamicSchema, schema::SchemaSpec, types::Dyn},
     model::{Fragment, Slice},
     transform::{Mappable, StepMap, Transform},
 };
@@ -773,7 +773,20 @@ fn fit_at<F: FnMut() -> Result<String>>(
     for node in content {
         native_content.push(bridge.encode(node, None, 0, true)?);
     }
-    let schema = DynamicSchema::from_json(&bridge.spec)
+    // Schema node order decides filler/wrapping preference. Value's sorted object map
+    // cannot replace the original ordered schema (whose default block is paragraph).
+    let mut spec: SchemaSpec = serde_json::from_str(include_str!("fitting_schema.json"))?;
+    for (name, node) in &mut spec.nodes {
+        *node = serde_json::from_value(bridge.spec["nodes"][name].clone())?;
+    }
+    for (name, mark) in &mut spec.marks {
+        *mark = serde_json::from_value(bridge.spec["marks"][name].clone())?;
+    }
+    spec.marks.insert(
+        LEAF_TOKEN.into(),
+        serde_json::from_value(bridge.spec["marks"][LEAF_TOKEN].clone())?,
+    );
+    let schema = DynamicSchema::from_spec(spec)
         .map_err(|_| Error::InvalidDocument("fitting_schema".into()))?;
     let (value, steps, incoming_size) = schema.with_types(|| -> Result<_> {
         let native = schema
