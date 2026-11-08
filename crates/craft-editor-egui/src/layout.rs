@@ -171,6 +171,17 @@ pub struct CellGeometry {
     pub rect: GeometryRect,
 }
 
+/// One actual native logical-column boundary, including a merged cell's internal tracks.
+#[derive(Debug, Clone)]
+pub struct ColumnGeometry {
+    /// Exact canonical table location in this measured document.
+    pub table_path: NodePath,
+    /// Logical column index, starting at zero.
+    pub column: usize,
+    /// Track's actual native rectangle in document points.
+    pub rect: GeometryRect,
+}
+
 /// Bounds of a canonical opaque atom, including its native caption where present.
 #[derive(Debug, Clone)]
 pub struct NodeGeometry {
@@ -224,6 +235,7 @@ pub struct FlowGeometry {
     measured: DocLayout,
     blocks: Vec<BlockMap>,
     cell_paths: HashMap<(Path, usize, usize), NodePath>,
+    table_tracks: HashMap<NodePath, Vec<f32>>,
     atom_paths: HashMap<String, NodePath>,
     node_paths: HashMap<Path, NodePath>,
     syntax_reports: Vec<SyntaxReport>,
@@ -295,6 +307,7 @@ impl FlowGeometry {
         let mut builder = Builder {
             blocks: Vec::new(),
             cell_paths: HashMap::new(),
+            table_tracks: HashMap::new(),
             atom_size,
             style,
             resolver,
@@ -357,6 +370,7 @@ impl FlowGeometry {
             measured,
             blocks: builder.blocks,
             cell_paths: builder.cell_paths,
+            table_tracks: builder.table_tracks,
             atom_paths: builder.atom_paths,
             node_paths: builder.node_paths,
             syntax_reports: builder.syntax_reports,
@@ -726,6 +740,56 @@ impl FlowGeometry {
         Ok(cells)
     }
 
+    /// Resolve real column tracks from measured cell boxes, including invisible merged boundaries.
+    pub fn columns(&self, source: &Document) -> Result<Vec<ColumnGeometry>> {
+        let cells = self.cells()?;
+        let mut columns = Vec::new();
+        for (path, tracks) in &self.table_tracks {
+            let grid = craft_editor_model::TableGrid::new(source.node(path)?)?;
+            let matching: Vec<_> = cells
+                .iter()
+                .filter(|cell| {
+                    cell.rect.page == 0
+                        && cell.canonical_path.0.len() == path.0.len() + 2
+                        && cell.canonical_path.0.starts_with(&path.0)
+                })
+                .collect();
+            let Some(first) = matching.first() else {
+                continue;
+            };
+            let origin = grid
+                .cells
+                .iter()
+                .find(|cell| first.canonical_path == path.child(cell.row).child(cell.cell_index))
+                .ok_or(Error::UnmappedPosition)?;
+            let x = first.rect.x - tracks.iter().take(origin.column).sum::<f32>();
+            let top = matching
+                .iter()
+                .map(|cell| cell.rect.y)
+                .fold(f32::INFINITY, f32::min);
+            let bottom = matching
+                .iter()
+                .map(|cell| cell.rect.y + cell.rect.height)
+                .fold(0.0_f32, f32::max);
+            let mut left = x;
+            for (column, width) in tracks.iter().copied().enumerate() {
+                columns.push(ColumnGeometry {
+                    table_path: path.clone(),
+                    column,
+                    rect: GeometryRect {
+                        page: 0,
+                        x: left,
+                        y: top,
+                        width,
+                        height: bottom - top,
+                    },
+                });
+                left += width;
+            }
+        }
+        Ok(columns)
+    }
+
     /// Actual selectable opaque-node bounds, with native caption and separator line geometry.
     pub fn nodes(&self) -> Vec<NodeGeometry> {
         self.node_geometry.clone()
@@ -898,6 +962,7 @@ struct ParagraphContext {
 struct Builder<'a, F> {
     blocks: Vec<BlockMap>,
     cell_paths: HashMap<(Path, usize, usize), NodePath>,
+    table_tracks: HashMap<NodePath, Vec<f32>>,
     atom_size: &'a F,
     style: Option<&'a GeometryStyle>,
     resolver: Option<&'a dyn crate::renderers::AtomResolver>,
@@ -1375,6 +1440,34 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
         width: f32,
     ) -> Result<Table> {
         let maximum = wordcraft_doc::table::MAX_COLS;
+        let canonical_grid = craft_editor_model::TableGrid::new(node)?;
+        if canonical_grid.columns > maximum {
+            return Err(Error::BackendColumnLimit {
+                requested: canonical_grid.columns,
+                maximum,
+            });
+        }
+        let explicit: f32 = canonical_grid
+            .column_widths
+            .values()
+            .map(|width| *width as f32)
+            .sum();
+        let automatic = canonical_grid.columns - canonical_grid.column_widths.len();
+        let auto_width = if automatic == 0 {
+            0.0
+        } else {
+            ((width - explicit) / automatic as f32).max(25.0)
+        };
+        let tracks: Vec<f32> = (0..canonical_grid.columns)
+            .map(|column| {
+                canonical_grid
+                    .column_widths
+                    .get(&column)
+                    .map_or(auto_width, |value| *value as f32)
+            })
+            .collect();
+        self.table_tracks
+            .insert(NodePath(canonical_path.to_vec()), tracks.clone());
         let mut active: Vec<Option<ActiveSpan>> = vec![None; maximum];
         let mut rows = Vec::new();
         let mut column_count = 0;
@@ -1435,8 +1528,16 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
                 {
                     cell.props.shading = Some(rgb(style.table_header));
                 }
-                cell.blocks =
-                    self.blocks(source_cell.children(), &word_path, &source_path, width)?;
+                let cell_width = tracks[column..end].iter().sum::<f32>();
+                cell.blocks = self.blocks(
+                    source_cell.children(),
+                    &word_path,
+                    &source_path,
+                    (cell_width - 18.0).max(1.0),
+                )?;
+                if let Some(align) = source_cell.string_attr("align") {
+                    align_cell_paragraphs(&mut cell.blocks, align);
+                }
                 if rowspan > 1 {
                     cell.props.vmerge = wordcraft_doc::props::VMerge::Restart;
                     active[column] = Some(ActiveSpan {
@@ -1463,8 +1564,9 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
         }
         let mut table = Table::new(1, column_count, width);
         table.rows = rows;
+        table.grid = tracks;
         table.props.fixed = true;
-        table.props.width = Some(width);
+        table.props.width = Some(table.grid.iter().sum());
         if let Some(style) = self.style {
             let mut border = wordcraft_doc::props::Border::single(0.75);
             border.color = Some(rgb(style.table_border));
@@ -1472,6 +1574,20 @@ impl<F: Fn(&Node) -> Option<AtomSize>> Builder<'_, F> {
             table.props.cell_margins = Some([7.0, 9.0, 7.0, 9.0]);
         }
         Ok(table)
+    }
+}
+
+fn align_cell_paragraphs(blocks: &mut Blocks, alignment: &str) {
+    let align = match alignment {
+        "left" => wordcraft_doc::props::Align::Left,
+        "center" => wordcraft_doc::props::Align::Center,
+        "right" => wordcraft_doc::props::Align::Right,
+        _ => return,
+    };
+    for block in blocks {
+        if let Block::Para(paragraph) = Arc::make_mut(block) {
+            paragraph.props.align = Some(align);
+        }
     }
 }
 
@@ -2039,6 +2155,97 @@ mod tests {
                 .iter()
                 .all(|run| run.props.font.as_deref() == Some("JetBrains Mono"))
         );
+        Ok(())
+    }
+    #[test]
+    fn canonical_widths_merged_boundaries_and_cell_alignment_match_actual_native_tracks()
+    -> Result<()> {
+        let source = Document::from_json(
+            json!({"type":"doc","attrs":{"schemaVersion":4},"content":[
+                {"type":"table","attrs":{"blockId":"table"},"content":[
+                    {"type":"tableRow","content":[
+                        {"type":"tableHeader","attrs":{"colspan":2,"rowspan":1,"colwidth":[120,240],"align":"right"},"content":[{"type":"paragraph","attrs":{"blockId":"merged"},"content":[{"type":"text","text":"Retained merged text"}]}]}
+                    ]},
+                    {"type":"tableRow","content":[
+                        {"type":"tableCell","attrs":{"colwidth":[120]},"content":[{"type":"paragraph","attrs":{"blockId":"left"},"content":[{"type":"text","text":"Left"}]}]},
+                        {"type":"tableCell","attrs":{"colwidth":[240],"align":"center"},"content":[{"type":"paragraph","attrs":{"blockId":"right"},"content":[{"type":"text","text":"Right"}]}]}
+                    ]}
+                ]}
+            ]}),
+        )?;
+        let before = source.to_json()?;
+        let geometry = FlowGeometry::new(&source, 600.0)?;
+        let columns = geometry.columns(&source)?;
+        assert_eq!(columns.len(), 2);
+        let first = columns
+            .iter()
+            .find(|column| column.column == 0)
+            .ok_or(Error::InvalidGrid)?;
+        let second = columns
+            .iter()
+            .find(|column| column.column == 1)
+            .ok_or(Error::InvalidGrid)?;
+        assert!((first.rect.width - 120.0).abs() < 0.1);
+        assert!((second.rect.width - 240.0).abs() < 0.1);
+        assert!((second.rect.x - first.rect.x - 120.0).abs() < 0.1);
+        let cells = geometry.cells()?;
+        let left = cells
+            .iter()
+            .find(|cell| cell.canonical_path == NodePath(vec![0, 1, 0]))
+            .ok_or(Error::InvalidGrid)?;
+        let right = cells
+            .iter()
+            .find(|cell| cell.canonical_path == NodePath(vec![0, 1, 1]))
+            .ok_or(Error::InvalidGrid)?;
+        assert!((left.rect.width - 120.0).abs() < 0.1);
+        assert!((right.rect.width - 240.0).abs() < 0.1);
+        let table = geometry.upstream.body[0]
+            .as_table()
+            .ok_or(Error::InvalidGrid)?;
+        let merged = table.rows[0].cells[0].blocks[0]
+            .as_para()
+            .ok_or(Error::InvalidGrid)?;
+        let right = table.rows[1].cells[1].blocks[0]
+            .as_para()
+            .ok_or(Error::InvalidGrid)?;
+        assert_eq!(merged.props.align, Some(wordcraft_doc::props::Align::Right));
+        assert_eq!(right.props.align, Some(wordcraft_doc::props::Align::Center));
+        assert_eq!(source.to_json()?, before);
+        Ok(())
+    }
+
+    #[test]
+    fn automatic_columns_use_remaining_space_and_nested_tables_stay_inside_their_cell() -> Result<()>
+    {
+        let source = Document::from_json(
+            json!({"type":"doc","attrs":{"schemaVersion":4},"content":[
+                {"type":"table","attrs":{"blockId":"outer"},"content":[{"type":"tableRow","content":[
+                    {"type":"tableCell","attrs":{"colwidth":[180]},"content":[{"type":"table","attrs":{"blockId":"nested"},"content":[{"type":"tableRow","content":[
+                        {"type":"tableCell","content":[{"type":"paragraph","attrs":{"blockId":"inside"},"content":[{"type":"text","text":"Nested"}]}]}
+                    ]}]}]},
+                    {"type":"tableCell","content":[{"type":"paragraph","attrs":{"blockId":"right"},"content":[{"type":"text","text":"Auto"}]}]}
+                ]}]}
+            ]}),
+        )?;
+        let before = source.to_json()?;
+        let geometry = FlowGeometry::new(&source, 600.0)?;
+        let table = geometry.upstream.body[0]
+            .as_table()
+            .ok_or(Error::InvalidGrid)?;
+        assert_eq!(table.grid, vec![180.0, 384.0]);
+        let nested = table.rows[0].cells[0].blocks[0]
+            .as_table()
+            .ok_or(Error::InvalidGrid)?;
+        assert!(nested.grid.iter().sum::<f32>() <= 162.0);
+        let columns = geometry.columns(&source)?;
+        assert_eq!(
+            columns
+                .iter()
+                .filter(|column| column.table_path == NodePath(vec![0, 0, 0, 0]))
+                .count(),
+            1
+        );
+        assert_eq!(source.to_json()?, before);
         Ok(())
     }
 }

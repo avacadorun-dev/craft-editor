@@ -594,16 +594,21 @@ impl EditorSession {
         if selected.origin_paths(self.document())?.len() != grid.cells.len() {
             return self.clear_selected_cells();
         }
+        self.remove_table_at(&selected.table_path)
+    }
+    /// Delete the current table through its exact session selection, retaining surrounding writing.
+    /// Text, atom and rectangular cell selections share the same transaction and Undo history.
+    pub fn delete_current_table(&mut self) -> Result<craft_editor_model::Change> {
+        if self.is_composing() {
+            return Err(Error::CompositionActive);
+        }
+        let selected = self.current_table_cell()?.ok_or(Error::InvalidSelection)?;
+        self.remove_table_at(&selected.table_path)
+    }
+    fn remove_table_at(&mut self, table_path: &NodePath) -> Result<craft_editor_model::Change> {
         let mut plan = crate::insertion::Plan::new(self, &[])?;
-        let parent_path = selected
-            .table_path
-            .parent()
-            .ok_or(Error::InvalidSelection)?;
-        let index = *selected
-            .table_path
-            .0
-            .last()
-            .ok_or(Error::InvalidSelection)?;
+        let parent_path = table_path.parent().ok_or(Error::InvalidSelection)?;
+        let index = *table_path.0.last().ok_or(Error::InvalidSelection)?;
         let parent = plan.doc().node_ref(&parent_path)?;
         let children = if parent.expected.children().len() == 1 {
             vec![source_empty_paragraph(&plan.id()?)]
@@ -620,7 +625,7 @@ impl EditorSession {
         let span = projection
             .spans
             .iter()
-            .find(|span| span.path >= selected.table_path.0)
+            .find(|span| span.path >= table_path.0)
             .or_else(|| projection.spans.last())
             .ok_or(Error::InvalidSelection)?;
         let next = plan.next_id;
@@ -630,7 +635,7 @@ impl EditorSession {
         } else {
             let caret = crate::DocPoint {
                 block_id: span.id.clone(),
-                offset: craft_editor_model::ScalarOffset(if span.path < selected.table_path.0 {
+                offset: craft_editor_model::ScalarOffset(if span.path < table_path.0 {
                     span.end - span.start
                 } else {
                     0

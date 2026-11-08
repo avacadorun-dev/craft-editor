@@ -700,3 +700,35 @@ fn rectangular_repeat_list_toggle_repairs_source_identity_reset_bug_without_losi
     assert_eq!(session.cell_selection(), Some(&rectangle()));
     Ok(())
 }
+
+#[test]
+fn explicit_table_deletion_preserves_original_text_selection_and_one_reversible_history()
+-> TestResult {
+    let original = fixture()?;
+    let mut session = EditorSession::new(original.clone(), Revision(0));
+    let selection = Selection {
+        anchor: DocPoint {
+            block_id: "d".into(),
+            offset: ScalarOffset(2),
+        },
+        head: DocPoint {
+            block_id: "d".into(),
+            offset: ScalarOffset(2),
+        },
+    };
+    session.set_selection(selection.clone())?;
+    session.delete_current_table()?;
+    assert_eq!(session.document().blocks().len(), 1);
+    assert_eq!(session.document().blocks()[0].node_type, "paragraph");
+    let after = session.document().to_json()?;
+    let target = session.selection().cloned();
+    assert!(target.is_some());
+    session.undo()?;
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.selection(), Some(&selection));
+    assert!(!session.can_undo());
+    session.redo()?;
+    assert_eq!(session.document().to_json()?, after);
+    assert_eq!(session.selection(), target.as_ref());
+    Ok(())
+}
