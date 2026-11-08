@@ -209,6 +209,8 @@ pub struct FlowGeometry {
     node_paths: HashMap<Path, NodePath>,
     syntax_reports: Vec<SyntaxReport>,
     placeholders: BTreeMap<String, crate::renderers::AtomPlaceholder>,
+    node_geometry: Vec<NodeGeometry>,
+    placeholder_geometry: Vec<AtomPlaceholderGeometry>,
 }
 
 impl FlowGeometry {
@@ -314,7 +316,7 @@ impl FlowGeometry {
             ..Default::default()
         };
         let measured = wordcraft_layout::layout(&upstream, &mut LayoutCache::new(), &options);
-        Ok(Self {
+        let mut geometry = Self {
             upstream,
             measured,
             blocks: builder.blocks,
@@ -323,7 +325,14 @@ impl FlowGeometry {
             node_paths: builder.node_paths,
             syntax_reports: builder.syntax_reports,
             placeholders: builder.placeholders,
-        })
+            node_geometry: vec![],
+            placeholder_geometry: vec![],
+        };
+        // Viewport scheduling/overlays read these every native frame. The immutable measured
+        // layout changes only with a new projection; do not rebuild its full display list on hover.
+        geometry.node_geometry = geometry.measure_nodes();
+        geometry.placeholder_geometry = geometry.measure_placeholders();
+        Ok(geometry)
     }
 
     /// Actual grammar coverage for projected code blocks, including explicit required gaps.
@@ -592,6 +601,13 @@ impl FlowGeometry {
 
     /// Actual selectable opaque-node bounds, with native caption and separator line geometry.
     pub fn nodes(&self) -> Vec<NodeGeometry> {
+        self.node_geometry.clone()
+    }
+
+    fn measure_nodes(&self) -> Vec<NodeGeometry> {
+        if self.atom_paths.is_empty() && self.node_paths.is_empty() {
+            return vec![];
+        }
         use wordcraft_layout::display::{DisplayOptions, Draw, page_display};
         let mut output: Vec<NodeGeometry> = Vec::new();
         for (page, layout) in self.measured.pages.iter().enumerate() {
@@ -636,6 +652,13 @@ impl FlowGeometry {
     /// Nonfinal atom status boxes at their actual native object bounds.
     /// The canvas paints these over transparent reservation pixels without changing source text.
     pub fn placeholders(&self) -> Vec<AtomPlaceholderGeometry> {
+        self.placeholder_geometry.clone()
+    }
+
+    fn measure_placeholders(&self) -> Vec<AtomPlaceholderGeometry> {
+        if self.placeholders.is_empty() {
+            return vec![];
+        }
         use wordcraft_layout::display::{DisplayOptions, Draw, page_display};
         let mut output = Vec::new();
         for (page, layout) in self.measured.pages.iter().enumerate() {
