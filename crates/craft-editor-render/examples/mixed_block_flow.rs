@@ -2,7 +2,7 @@
 #[path = "../tests/support/mixed_block_fixture.rs"]
 mod fixture;
 use craft_editor_egui::layout::GeometryRect;
-use craft_editor_render::{RenderOptions, Renderer};
+use craft_editor_render::Renderer;
 use serde_json::json;
 use std::path::PathBuf;
 fn main() -> fixture::EvidenceResult<()> {
@@ -15,11 +15,7 @@ fn main() -> fixture::EvidenceResult<()> {
     for dark in [false, true] {
         let (document, assets) = fixture::fixture()?;
         let original = document.to_json()?;
-        let renderer = Renderer::new(RenderOptions {
-            dark,
-            pixel_scale: 1.0,
-            ..Default::default()
-        })?;
+        let renderer = Renderer::new(fixture::options(dark))?;
         let catalog = renderer.prepare_document(&document, &assets, 1)?;
         if !catalog.failures().is_empty() {
             return Err("mixed-block fixture contains an unrendered atom".into());

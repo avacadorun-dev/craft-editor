@@ -4,7 +4,7 @@ use craft_editor_egui::{
     renderers::AtomResolver,
 };
 use craft_editor_model::{Document, NodePath, ScalarOffset};
-use craft_editor_render::AssetMap;
+use craft_editor_render::{AssetMap, RenderOptions};
 use serde_json::{Value, json};
 use std::sync::Arc;
 pub type EvidenceResult<T> = Result<T, Box<dyn std::error::Error>>;
@@ -27,12 +27,40 @@ pub fn fixture() -> EvidenceResult<(Document, AssetMap)> {
     )?;
     Ok((document, assets))
 }
+pub fn options(dark: bool) -> RenderOptions {
+    RenderOptions {
+        dark,
+        pixel_scale: 1.0,
+        foreground: if dark {
+            [225, 230, 238, 255]
+        } else {
+            [35, 39, 47, 255]
+        },
+        background: if dark {
+            [29, 34, 42, 255]
+        } else {
+            [250, 250, 248, 255]
+        },
+        ..Default::default()
+    }
+}
 pub fn style(dark: bool) -> GeometryStyle {
+    let foreground = if dark { [225, 230, 238] } else { [35, 39, 47] };
+    let background = if dark { [29, 34, 42] } else { [250, 250, 248] };
     GeometryStyle {
         font_size: 19.0,
         line_height: 1.75,
         line_height_basis: LineHeightBasis::FontSize,
-        text_color: if dark { [225, 230, 238] } else { [35, 39, 47] },
+        text_color: foreground,
+        table_header: if dark { [43, 51, 62] } else { [234, 238, 244] },
+        table_border: if dark {
+            [100, 115, 135]
+        } else {
+            [139, 148, 163]
+        },
+        syntax_palette: Some(craft_editor_egui::syntax::Palette::for_surface(
+            foreground, background,
+        )),
         ..Default::default()
     }
 }
