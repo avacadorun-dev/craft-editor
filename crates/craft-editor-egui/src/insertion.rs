@@ -411,6 +411,111 @@ impl EditorSession {
         self.stored_marks = Some(marks);
         Ok(change)
     }
+    /// Insert a paragraph break, splitting a list item or leaving an empty item as appropriate.
+    ///
+    /// Code blocks keep a literal newline. A selected opaque block is retained and followed by a
+    /// new paragraph. The resulting tree and caret form one revision-guarded Undo/Redo entry.
+    pub fn insert_paragraph(&mut self) -> Result<Change> {
+        if self.is_composing() {
+            return Err(Error::CompositionActive);
+        }
+        let mut plan = Plan::new(self, &[])?;
+        let caret = if let Some(reference) = &self.node_selection {
+            if reference.expected.node_type == "inlineMath" {
+                return self.insert_plain_text("\n");
+            }
+            if plan.doc().node(&reference.path)? != reference.expected.as_ref() {
+                return Err(craft_editor_model::Error::NodeReferenceConflict.into());
+            }
+            let parent_path = reference.path.parent().ok_or(Error::InvalidSelection)?;
+            let index = *reference.path.0.last().ok_or(Error::InvalidSelection)?;
+            let id = plan.id()?;
+            let paragraph = Node::paragraph(&id, "");
+            plan.execute(vec![Command::InsertChildren {
+                parent: plan.doc().node_ref(&parent_path)?,
+                index: index + 1,
+                children: vec![paragraph],
+            }])?;
+            DocPoint {
+                block_id: id,
+                offset: ScalarOffset(0),
+            }
+        } else {
+            let selection = self.selection.clone().ok_or(Error::InvalidSelection)?;
+            let point = plan.delete_range(&selection)?;
+            let path = plan.path(&point.block_id)?;
+            let block = plan.doc().block(&point.block_id)?;
+            if block.node_type == "codeBlock" {
+                return self.insert_plain_text("\n");
+            }
+            let paragraph_index = *path.0.last().ok_or(Error::InvalidSelection)?;
+            let item_path = path.parent().ok_or(Error::InvalidSelection)?;
+            if block.node_type == "paragraph"
+                && plan.doc().node(&item_path)?.node_type == "listItem"
+            {
+                let list_path = item_path.parent().ok_or(Error::InvalidSelection)?;
+                let item_index = *item_path.0.last().ok_or(Error::InvalidSelection)?;
+                let list = plan.doc().node_ref(&list_path)?;
+                let item = plan.doc().node(&item_path)?;
+                let empty_exit = item.children().len() == 1
+                    && block.inline_text().is_empty()
+                    && point.offset.0 == 0;
+                let identified_item = item.block_id().is_some();
+                let new_block_id = plan.id()?;
+                let new_item_id = if identified_item {
+                    Some(plan.id()?)
+                } else {
+                    None
+                };
+                let command = craft_editor_model::split_list_item(
+                    plan.doc(),
+                    list,
+                    item_index,
+                    paragraph_index,
+                    point.offset,
+                    &new_block_id,
+                    new_item_id.as_deref(),
+                )?;
+                plan.execute(vec![command])?;
+                if empty_exit {
+                    point
+                } else {
+                    DocPoint {
+                        block_id: new_block_id,
+                        offset: ScalarOffset(0),
+                    }
+                }
+            } else {
+                return self.insert_plain_text("\n");
+            }
+        };
+        let next_id = plan.next_id;
+        let change = self.apply_commands_with_selection(
+            plan.commands,
+            Selection {
+                anchor: caret.clone(),
+                head: caret,
+            },
+        )?;
+        self.next_id = next_id;
+        Ok(change)
+    }
+    /// Insert a canonical hard break, retaining a literal newline inside code blocks.
+    pub fn insert_hard_break(&mut self) -> Result<Change> {
+        if self.selection.as_ref().is_some_and(|selection| {
+            self.document()
+                .block(&selection.head.block_id)
+                .is_ok_and(|node| node.node_type == "codeBlock")
+        }) {
+            self.insert_plain_text("\n")
+        } else {
+            self.insert_content(ContentSlice::Inline(vec![Node::block(
+                "hardBreak",
+                serde_json::Map::new(),
+                vec![],
+            )]))
+        }
+    }
     /// Insert a closed canonical slice at the current selection as one rich transaction.
     ///
     /// Preserves supplied nodes and the unselected tail; schema/identity/placement failures do

@@ -561,6 +561,11 @@ impl CanvasState {
             self.scroll_to_caret = true;
             return Ok(());
         }
+        if !read_only && key == Key::Enter && session.node_selection.is_some() {
+            session.insert_paragraph()?;
+            self.scroll_to_caret = true;
+            return Ok(());
+        }
         let geometry = self.geometry.as_ref().ok_or(Error::InvalidSelection)?;
         if let Some(reference) = &session.node_selection {
             if let Some(node) = geometry
@@ -616,9 +621,32 @@ impl CanvasState {
             return Ok(());
         }
         if !read_only && key == Key::Enter {
-            replace(session, "\n")?;
+            if modifiers.shift {
+                session.insert_hard_break()?;
+            } else {
+                session.insert_paragraph()?;
+            }
             self.scroll_to_caret = true;
             return Ok(());
+        }
+        if !read_only
+            && key == Key::Tab
+            && !Projection::new(session.document())?
+                .spans
+                .iter()
+                .any(|span| span.id == selection.head.block_id && span.table)
+        {
+            let in_list = session.list_state(crate::ListKind::Bullet)? != crate::MarkState::Off
+                || session.list_state(crate::ListKind::Ordered)? != crate::MarkState::Off;
+            if in_list {
+                if modifiers.shift {
+                    session.outdent_list()?;
+                } else {
+                    session.indent_list()?;
+                }
+                self.scroll_to_caret = true;
+                return Ok(());
+            }
         }
         let word = modifiers.alt || (modifiers.ctrl && !modifiers.mac_cmd);
         let moved = match key {

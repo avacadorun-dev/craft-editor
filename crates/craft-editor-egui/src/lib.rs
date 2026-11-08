@@ -18,6 +18,8 @@ pub mod renderers;
 pub mod canvas;
 
 mod insertion;
+mod structure;
+pub use craft_editor_model::ListKind;
 pub use insertion::ContentSlice;
 
 mod projection;

@@ -36,3 +36,9 @@ The geometry fixture passed hosted run [42411597588](https://github.com/avacador
 
 
 Hosted canvas qualification [42452125336](https://github.com/avacadorun-dev/craft-editor/actions/runs/42452125336) at `5f11b46` passed all 28 view and 87 model tests, strict Clippy and actual geometry/raster/input examples. This verifies the synthetic checkpoint, not native UX or full schema acceptance. The host can query `MarkState::{Off, On, Mixed}`, toggle stored insertion marks, and use the same selection/history for text and structure. Structural integrations should use `apply_commands_with_selection` to validate and record the exact new/surviving-cell caret atomically; `request_scroll_to_caret` reveals it on the next canvas frame.
+
+## Canonical authoring APIs
+
+Closed canonical inline/block insertion now uses the exact native selection and parent boundary through `ContentSlice` and `EditorSession::insert_content`. Hosts can record a first-table-cell caret through `insert_content_with_selection` or resolve a newly inserted identified atom through `insert_content_selecting_node`, in the same rich history entry. See [insertion contract](specs/INSERT_CONTENT.md).
+
+Selection-aware list, quotation, callout-kind and Enter/Shift+Enter commands are described in [structure commands](specs/STRUCTURE_COMMANDS.md). New semantic coverage remains a checkpoint; the source-backed original behavior and actual native full-editor acceptance are still required. In particular, conservative canonical preservation is not a claim of complete clipboard, annotation remapping, multi-container editing or platform input parity.
