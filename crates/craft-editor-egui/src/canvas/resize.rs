@@ -18,39 +18,36 @@ pub(super) struct ColumnDrag {
 impl CanvasState {
     fn resize_hit(&self, session: &EditorSession, local: Vec2) -> Result<Option<ColumnGeometry>> {
         let geometry = self.geometry.as_ref().ok_or(Error::InvalidSelection)?;
-        let cells = geometry.cells()?;
+        let cell = geometry
+            .cells()?
+            .into_iter()
+            .filter(|cell| {
+                let rect = cell.rect;
+                local.y >= rect.y
+                    && local.y <= rect.y + rect.height
+                    && (local.x - rect.x - rect.width).abs() <= 4.0
+            })
+            .max_by_key(|cell| cell.canonical_path.0.len());
+        let Some(cell) = cell else {
+            return Ok(None);
+        };
+        let Some(depth) = cell.canonical_path.0.len().checked_sub(2) else {
+            return Ok(None);
+        };
+        let path = craft_editor_model::NodePath(cell.canonical_path.0[..depth].to_vec());
         Ok(geometry
             .columns(session.document())?
             .into_iter()
-            .filter(|column| {
-                column.clip.is_none_or(|clip| {
-                    local.x >= clip.x
-                        && local.x <= clip.x + clip.width
-                        && local.y >= clip.y
-                        && local.y <= clip.y + clip.height
-                }) && cells.iter().any(|cell| {
-                    if cell.canonical_path.0.len() != column.table_path.0.len() + 2
-                        || !cell.canonical_path.0.starts_with(&column.table_path.0)
-                    {
-                        return false;
-                    }
-                    let rect = cell.rect;
-                    local.y >= rect.y
-                        && local.y <= rect.y + rect.height
-                        && (local.x - rect.x - rect.width).abs() <= 4.0
-                        && (column.rect.x + column.rect.width - rect.x - rect.width).abs() <= 0.5
-                })
-            })
-            .max_by(|a, b| {
-                a.table_path
-                    .0
-                    .len()
-                    .cmp(&b.table_path.0.len())
-                    .then_with(|| {
-                        (local.x - b.rect.x - b.rect.width)
-                            .abs()
-                            .total_cmp(&(local.x - a.rect.x - a.rect.width).abs())
+            .find(|column| {
+                column.table_path == path
+                    && column.clip.is_none_or(|clip| {
+                        local.x >= clip.x
+                            && local.x <= clip.x + clip.width
+                            && local.y >= clip.y
+                            && local.y <= clip.y + clip.height
                     })
+                    && (column.rect.x + column.rect.width - cell.rect.x - cell.rect.width).abs()
+                        <= 0.5
             }))
     }
     pub(super) fn resize_input(

@@ -102,7 +102,8 @@ fn nested_table_projection_uses_both_ancestor_clips_and_exact_inverse_positions(
     assert_eq!(hit.block_id, "inner-2");
     assert_eq!(hit.offset, ScalarOffset(3));
     assert_eq!(source.to_json()?, original);
-    assert!(geometry.reveal_caret(&point("sibling", 0))?);
-    assert!(geometry.caret(&point("sibling", 0))?.is_some());
+    let sibling_end = point("sibling", source.block_text("sibling")?.chars().count());
+    assert!(geometry.reveal_caret(&sibling_end)?);
+    assert!(geometry.caret(&sibling_end)?.is_some());
     Ok(())
 }

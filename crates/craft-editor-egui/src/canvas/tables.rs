@@ -79,6 +79,9 @@ impl CanvasState {
                             aspect_ratio: thumb,
                         });
                     let response = ui.add_enabled(self.column_resize.is_none(), slider);
+                    if response.clicked() {
+                        response.request_focus();
+                    }
                     response.widget_info(|| {
                         egui::WidgetInfo::slider(true, f64::from(offset), &style.table_scroll_label)
                     });
@@ -126,6 +129,248 @@ impl CanvasState {
             self.table_offsets = geometry.table_offsets();
             self.tiles.clear();
         }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use craft_editor_model::{NodePath, TableGrid};
+    use serde_json::json;
+    type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
+    fn source() -> Result<Document> {
+        let cells:Vec<_>=(0..63).map(|column|json!({"type":"tableCell","attrs":{"colwidth":[80]},"content":[
+            {"type":"paragraph","attrs":{"blockId":format!("cell-{column}")},"content":[{"type":"text","text":format!("Cell {column} 😀")}]}
+        ]})).collect();
+        Ok(Document::from_json(
+            json!({"type":"doc","attrs":{"schemaVersion":4},"content":[
+                {"type":"paragraph","attrs":{"blockId":"before"},"content":[{"type":"text","text":"Before"}]},
+                {"type":"table","attrs":{"blockId":"wide"},"content":[{"type":"tableRow","content":cells}]},
+                {"type":"paragraph","attrs":{"blockId":"after"},"content":[{"type":"text","text":"After"}]}
+            ]}),
+        )?)
+    }
+    fn frame(
+        session: &mut EditorSession,
+        ctx: &egui::Context,
+        events: Vec<Event>,
+    ) -> (ViewResponse, egui::FullOutput) {
+        let mut response = None;
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(700.0, 650.0))),
+                events,
+                focused: true,
+                ..Default::default()
+            },
+            |root| {
+                egui::CentralPanel::default().show(root, |ui| {
+                    response = Some(session.show_canvas(ui, &CanvasStyle::default()));
+                });
+            },
+        );
+        output.textures_delta.clear();
+        let response = match response {
+            Some(response) => response,
+            None => panic!("native table frame"),
+        };
+        (response, output)
+    }
+    fn press(position: Pos2, pressed: bool) -> Event {
+        Event::PointerButton {
+            pos: position,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: Modifiers::NONE,
+        }
+    }
+    #[test]
+    fn native_horizontal_wheel_and_scrollbar_keyboard_leave_canonical_writing_and_selection_unchanged()
+    -> TestResult {
+        let original = source()?;
+        let mut session = EditorSession::new(original.clone(), Revision(0));
+        let ctx = egui::Context::default();
+        let (first, _) = frame(&mut session, &ctx, vec![]);
+        assert!(first.errors.is_empty(), "{:?}", first.errors);
+        let selection = session.selection_state()?;
+        let viewport = session
+            .canvas_state
+            .geometry
+            .as_ref()
+            .ok_or(Error::InvalidSelection)?
+            .table_viewports()
+            .remove(0);
+        let at = on_screen(first.response.rect.min, viewport.rect).center();
+        let (wheel, _) = frame(
+            &mut session,
+            &ctx,
+            vec![
+                Event::PointerMoved(at),
+                Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: Vec2::new(-150.0, 0.0),
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+        );
+        assert!(wheel.errors.is_empty(), "{:?}", wheel.errors);
+        let viewport = session
+            .canvas_state
+            .geometry
+            .as_ref()
+            .ok_or(Error::InvalidSelection)?
+            .table_viewports()
+            .remove(0);
+        assert!(viewport.offset > 0.0);
+        let bar = on_screen(first.response.rect.min, viewport.scrollbar).center();
+        frame(
+            &mut session,
+            &ctx,
+            vec![Event::PointerMoved(bar), press(bar, true)],
+        );
+        frame(&mut session, &ctx, vec![press(bar, false)]);
+        frame(&mut session, &ctx, vec![]);
+        let prior = session
+            .canvas_state
+            .geometry
+            .as_ref()
+            .ok_or(Error::InvalidSelection)?
+            .table_viewports()[0]
+            .offset;
+        frame(
+            &mut session,
+            &ctx,
+            vec![Event::Key {
+                key: Key::ArrowRight,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: Modifiers::NONE,
+            }],
+        );
+        frame(&mut session, &ctx, vec![]);
+        let current = session
+            .canvas_state
+            .geometry
+            .as_ref()
+            .ok_or(Error::InvalidSelection)?
+            .table_viewports()[0]
+            .offset;
+        assert!(
+            current > prior,
+            "scrollbar keyboard: {current} after {prior}"
+        );
+        assert_eq!(session.selection_state()?, selection);
+        assert_eq!(session.document(), &original);
+        assert_eq!(session.revision(), Revision(0));
+        assert!(!session.can_undo());
+        Ok(())
+    }
+    #[test]
+    fn last_column_reveal_pointer_ime_and_resize_share_one_visible_semantic_target() -> TestResult {
+        let original = source()?;
+        let mut session = EditorSession::new(original.clone(), Revision(0));
+        session.set_table_column_limit(Some(63))?;
+        let point = DocPoint {
+            block_id: "cell-62".into(),
+            offset: ScalarOffset(0),
+        };
+        session.set_selection(collapsed(point.clone()))?;
+        session.request_scroll_to_caret();
+        let ctx = egui::Context::default();
+        ctx.memory_mut(|memory| memory.request_focus(session.options.id));
+        let (first, _) = frame(&mut session, &ctx, vec![]);
+        assert!(first.errors.is_empty(), "{:?}", first.errors);
+        let geometry = session
+            .canvas_state
+            .geometry
+            .as_ref()
+            .ok_or(Error::InvalidSelection)?;
+        assert!(geometry.table_viewports()[0].offset > 0.0);
+        let caret = geometry.caret(&point)?.ok_or(Error::InvalidSelection)?;
+        let at = on_screen(first.response.rect.min, caret).center() + Vec2::new(0.1, 0.0);
+        frame(
+            &mut session,
+            &ctx,
+            vec![Event::PointerMoved(at), press(at, true)],
+        );
+        frame(&mut session, &ctx, vec![press(at, false)]);
+        assert_eq!(
+            session
+                .selection()
+                .map(|selection| selection.head.block_id.as_str()),
+            Some("cell-62")
+        );
+        frame(
+            &mut session,
+            &ctx,
+            vec![Event::Ime(egui::ImeEvent::Enabled)],
+        );
+        let (preedit, output) = frame(
+            &mut session,
+            &ctx,
+            vec![Event::Ime(egui::ImeEvent::Preedit("界".into()))],
+        );
+        assert!(preedit.errors.is_empty(), "{:?}", preedit.errors);
+        assert_eq!(session.document(), &original);
+        let ime = output
+            .platform_output
+            .ime
+            .as_ref()
+            .ok_or("missing native IME geometry")?;
+        let viewport = session
+            .canvas_state
+            .geometry
+            .as_ref()
+            .ok_or(Error::InvalidSelection)?
+            .table_viewports()
+            .remove(0);
+        let visible = on_screen(first.response.rect.min, viewport.rect);
+        assert!(visible.contains(ime.cursor_rect.center()));
+        let (commit, _) = frame(
+            &mut session,
+            &ctx,
+            vec![
+                Event::Ime(egui::ImeEvent::Commit("界".into())),
+                Event::Ime(egui::ImeEvent::Disabled),
+            ],
+        );
+        assert!(commit.errors.is_empty(), "{:?}", commit.errors);
+        assert!(session.document().block_text("cell-62")?.contains('界'));
+        session.undo()?;
+        assert_eq!(session.document(), &original);
+        frame(&mut session, &ctx, vec![]);
+        let geometry = session
+            .canvas_state
+            .geometry
+            .as_ref()
+            .ok_or(Error::InvalidSelection)?;
+        let column = geometry
+            .columns(session.document())?
+            .into_iter()
+            .find(|column| column.column == 62)
+            .ok_or("missing final column")?;
+        let edge = egui::pos2(
+            first.response.rect.left() + column.rect.x + column.rect.width,
+            first.response.rect.top() + column.rect.y + column.rect.height * 0.5,
+        );
+        frame(
+            &mut session,
+            &ctx,
+            vec![Event::PointerMoved(edge), press(edge, true)],
+        );
+        let destination = edge + Vec2::new(40.0, 0.0);
+        let (resize, _) = frame(
+            &mut session,
+            &ctx,
+            vec![Event::PointerMoved(destination), press(destination, false)],
+        );
+        assert!(resize.errors.is_empty(), "{:?}", resize.errors);
+        let grid = TableGrid::new(session.document().node(&NodePath(vec![1]))?)?;
+        assert_eq!(grid.column_widths.get(&62), Some(&120));
+        session.undo()?;
+        assert_eq!(session.document(), &original);
         Ok(())
     }
 }

@@ -245,6 +245,8 @@ pub struct FlowGeometry {
     upstream: wordcraft_doc::Document,
     measured: DocLayout,
     blocks: Vec<BlockMap>,
+    blocks_by_id: HashMap<String, usize>,
+    blocks_by_path: HashMap<Path, usize>,
     cell_paths: HashMap<(Path, usize, usize), NodePath>,
     table_tracks: HashMap<NodePath, Vec<f32>>,
     table_available: HashMap<NodePath, f32>,
@@ -383,7 +385,21 @@ impl FlowGeometry {
             ..Default::default()
         };
         let measured = wordcraft_layout::layout(&upstream, &mut LayoutCache::new(), &options);
+        let blocks_by_id = builder
+            .blocks
+            .iter()
+            .enumerate()
+            .map(|(index, block)| (block.id.clone(), index))
+            .collect();
+        let blocks_by_path = builder
+            .blocks
+            .iter()
+            .enumerate()
+            .map(|(index, block)| (block.path.clone(), index))
+            .collect();
         let mut geometry = Self {
+            blocks_by_id,
+            blocks_by_path,
             upstream,
             measured,
             blocks: builder.blocks,
@@ -524,9 +540,7 @@ impl FlowGeometry {
     ) -> Result<Option<(DocPoint, f32)>> {
         let native = self.to_native(point)?;
         let block = self
-            .blocks
-            .iter()
-            .find(|block| block.id == point.block_id)
+            .block_for_id(&point.block_id)
             .ok_or(Error::UnmappedPosition)?;
         let shift = self.viewports.shift(&block.canonical);
         let Some((candidate, x)) =
@@ -668,9 +682,7 @@ impl FlowGeometry {
     /// Convert an exact semantic point to a native byte position and caret rectangle.
     pub fn caret(&self, point: &DocPoint) -> Result<Option<GeometryRect>> {
         let block = self
-            .blocks
-            .iter()
-            .find(|block| block.id == point.block_id)
+            .block_for_id(&point.block_id)
             .ok_or(Error::UnmappedPosition)?;
         Ok(self
             .measured
@@ -697,9 +709,7 @@ impl FlowGeometry {
         };
         let point = self.resolve_native(&pos)?;
         let block = self
-            .blocks
-            .iter()
-            .find(|block| block.id == point.block_id)
+            .block_for_id(&point.block_id)
             .ok_or(Error::UnmappedPosition)?;
         if self.viewports.clip(&block.canonical).is_some_and(|clip| {
             x < clip.x || x > clip.x + clip.width || y < clip.y || y > clip.y + clip.height
@@ -778,9 +788,7 @@ impl FlowGeometry {
             .iter()
             .take_while(|(rect, _)| rect.page == area.page && rect.y <= area.y + area.height)
             .filter(|(rect, range)| {
-                self.blocks
-                    .iter()
-                    .find(|block| block.id == range.anchor.block_id)
+                self.block_for_id(&range.anchor.block_id)
                     .and_then(|block| self.viewports.rect(&block.canonical, *rect))
                     .is_some_and(|rect| {
                         rect.y + rect.height >= area.y
@@ -906,18 +914,23 @@ impl FlowGeometry {
             .collect())
     }
     fn measure_columns(&self, source: &Document) -> Result<Vec<ColumnGeometry>> {
-        let cells = &self.raw_cells;
+        let mut grouped: HashMap<NodePath, Vec<&CellGeometry>> = HashMap::new();
+        for cell in &self.raw_cells {
+            if cell.canonical_path.0.len() >= 2 {
+                grouped
+                    .entry(NodePath(
+                        cell.canonical_path.0[..cell.canonical_path.0.len() - 2].to_vec(),
+                    ))
+                    .or_default()
+                    .push(cell);
+            }
+        }
         let mut columns = Vec::new();
         for (path, tracks) in &self.table_tracks {
             let grid = craft_editor_model::TableGrid::new(source.node(path)?)?;
-            let matching: Vec<_> = cells
-                .iter()
-                .filter(|cell| {
-                    cell.rect.page == 0
-                        && cell.canonical_path.0.len() == path.0.len() + 2
-                        && cell.canonical_path.0.starts_with(&path.0)
-                })
-                .collect();
+            let Some(matching) = grouped.get(path) else {
+                continue;
+            };
             let Some(first) = matching.first() else {
                 continue;
             };
@@ -1117,9 +1130,7 @@ impl FlowGeometry {
     /// Reveal an exact caret through nested table viewports without reshaping or rewriting content.
     pub fn reveal_caret(&mut self, point: &DocPoint) -> Result<bool> {
         let block = self
-            .blocks
-            .iter()
-            .find(|block| block.id == point.block_id)
+            .block_for_id(&point.block_id)
             .ok_or(Error::UnmappedPosition)?;
         let Some(caret) = self.measured.caret(&self.to_native(point)?) else {
             return Ok(false);
@@ -1159,9 +1170,7 @@ impl FlowGeometry {
     #[cfg(feature = "wordcraft-canvas")]
     fn canonical_item_path(&self, item: &Placed) -> Option<NodePath> {
         let from_path = |path: &Path| {
-            self.blocks
-                .iter()
-                .find(|block| block.path == *path)
+            self.block_for_path(path)
                 .map(|block| block.canonical.clone())
                 .or_else(|| self.node_paths.get(path).cloned())
         };
@@ -1203,11 +1212,19 @@ impl FlowGeometry {
         self.viewports.scope_for_rect(bounds)
     }
 
+    fn block_for_id(&self, id: &str) -> Option<&BlockMap> {
+        self.blocks_by_id
+            .get(id)
+            .and_then(|index| self.blocks.get(*index))
+    }
+    fn block_for_path(&self, path: &Path) -> Option<&BlockMap> {
+        self.blocks_by_path
+            .get(path)
+            .and_then(|index| self.blocks.get(*index))
+    }
     fn to_native(&self, point: &DocPoint) -> Result<Pos> {
         let block = self
-            .blocks
-            .iter()
-            .find(|block| block.id == point.block_id)
+            .block_for_id(&point.block_id)
             .ok_or(Error::UnmappedPosition)?;
         let offset = scalar_to_byte(&block.text, point.offset)?;
         Ok(Pos::new(StoryRef::Body, block.path.clone(), offset.0))
@@ -1217,7 +1234,7 @@ impl FlowGeometry {
         if pos.story != StoryRef::Body {
             return Err(Error::UnmappedPosition);
         }
-        let Some(block) = self.blocks.iter().find(|block| block.path == pos.path) else {
+        let Some(block) = self.block_for_path(&pos.path) else {
             let previous = self
                 .blocks
                 .iter()

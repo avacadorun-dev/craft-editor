@@ -186,6 +186,21 @@ impl CanvasState {
             font_generation: crate::fonts::generation(),
         };
         if self.measured.as_ref() != Some(&key) {
+            let target = self
+                .preedit
+                .as_ref()
+                .map(|preedit| preedit.caret.clone())
+                .or_else(|| session.selection().map(|selection| selection.head.clone()))
+                .or(if session.cell_selection().is_some() {
+                    session.head_cell_text_point(false)?
+                } else {
+                    None
+                });
+            let retain_visible = target.as_ref().is_some_and(|point| {
+                self.geometry
+                    .as_ref()
+                    .is_some_and(|geometry| geometry.caret(point).is_ok_and(|rect| rect.is_some()))
+            });
             let document = self
                 .preedit
                 .as_ref()
@@ -196,6 +211,9 @@ impl CanvasState {
                 FlowGeometry::with_style(document, width, &|_| None, Some(&key.style))?
             };
             geometry.restore_table_offsets(&self.table_offsets);
+            if retain_visible && let Some(point) = &target {
+                geometry.reveal_caret(point)?;
+            }
             self.table_offsets = geometry.table_offsets();
             self.geometry = Some(geometry);
             self.measured = Some(key);
