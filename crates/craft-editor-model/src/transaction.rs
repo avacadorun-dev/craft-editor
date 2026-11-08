@@ -1,4 +1,6 @@
 use std::collections::VecDeque;
+use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
 use prosemirror::transform::{Mappable, StepMap};
 use serde::{Deserialize, Serialize};
@@ -345,6 +347,99 @@ pub struct Change {
     pub after: Document,
     /// Ordered scalar maps; Undo/Redo return none and provide exact snapshots.
     pub mappings: Vec<PositionMap>,
+    replay: ReplayProof,
+}
+
+impl Change {
+    /// Immutable engine provenance, independent of the public display snapshots
+    /// and maps. It cannot be deserialized or constructed by an external caller.
+    pub fn replay_proof(&self) -> ReplayProof {
+        self.replay.clone()
+    }
+}
+
+/// Exact in-process history-entry identity, distinct even for identical JSON.
+/// Hosts retain clones while attachment history is reachable. Receipts are not
+/// portable identifiers and deliberately have no serialization implementation.
+#[derive(Debug, Clone)]
+pub struct HistoryReceipt(Arc<Document>);
+
+impl PartialEq for HistoryReceipt {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+impl Eq for HistoryReceipt {}
+impl Hash for HistoryReceipt {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        Arc::as_ptr(&self.0).hash(state);
+    }
+}
+impl HistoryReceipt {
+    /// Immutable canonical tree belonging to this exact history entry.
+    pub fn document(&self) -> &Document {
+        &self.0
+    }
+    /// Ownership count for bounded host receipt-cache reclamation. This is a
+    /// liveness hint only, never an authorization or snapshot-validity check.
+    pub fn reference_count(&self) -> usize {
+        Arc::strong_count(&self.0)
+    }
+}
+
+/// Provenance category generated only by the canonical editor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReplayAction {
+    /// Recompute maps by replaying private, validated typed commands.
+    Apply,
+    /// Restore a specific previously retained history receipt.
+    Undo,
+    /// Reapply a specific previously undone history receipt.
+    Redo,
+}
+
+/// Native command provenance. Public Change fields are not trusted authority.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReplayProof {
+    before: HistoryReceipt,
+    after: HistoryReceipt,
+    before_revision: Revision,
+    action: ReplayAction,
+    commands: Vec<Command>,
+}
+impl ReplayProof {
+    /// Exact immutable input state/history identity.
+    pub fn before(&self) -> &HistoryReceipt {
+        &self.before
+    }
+    /// Exact immutable output state/history identity.
+    pub fn after(&self) -> &HistoryReceipt {
+        &self.after
+    }
+    /// Whether this is forward editing or a specific history traversal.
+    pub fn action(&self) -> ReplayAction {
+        self.action
+    }
+    /// Validate against the actual host canonical base and recompute forward maps.
+    /// Undo/Redo return no guessed inverse maps: the host must restore the exact
+    /// target receipt's attachment snapshot, refusing an unknown history receipt.
+    pub fn verify(&self, expected: &Document) -> Result<(Document, Vec<PositionMap>)> {
+        if expected != self.before.document() {
+            return Err(Error::NodeReferenceConflict);
+        }
+        if self.action != ReplayAction::Apply {
+            return Ok((self.after.document().clone(), vec![]));
+        }
+        let mut editor = Editor::new(expected.clone(), self.before_revision).with_history_limit(0);
+        let change = editor.apply(Transaction {
+            base_revision: self.before_revision,
+            commands: self.commands.clone(),
+        })?;
+        if &change.after != self.after.document() {
+            return Err(Error::NodeReferenceConflict);
+        }
+        Ok((change.after, change.mappings))
+    }
 }
 
 /// One document-level editing session with guarded, bounded snapshot history.
@@ -352,9 +447,10 @@ pub struct Change {
 #[derive(Debug)]
 pub struct Editor {
     document: Document,
+    receipt: HistoryReceipt,
     revision: Revision,
-    undo: VecDeque<Document>,
-    redo: Vec<Document>,
+    undo: VecDeque<HistoryReceipt>,
+    redo: Vec<HistoryReceipt>,
     history_limit: usize,
 }
 
@@ -362,6 +458,7 @@ impl Editor {
     /// Create a session from validated canonical state and its host revision.
     pub fn new(document: Document, revision: Revision) -> Self {
         Self {
+            receipt: HistoryReceipt(Arc::new(document.clone())),
             document,
             revision,
             undo: VecDeque::new(),
@@ -398,23 +495,26 @@ impl Editor {
         }
         let mut candidate = self.document.clone();
         let mut mappings = Vec::new();
-        for command in transaction.commands {
+        let commands = transaction.commands;
+        for command in commands.iter().cloned() {
             apply_command(&mut candidate, command, &mut mappings)?;
             candidate.promote_schema()?;
             candidate.validate()?;
         }
         let before = self.document.clone();
+        let before_receipt = self.receipt.clone();
         let before_revision = self.revision;
         if candidate != self.document {
             let revision = self.next_revision()?;
             if self.history_limit > 0 {
-                self.undo.push_back(self.document.clone());
+                self.undo.push_back(self.receipt.clone());
                 while self.undo.len() > self.history_limit {
                     self.undo.pop_front();
                 }
             }
             self.redo.clear();
             self.document = candidate;
+            self.receipt = HistoryReceipt(Arc::new(self.document.clone()));
             self.revision = revision;
         } else {
             mappings.clear();
@@ -425,6 +525,13 @@ impl Editor {
             before,
             after: self.document.clone(),
             mappings,
+            replay: ReplayProof {
+                before: before_receipt,
+                after: self.receipt.clone(),
+                before_revision,
+                action: ReplayAction::Apply,
+                commands,
+            },
         })
     }
     /// Undo by creating a new revision; stale calls never consume history.
@@ -432,8 +539,9 @@ impl Editor {
         self.check_revision(expected_revision)?;
         let revision = self.next_revision()?;
         let previous = self.undo.pop_back().ok_or(Error::HistoryEmpty)?;
-        let before = std::mem::replace(&mut self.document, previous);
-        self.redo.push(before.clone());
+        let before = std::mem::replace(&mut self.document, previous.document().clone());
+        let before_receipt = std::mem::replace(&mut self.receipt, previous);
+        self.redo.push(before_receipt.clone());
         let before_revision = std::mem::replace(&mut self.revision, revision);
         Ok(Change {
             before_revision,
@@ -441,6 +549,13 @@ impl Editor {
             before,
             after: self.document.clone(),
             mappings: vec![],
+            replay: ReplayProof {
+                before: before_receipt,
+                after: self.receipt.clone(),
+                before_revision,
+                action: ReplayAction::Undo,
+                commands: vec![],
+            },
         })
     }
     /// Redo a previously undone batch as another new revision.
@@ -448,9 +563,10 @@ impl Editor {
         self.check_revision(expected_revision)?;
         let revision = self.next_revision()?;
         let next = self.redo.pop().ok_or(Error::HistoryEmpty)?;
-        let before = std::mem::replace(&mut self.document, next);
+        let before = std::mem::replace(&mut self.document, next.document().clone());
+        let before_receipt = std::mem::replace(&mut self.receipt, next);
         if self.history_limit > 0 {
-            self.undo.push_back(before.clone());
+            self.undo.push_back(before_receipt.clone());
         }
         let before_revision = std::mem::replace(&mut self.revision, revision);
         Ok(Change {
@@ -459,6 +575,13 @@ impl Editor {
             before,
             after: self.document.clone(),
             mappings: vec![],
+            replay: ReplayProof {
+                before: before_receipt,
+                after: self.receipt.clone(),
+                before_revision,
+                action: ReplayAction::Redo,
+                commands: vec![],
+            },
         })
     }
     fn check_revision(&self, revision: Revision) -> Result<()> {

@@ -77,6 +77,14 @@ fn null_presence<T>(value: &Option<T>, null_fields: &HashSet<String>, field: &st
 }
 
 impl Node {
+    /// Minimum canonical schema version needed by this complete subtree.
+    /// This does not change or validate the node; transaction promotion still
+    /// validates the complete resulting document before it can be committed.
+    pub fn required_schema_version(&self) -> Result<u64> {
+        crate::structural::check_subtree_bounds(self)?;
+        Ok(required_version(self))
+    }
+
     pub(crate) fn same_null_presence(&self, other: &Self) -> bool {
         null_presence(&self.attrs, &self.null_fields, "attrs")
             == null_presence(&other.attrs, &other.null_fields, "attrs")
