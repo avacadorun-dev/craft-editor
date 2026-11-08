@@ -1044,7 +1044,7 @@ pub(crate) fn fit_clipboard_container<F: FnMut() -> Result<String>>(
             // that explicit schema-default root rather than relying on native
             // recursive block+ filler discovery for this isolated container.
             schema
-                .node_from_json(&json!({"type":"tableCell","content":[{"type":"paragraph"}]}))
+                .node_from_json(&json!({"type":"tableCell","attrs":{"colspan":1,"rowspan":1,"colwidth":null,"align":null},"content":[{"type":"paragraph","attrs":{"blockId":null,"sourceRefs":[]}}]}))
                 .map_err(|_| Error::UnsupportedEdit)?
         } else {
             schema
