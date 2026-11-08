@@ -91,7 +91,11 @@ impl CanvasState {
                         drag.width,
                     )?;
                     session.restore_selection_bookmark(&drag.bookmark)?;
-                    session.apply_commands(vec![command])?;
+                    if let Some(cells) = session.cell_selection().cloned() {
+                        session.apply_commands_with_cell_selection(vec![command], cells)?;
+                    } else {
+                        session.apply_commands(vec![command])?;
+                    }
                 }
             } else if down {
                 self.column_resize = Some(drag);
@@ -331,6 +335,49 @@ mod tests {
             assert_eq!(session.document().to_json()?, before);
             assert_eq!(session.revision(), revision);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn a_cell_rectangle_survives_native_resize_release_and_undo() -> TestResult {
+        let original = source()?;
+        let mut session = EditorSession::new(original.clone(), Revision(0));
+        let cells = crate::TableSelection {
+            table_path: NodePath(vec![1]),
+            anchor: crate::CellPoint { row: 1, column: 1 },
+            head: crate::CellPoint { row: 1, column: 0 },
+        };
+        session.set_cell_selection(cells.clone())?;
+        let ctx = egui::Context::default();
+        let style = CanvasStyle::default();
+        let first = frame(&mut session, &ctx, vec![], &style);
+        assert!(first.errors.is_empty(), "{:?}", first.errors);
+        let at = boundary(&session, first.response.rect)?;
+        let pressed = frame(
+            &mut session,
+            &ctx,
+            vec![Event::PointerMoved(at), down(at, true)],
+            &style,
+        );
+        assert!(pressed.errors.is_empty(), "{:?}", pressed.errors);
+        let destination = at + egui::vec2(60.0, 0.0);
+        let released = frame(
+            &mut session,
+            &ctx,
+            vec![Event::PointerMoved(destination), down(destination, false)],
+            &style,
+        );
+        assert!(released.errors.is_empty(), "{:?}", released.errors);
+        assert_eq!(session.revision(), Revision(1));
+        assert_eq!(session.cell_selection(), Some(&cells));
+        let after = session.document().to_json()?;
+        session.undo()?;
+        assert_eq!(session.document(), &original);
+        assert_eq!(session.cell_selection(), Some(&cells));
+        assert!(!session.can_undo());
+        session.redo()?;
+        assert_eq!(session.document().to_json()?, after);
+        assert_eq!(session.cell_selection(), Some(&cells));
         Ok(())
     }
 }
