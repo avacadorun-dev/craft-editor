@@ -19,6 +19,8 @@ mod html;
 #[cfg(feature = "native-clipboard")]
 mod native;
 mod plain;
+/// Source-backed bounded URL and text paste-rule components.
+pub mod rules;
 #[cfg(feature = "native-clipboard")]
 pub use native::NativeClipboard;
 

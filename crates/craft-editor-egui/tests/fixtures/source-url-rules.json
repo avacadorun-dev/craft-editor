@@ -1,0 +1,411 @@
+{
+  "source": {
+    "tiptap": "3.29.2",
+    "linkifyjs": "4.3.3",
+    "linkSourceSha256": "a86d57e74715057a26e0a0881b461e3468225d75fc66133bd8c151cec7949a89",
+    "finderSourceSha256": "c2235aeb0733ff36f12bda2aa8dc1f5efbfc94315089d5b69bc75934ccea5f9c",
+    "scope": "Raw source URL finder + configured isAllowedUri/shouldAutoLink; code/internal paste exclusions are separate"
+  },
+  "cases": [
+    {
+      "text": "https://example.com.",
+      "links": [
+        {
+          "value": "https://example.com",
+          "href": "https://example.com",
+          "from": 0,
+          "to": 19
+        }
+      ]
+    },
+    {
+      "text": "https://test.com/!/",
+      "links": [
+        {
+          "value": "https://test.com/!/",
+          "href": "https://test.com/!/",
+          "from": 0,
+          "to": 19
+        }
+      ]
+    },
+    {
+      "text": "(https://en.wikipedia.org/wiki/Link_(The_Legend_of_Zelda))",
+      "links": [
+        {
+          "value": "https://en.wikipedia.org/wiki/Link_(The_Legend_of_Zelda)",
+          "href": "https://en.wikipedia.org/wiki/Link_(The_Legend_of_Zelda)",
+          "from": 1,
+          "to": 57
+        }
+      ]
+    },
+    {
+      "text": "example.com",
+      "links": [
+        {
+          "value": "example.com",
+          "href": "http://example.com",
+          "from": 0,
+          "to": 11
+        }
+      ]
+    },
+    {
+      "text": "www.example.com/foo",
+      "links": [
+        {
+          "value": "www.example.com/foo",
+          "href": "http://www.example.com/foo",
+          "from": 0,
+          "to": 19
+        }
+      ]
+    },
+    {
+      "text": "example.invalid",
+      "links": []
+    },
+    {
+      "text": "example.test",
+      "links": []
+    },
+    {
+      "text": "localhost",
+      "links": []
+    },
+    {
+      "text": "localhost:3000",
+      "links": []
+    },
+    {
+      "text": "127.0.0.1",
+      "links": []
+    },
+    {
+      "text": "http://127.0.0.1:8080/a",
+      "links": [
+        {
+          "value": "http://127.0.0.1:8080/a",
+          "href": "http://127.0.0.1:8080/a",
+          "from": 0,
+          "to": 23
+        }
+      ]
+    },
+    {
+      "text": "http://localhost:3000",
+      "links": [
+        {
+          "value": "http://localhost:3000",
+          "href": "http://localhost:3000",
+          "from": 0,
+          "to": 21
+        }
+      ]
+    },
+    {
+      "text": "a@example.com",
+      "links": [
+        {
+          "value": "a@example.com",
+          "href": "mailto:a@example.com",
+          "from": 0,
+          "to": 13
+        }
+      ]
+    },
+    {
+      "text": "a@example.invalid",
+      "links": []
+    },
+    {
+      "text": "a@localhost",
+      "links": []
+    },
+    {
+      "text": "mailto:a@example.com",
+      "links": [
+        {
+          "value": "mailto:a@example.com",
+          "href": "mailto:a@example.com",
+          "from": 0,
+          "to": 20
+        }
+      ]
+    },
+    {
+      "text": "ftp://example.com/a",
+      "links": [
+        {
+          "value": "ftp://example.com/a",
+          "href": "ftp://example.com/a",
+          "from": 0,
+          "to": 19
+        }
+      ]
+    },
+    {
+      "text": "ftps://example.com/a",
+      "links": [
+        {
+          "value": "ftps://example.com/a",
+          "href": "ftps://example.com/a",
+          "from": 0,
+          "to": 20
+        }
+      ]
+    },
+    {
+      "text": "file:///etc/private",
+      "links": []
+    },
+    {
+      "text": "tel:1234",
+      "links": []
+    },
+    {
+      "text": "sms:1234",
+      "links": []
+    },
+    {
+      "text": "xmpp:a@example.com",
+      "links": [
+        {
+          "value": "a@example.com",
+          "href": "mailto:a@example.com",
+          "from": 5,
+          "to": 18
+        }
+      ]
+    },
+    {
+      "text": "callto:1234",
+      "links": []
+    },
+    {
+      "text": "cid:part@example.com",
+      "links": [
+        {
+          "value": "part@example.com",
+          "href": "mailto:part@example.com",
+          "from": 4,
+          "to": 20
+        }
+      ]
+    },
+    {
+      "text": "javascript:bad",
+      "links": []
+    },
+    {
+      "text": "data:text/plain,bad",
+      "links": []
+    },
+    {
+      "text": "https://例え.jp/道",
+      "links": [
+        {
+          "value": "https://例え.jp/道",
+          "href": "https://例え.jp/道",
+          "from": 0,
+          "to": 15
+        }
+      ]
+    },
+    {
+      "text": "сайт.рф",
+      "links": [
+        {
+          "value": "сайт.рф",
+          "href": "http://сайт.рф",
+          "from": 0,
+          "to": 7
+        }
+      ]
+    },
+    {
+      "text": "例え.テスト",
+      "links": []
+    },
+    {
+      "text": "例え.jp",
+      "links": [
+        {
+          "value": "例え.jp",
+          "href": "http://例え.jp",
+          "from": 0,
+          "to": 5
+        }
+      ]
+    },
+    {
+      "text": "😀.com/path",
+      "links": [
+        {
+          "value": "😀.com/path",
+          "href": "http://😀.com/path",
+          "from": 0,
+          "to": 10
+        }
+      ]
+    },
+    {
+      "text": "https://😀.com/路",
+      "links": [
+        {
+          "value": "https://😀.com/路",
+          "href": "https://😀.com/路",
+          "from": 0,
+          "to": 15
+        }
+      ]
+    },
+    {
+      "text": "foo://example.com/a",
+      "links": [
+        {
+          "value": "example.com/a",
+          "href": "http://example.com/a",
+          "from": 6,
+          "to": 19
+        }
+      ]
+    },
+    {
+      "text": "foo:example.com",
+      "links": [
+        {
+          "value": "example.com",
+          "href": "http://example.com",
+          "from": 4,
+          "to": 15
+        }
+      ]
+    },
+    {
+      "text": "https://user:pass@example.com",
+      "links": [
+        {
+          "value": "https://user:pass@example.com",
+          "href": "https://user:pass@example.com",
+          "from": 0,
+          "to": 29
+        }
+      ]
+    },
+    {
+      "text": "user:pass@example.com",
+      "links": [
+        {
+          "value": "pass@example.com",
+          "href": "mailto:pass@example.com",
+          "from": 5,
+          "to": 21
+        }
+      ]
+    },
+    {
+      "text": "http://user:pass@example.com",
+      "links": [
+        {
+          "value": "http://user:pass@example.com",
+          "href": "http://user:pass@example.com",
+          "from": 0,
+          "to": 28
+        }
+      ]
+    },
+    {
+      "text": "https://example.com/<tag>",
+      "links": [
+        {
+          "value": "https://example.com/<tag>",
+          "href": "https://example.com/<tag>",
+          "from": 0,
+          "to": 25
+        }
+      ]
+    },
+    {
+      "text": "<https://example.com/>",
+      "links": [
+        {
+          "value": "https://example.com/",
+          "href": "https://example.com/",
+          "from": 1,
+          "to": 21
+        }
+      ]
+    },
+    {
+      "text": "https://example.com/a?x=1&y=2",
+      "links": [
+        {
+          "value": "https://example.com/a?x=1&y=2",
+          "href": "https://example.com/a?x=1&y=2",
+          "from": 0,
+          "to": 29
+        }
+      ]
+    },
+    {
+      "text": "https://example.com/a#frag",
+      "links": [
+        {
+          "value": "https://example.com/a#frag",
+          "href": "https://example.com/a#frag",
+          "from": 0,
+          "to": 26
+        }
+      ]
+    },
+    {
+      "text": "https://[::1]/x",
+      "links": []
+    },
+    {
+      "text": "a@[::1]",
+      "links": []
+    },
+    {
+      "text": "先😀 https://example.com/后 — a@example.com",
+      "links": [
+        {
+          "value": "https://example.com/后",
+          "href": "https://example.com/后",
+          "from": 3,
+          "to": 24
+        },
+        {
+          "value": "a@example.com",
+          "href": "mailto:a@example.com",
+          "from": 27,
+          "to": 40
+        }
+      ]
+    },
+    {
+      "text": "[label](https://example.com)",
+      "links": [
+        {
+          "value": "https://example.com",
+          "href": "https://example.com",
+          "from": 8,
+          "to": 27
+        }
+      ]
+    },
+    {
+      "text": "`https://example.com`",
+      "links": [
+        {
+          "value": "https://example.com`",
+          "href": "https://example.com`",
+          "from": 1,
+          "to": 21
+        }
+      ]
+    }
+  ]
+}
