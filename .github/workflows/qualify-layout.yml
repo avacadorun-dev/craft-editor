@@ -43,6 +43,8 @@ jobs:
         run: |
           python3 tools/verify-syntax-assets.py
           cargo fmt --all -- --check
+          cargo test -p craft-editor-egui --test progressive_atoms --all-features --locked
+          cargo test -p craft-editor-render --test progressive_atoms --locked
           cargo test --workspace --all-features --locked
           cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
           cargo run -p craft-editor-egui --example wordcraft_geometry --features wordcraft-geometry --locked > artifacts/geometry-report.json
