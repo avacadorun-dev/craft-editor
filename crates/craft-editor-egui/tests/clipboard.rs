@@ -58,7 +58,7 @@ fn rich_partial_copy_preserves_marks_atoms_opaque_fields_and_exact_unicode() -> 
         slice.content[0].children()[1],
         source.blocks()[0].children()[1]
     );
-    assert_eq!(copied.plain, "😀Б$x^2$");
+    assert_eq!(copied.plain, "😀Б"); // The enabled source serializer omits inlineMath.
     assert!(!copied.plain.contains('\u{fffc}'));
     assert!(
         !copied
@@ -149,7 +149,7 @@ fn paragraph_break_copy_retains_both_empty_open_boundaries() -> TestResult {
     let mut editor = EditorSession::new(source, Revision(0));
     editor.set_selection(range("a", 1, "b", 0))?;
     let copied = editor.copy_selection()?.ok_or("missing boundary copy")?;
-    assert_eq!(copied.plain, "\n");
+    assert_eq!(copied.plain, "\n\n");
     let slice = RichSlice::decode(copied.rich.as_deref().ok_or("missing rich")?, LIMIT)?;
     assert_eq!(slice.content.len(), 2);
     let mut target = session()?;
@@ -160,17 +160,20 @@ fn paragraph_break_copy_retains_both_empty_open_boundaries() -> TestResult {
     Ok(())
 }
 #[test]
-fn opaque_block_copy_has_real_plain_fallback_and_paste_renews_only_identity() -> TestResult {
+fn opaque_block_copy_matches_empty_source_plain_and_paste_renews_only_identity() -> TestResult {
     let source = Document::from_json(
         json!({"type":"doc","attrs":{"schemaVersion":2},"content":[{"type":"mermaidBlock","attrs":{"blockId":"diagram","code":"flowchart TD\nA-->B","caption":"Caption","vendor":null},"vendorNode":true}]}),
     )?;
     let mut editor = EditorSession::new(source.clone(), Revision(0));
     editor.select_node(editor.document().node_ref(&NodePath(vec![0]))?)?;
     let copied = editor.copy_selection()?.ok_or("missing atom copy")?;
+    assert!(copied.plain.is_empty());
+    assert!(copied.rich.is_some());
     assert!(
         copied
-            .plain
-            .contains("```mermaid\nflowchart TD\nA-->B\n```")
+            .html
+            .as_deref()
+            .is_some_and(|html| html.contains("flowchart TD"))
     );
     assert!(!copied.plain.contains('\u{fffc}'));
     let mut target = session()?;
@@ -456,6 +459,59 @@ fn empty_native_clipboard_never_deletes_the_current_selection_or_creates_history
         assert_eq!(editor.selection(), original_selection.as_ref());
         assert!(!editor.can_undo());
         assert!(editor.take_pending_changes().is_empty());
+    }
+    Ok(())
+}
+
+#[test]
+fn copy_bundle_matches_all_actual_enabled_source_plain_ranges_without_markdown_conversion()
+-> TestResult {
+    let corpus: Value = serde_json::from_str(include_str!("fixtures/source-plain-copy.json"))?;
+    for case in corpus["cases"].as_array().ok_or("missing source cases")? {
+        let document = Document::from_json(case["input"].clone())?;
+        let mut editor = EditorSession::new(document.clone(), Revision(0));
+        let bundle = if let Some(index) = case["node"].as_u64() {
+            RichSlice {
+                content: vec![document.blocks()[index as usize].clone()],
+                open_start: 0,
+                open_end: 0,
+            }
+            .bundle()?
+        } else if case.get("cells").is_some() {
+            editor.set_cell_selection(craft_editor_egui::TableSelection {
+                table_path: NodePath(vec![12]),
+                anchor: craft_editor_egui::CellPoint { row: 1, column: 1 },
+                head: craft_editor_egui::CellPoint { row: 0, column: 0 },
+            })?;
+            editor.copy_selection()?.ok_or("missing rectangular copy")?
+        } else {
+            let (from, to) = if case["all"] == true {
+                (("before", 0), ("after", 5))
+            } else {
+                (
+                    (
+                        case["from"][0].as_str().ok_or("missing id")?,
+                        case["from"][1].as_u64().ok_or("missing offset")? as usize,
+                    ),
+                    (
+                        case["to"][0].as_str().ok_or("missing id")?,
+                        case["to"][1].as_u64().ok_or("missing offset")? as usize,
+                    ),
+                )
+            };
+            editor.set_selection(range(from.0, from.1, to.0, to.1))?;
+            editor.copy_selection()?.ok_or("missing text copy")?
+        };
+        assert_eq!(
+            bundle.plain,
+            case["plain"].as_str().ok_or("missing plain")?,
+            "{}",
+            case["name"]
+        );
+        assert!(bundle.rich.is_some());
+        assert!(bundle.html.is_some());
+        assert_eq!(editor.document(), &document);
+        assert!(!editor.can_undo());
     }
     Ok(())
 }

@@ -19,6 +19,7 @@ mod html;
 #[cfg(feature = "native-clipboard")]
 mod native;
 mod plain;
+mod plain_source;
 mod prepared;
 pub use prepared::{ImageBinding, PasteContext, PreparedPaste};
 /// Source-backed bounded URL and text paste-rule components.
@@ -73,7 +74,8 @@ pub struct ClipboardBundle {
     pub rich: Option<Vec<u8>>,
     /// Sanitized interoperable HTML; it does not carry opaque internal metadata.
     pub html: Option<String>,
-    /// Meaningful text, including source-form atoms rather than synthesized U+FFFC sentinels.
+    /// Exact enabled-source clipboard text, including its empty atom-only representations.
+    /// Canonical rich/HTML preserve blocks whose source plain serializer omits their content.
     pub plain: String,
     /// Host-owned opaque named formats, such as a portable project-media capsule.
     /// Native reads are limited to explicitly registered formats; these bytes grant no access.
@@ -275,7 +277,7 @@ impl RichSlice {
         Ok(ClipboardBundle {
             rich: Some(self.encode()?),
             html: Some(html::export(&self.content)),
-            plain: plain::export(&self.content),
+            plain: plain_source::slice(self)?,
             formats: BTreeMap::new(),
         })
     }
@@ -386,30 +388,21 @@ impl EditorSession {
                 .map(|span| span.path.len())
                 .ok_or(Error::InvalidSelection)
         };
-        RichSlice {
+        let mut bundle = RichSlice {
             content,
             open_start: path_depth(&first.block_id)?,
             open_end: path_depth(&last.block_id)?,
         }
-        .bundle()
-        .map(Some)
+        .bundle()?;
+        bundle.plain = plain_source::selection(self.document(), selection)?;
+        Ok(Some(bundle))
     }
     pub(crate) fn selected_cell_plain_text(&self) -> Result<String> {
         let selection = self
             .table_selection
             .as_ref()
             .ok_or(Error::InvalidSelection)?;
-        selection
-            .origin_paths(self.document())?
-            .iter()
-            .map(|path| {
-                self.document()
-                    .node(path)
-                    .map(|cell| plain::export(cell.children()))
-                    .map_err(Error::from)
-            })
-            .collect::<Result<Vec<_>>>()
-            .map(|cells| cells.join("\n\n"))
+        plain_source::cells(self.document(), &selection.origin_paths(self.document())?)
     }
     fn copy_table_selection(&self) -> Result<ClipboardBundle> {
         let selection = self

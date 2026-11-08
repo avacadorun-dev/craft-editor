@@ -43,7 +43,7 @@ fn main() -> ProbeResult<()> {
         (Ok(()), Ok(())) => {
             println!(
                 "{}",
-                json!({"native_clipboard":true,"backend":if cfg!(target_os="macos"){"macOS pasteboard"}else{"isolated X11"},"fresh_nonce_verified":true,"private_json":true,"html":true,"unicode_plain":true,"canonical_roundtrip":true,"registered_opaque_format":true,"synthetic_fixture_restored":true,"native_ui_acceptance":false})
+                json!({"native_clipboard":true,"backend":if cfg!(target_os="macos"){"macOS pasteboard"}else{"isolated X11"},"fresh_nonce_verified":true,"private_json":true,"html":true,"unicode_plain":true,"canonical_roundtrip":true,"registered_opaque_format":true,"synthetic_fixture_restored":true,"empty_plain_rich_cut_undo":true,"native_ui_acceptance":false})
             );
             Ok(())
         }
@@ -106,6 +106,38 @@ fn exercise(
     )?;
     if slice.content != source.blocks() {
         return Err("native_clipboard_canonical_roundtrip_mismatch".into());
+    }
+    let atom = Document::from_json(
+        json!({"type":"doc","attrs":{"schemaVersion":4},"content":[{"type":"mermaidBlock","attrs":{"blockId":"native-atom","code":format!("graph TD; A[\"{nonce}\"]-->B"),"caption":nonce}}]}),
+    )?;
+    let mut session = EditorSession::new(atom.clone(), Revision(0));
+    let selected = session
+        .document()
+        .node_ref(&craft_editor_model::NodePath(vec![0]))?;
+    session.select_node(selected.clone())?;
+    let Some(craft_editor_egui::clipboard::ClipboardRequest::Cut {
+        bundle,
+        ticket,
+        guard,
+    }) = session.begin_cut()?
+    else {
+        return Err("native_empty_plain_missing_cut".into());
+    };
+    if !bundle.plain.is_empty() || bundle.rich.is_none() || bundle.html.is_none() {
+        return Err("native_empty_plain_wrong_source_contract".into());
+    }
+    let ack = ticket.write(writer.as_ref(), &bundle)?;
+    let actual = reader.read()?;
+    if actual != *bundle {
+        return Err("native_empty_plain_rich_roundtrip_mismatch".into());
+    }
+    session.finish_cut(guard, ack)?;
+    if session.document() == &atom {
+        return Err("native_empty_plain_cut_not_applied".into());
+    }
+    session.undo()?;
+    if session.document() != &atom || session.node_selection() != Some(&selected) {
+        return Err("native_empty_plain_cut_undo_mismatch".into());
     }
     Ok(())
 }

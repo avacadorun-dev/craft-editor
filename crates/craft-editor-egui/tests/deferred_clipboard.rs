@@ -465,3 +465,48 @@ fn explicit_recovery_copy_keeps_captured_bytes_and_never_creates_a_cut_guard() -
     );
     Ok(())
 }
+
+#[test]
+fn empty_source_plain_atom_cut_requires_real_rich_ack_and_one_undo() -> TestResult {
+    for fail in [false, true] {
+        let original = Document::from_json(
+            serde_json::json!({"type":"doc","attrs":{"schemaVersion":4},"content":[{"type":"mermaidBlock","attrs":{"blockId":"atom","code":"graph TD; A-->B","caption":"Caption","vendor":null}}]}),
+        )?;
+        let mut session = EditorSession::new(original.clone(), Revision(0));
+        let selected = session
+            .document()
+            .node_ref(&craft_editor_model::NodePath(vec![0]))?;
+        session.select_node(selected.clone())?;
+        let Some(ClipboardRequest::Cut {
+            bundle,
+            ticket,
+            guard,
+        }) = session.begin_cut()?
+        else {
+            return Err("missing atom Cut".into());
+        };
+        assert!(bundle.plain.is_empty());
+        assert!(bundle.rich.is_some());
+        assert!(bundle.html.is_some());
+        let provider = Provider {
+            fail,
+            ..Default::default()
+        };
+        let ack = ticket.write(&provider, &bundle);
+        if fail {
+            assert!(ack.is_err());
+            assert_eq!(session.document(), &original);
+            assert_eq!(session.node_selection(), Some(&selected));
+            assert!(!session.can_undo());
+        } else {
+            session.finish_cut(guard, ack?)?;
+            assert_ne!(session.document(), &original);
+            assert_eq!(provider.read()?, *bundle);
+            session.undo()?;
+            assert_eq!(session.document(), &original);
+            assert_eq!(session.node_selection(), Some(&selected));
+            assert!(!session.can_undo());
+        }
+    }
+    Ok(())
+}

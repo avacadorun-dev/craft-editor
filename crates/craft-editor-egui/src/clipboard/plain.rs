@@ -1,4 +1,4 @@
-//! Source-backed complete-fence/formula paste and non-sentinel plain fallbacks.
+//! Source-backed complete-fence/formula paste rules. Clipboard copy has a separate exact-source serializer.
 use super::RichSlice;
 use crate::Result;
 use craft_editor_model::Node;
@@ -103,80 +103,4 @@ fn fenced_code(value: &str) -> Option<(String, String)> {
         return None;
     }
     Some((language.to_ascii_lowercase(), text.into()))
-}
-pub(super) fn export(nodes: &[Node]) -> String {
-    nodes.iter().map(node_text).collect::<Vec<_>>().join("\n")
-}
-fn attr<'a>(node: &'a Node, key: &str) -> &'a str {
-    node.attrs
-        .as_ref()
-        .and_then(|attrs| attrs.get(key))
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-}
-fn inline(nodes: &[Node]) -> String {
-    nodes.iter().map(node_text).collect()
-}
-fn node_text(node: &Node) -> String {
-    match node.node_type.as_str() {
-        "text" => node.text.clone().unwrap_or_default(),
-        "hardBreak" => "\n".into(),
-        "inlineMath" => format!("${}$", attr(node, "latex")),
-        "mathBlock" => format!("$$\n{}\n$$", attr(node, "latex")),
-        "mermaidBlock" => {
-            let code = attr(node, "code");
-            let ticks = fence_for(code);
-            let caption = attr(node, "caption");
-            format!(
-                "{ticks}mermaid\n{code}\n{ticks}{}",
-                if caption.is_empty() {
-                    String::new()
-                } else {
-                    format!("\n{caption}")
-                }
-            )
-        }
-        "imageBlock" => {
-            let alt = attr(node, "alt");
-            let caption = attr(node, "caption");
-            let label = if alt.is_empty() { caption } else { alt };
-            format!(
-                "![{label}]({}){}",
-                attr(node, "src"),
-                if caption.is_empty() || caption == label {
-                    String::new()
-                } else {
-                    format!("\n{caption}")
-                }
-            )
-        }
-        "codeBlock" => {
-            let text = node.inline_text();
-            let fence = fence_for(&text);
-            format!("{fence}{}\n{text}\n{fence}", attr(node, "language"))
-        }
-        "horizontalRule" => "---".into(),
-        "sceneBreak" => "* * *".into(),
-        "paragraph" | "heading" => inline(node.children()),
-        "tableRow" => node
-            .children()
-            .iter()
-            .map(|node| export(node.children()))
-            .collect::<Vec<_>>()
-            .join("\t"),
-        _ => export(node.children()),
-    }
-}
-fn fence_for(text: &str) -> String {
-    let mut longest: usize = 0;
-    let mut run: usize = 0;
-    for ch in text.chars() {
-        if ch == '`' {
-            run += 1;
-            longest = longest.max(run);
-        } else {
-            run = 0;
-        }
-    }
-    "`".repeat(longest.saturating_add(1).max(3))
 }

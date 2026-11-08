@@ -580,4 +580,152 @@ mod tests {
         }
         Ok(())
     }
+    #[derive(Default)]
+    struct MemoryClipboard(std::sync::Mutex<crate::clipboard::ClipboardBundle>);
+    impl crate::clipboard::ClipboardProvider for MemoryClipboard {
+        fn read(&self) -> crate::clipboard::ClipboardResult<crate::clipboard::ClipboardBundle> {
+            Ok(self
+                .0
+                .lock()
+                .map_err(|_| crate::clipboard::ClipboardError::Read)?
+                .clone())
+        }
+        fn write(
+            &self,
+            bundle: &crate::clipboard::ClipboardBundle,
+        ) -> crate::clipboard::ClipboardResult<()> {
+            *self
+                .0
+                .lock()
+                .map_err(|_| crate::clipboard::ClipboardError::Write)? = bundle.clone();
+            Ok(())
+        }
+        fn max_bytes(&self) -> usize {
+            1_000_000
+        }
+    }
+    #[test]
+    fn real_canvas_cell_copy_plain_paste_and_cut_use_canonical_native_event_paths() -> TestResult {
+        use crate::clipboard::{ClipboardBundle, ClipboardProvider};
+        let original = fixture()?;
+        let mut session = EditorSession::new(original.clone(), Revision(0));
+        let ctx = egui::Context::default();
+        let style = CanvasStyle::default();
+        focus(&mut session, &ctx, &style)?;
+        let clipboard = std::sync::Arc::new(MemoryClipboard::default());
+        session.set_clipboard_provider(Some(clipboard.clone()));
+        let mut selected = rectangle();
+        std::mem::swap(&mut selected.anchor, &mut selected.head);
+        session.set_cell_selection(selected.clone())?;
+        let (response, _) = frame(&mut session, &ctx, vec![Event::Copy], &style);
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let copied = clipboard.read()?;
+        assert_eq!(copied.plain, "Alpha\n\nBravo\n\nCharlie\n\nDelta");
+        assert!(copied.rich.is_some());
+        assert_eq!(session.document(), &original);
+        assert!(!session.can_undo());
+        clipboard.write(&ClipboardBundle {
+            plain: "X".into(),
+            ..Default::default()
+        })?;
+        let (response, _) = frame(
+            &mut session,
+            &ctx,
+            vec![Event::Paste("do not use a different event snapshot".into())],
+            &style,
+        );
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let writing = session.document().blocks()[1]
+            .children()
+            .iter()
+            .flat_map(Node::children)
+            .flat_map(Node::children)
+            .map(Node::inline_text)
+            .collect::<Vec<_>>();
+        assert_eq!(writing, vec!["X", "X", "X", "X"]);
+        assert_eq!(session.cell_selection(), Some(&rectangle()));
+        assert_eq!(session.revision(), Revision(1));
+        session.undo()?;
+        assert_eq!(session.document(), &original);
+        assert_eq!(session.cell_selection(), Some(&selected));
+        let (response, _) = frame(&mut session, &ctx, vec![Event::Cut], &style);
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        assert_eq!(clipboard.read()?.plain, copied.plain);
+        assert!(session.cell_selection().is_none());
+        assert!(
+            session.document().blocks()[1]
+                .children()
+                .iter()
+                .flat_map(Node::children)
+                .flat_map(Node::children)
+                .all(|node| node.inline_text().is_empty())
+        );
+        session.undo()?;
+        assert_eq!(session.document(), &original);
+        assert_eq!(session.cell_selection(), Some(&selected));
+        assert!(!session.can_undo());
+        Ok(())
+    }
+    #[test]
+    fn rectangular_ime_cancel_and_focus_loss_preserve_one_selection_form_without_history()
+    -> TestResult {
+        let original = fixture()?;
+        let mut session = EditorSession::new(original.clone(), Revision(0));
+        let ctx = egui::Context::default();
+        let style = CanvasStyle::default();
+        focus(&mut session, &ctx, &style)?;
+        session.set_cell_selection(rectangle())?;
+        let (response, _) = frame(
+            &mut session,
+            &ctx,
+            vec![Event::Ime(egui::ImeEvent::Preedit {
+                text: "候補".into(),
+                active_range_chars: Some(0..2),
+            })],
+            &style,
+        );
+        assert!(response.errors.is_empty());
+        assert!(session.is_composing());
+        assert!(
+            session
+                .set_selection(collapsed(DocPoint {
+                    block_id: "a".into(),
+                    offset: ScalarOffset(0)
+                }))
+                .is_err()
+        );
+        let (response, _) = frame(
+            &mut session,
+            &ctx,
+            vec![key(Key::Escape, Modifiers::NONE)],
+            &style,
+        );
+        assert!(response.errors.is_empty());
+        assert!(!session.is_composing());
+        assert_eq!(session.cell_selection(), Some(&rectangle()));
+        assert!(session.selection().is_none());
+        assert!(session.node_selection().is_none());
+        let mut result = None;
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(700.0, 650.0))),
+                focused: false,
+                ..Default::default()
+            },
+            |root| {
+                egui::CentralPanel::default().show(root, |ui| {
+                    result = Some(session.show_canvas(ui, &style));
+                });
+            },
+        );
+        output.textures_delta.clear();
+        let response = result.ok_or("missing unfocused frame")?;
+        assert!(response.errors.is_empty());
+        assert_eq!(session.document(), &original);
+        assert_eq!(session.cell_selection(), Some(&rectangle()));
+        assert!(session.selection().is_none());
+        assert!(session.node_selection().is_none());
+        assert!(!session.can_undo());
+        Ok(())
+    }
 }
