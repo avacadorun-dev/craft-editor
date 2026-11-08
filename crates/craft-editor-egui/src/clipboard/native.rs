@@ -1,5 +1,7 @@
 //! Safe optional OS transport; actual native interoperability is separately qualified.
-use super::{ClipboardBundle, ClipboardError, ClipboardProvider, ClipboardResult, RICH_MIME};
+use super::{
+    ClipboardBundle, ClipboardError, ClipboardFormat, ClipboardProvider, ClipboardResult, RICH_MIME,
+};
 
 // NSPasteboard rejects raw MIME identifiers containing '/' or '+'. The canonical wire format
 // remains portable; only the native type identifier differs on macOS.
@@ -18,13 +20,35 @@ use std::sync::Mutex;
 pub struct NativeClipboard {
     context: Mutex<ClipboardContext>,
     max_bytes: usize,
+    formats: Vec<ClipboardFormat>,
 }
 impl NativeClipboard {
     /// Open the native clipboard. Do not instantiate per copy on selection-owned desktops.
     pub fn new(max_bytes: usize) -> ClipboardResult<Self> {
+        Self::with_formats(max_bytes, Vec::new())
+    }
+    /// Open with an explicit allowlist of additional opaque formats. Other OS formats are not read.
+    pub fn with_formats(max_bytes: usize, formats: Vec<ClipboardFormat>) -> ClipboardResult<Self> {
+        let mut mimes = std::collections::HashSet::new();
+        let mut utis = std::collections::HashSet::new();
+        for format in &formats {
+            if !valid_mime(&format.mime)
+                || !valid_uti(&format.macos_uti)
+                || matches!(format.mime.as_str(), RICH_MIME | "text/html" | "text/plain")
+                || matches!(
+                    format.macos_uti.as_str(),
+                    MACOS_RICH_UTI | "public.html" | "public.utf8-plain-text"
+                )
+                || !mimes.insert(format.mime.clone())
+                || !utis.insert(format.macos_uti.clone())
+            {
+                return Err(ClipboardError::InvalidSlice);
+            }
+        }
         Ok(Self {
             context: Mutex::new(ClipboardContext::new().map_err(|_| ClipboardError::Unavailable)?),
             max_bytes,
+            formats,
         })
     }
 }
@@ -52,7 +76,22 @@ impl ClipboardProvider for NativeClipboard {
         } else {
             String::new()
         };
-        let bundle = ClipboardBundle { rich, html, plain };
+        let mut formats = std::collections::BTreeMap::new();
+        for format in &self.formats {
+            let native = format_name(format);
+            if ctx.has(ContentFormat::Other(native.into())) {
+                formats.insert(
+                    format.mime.clone(),
+                    ctx.get_buffer(native).map_err(|_| ClipboardError::Read)?,
+                );
+            }
+        }
+        let bundle = ClipboardBundle {
+            rich,
+            html,
+            plain,
+            formats,
+        };
         bundle.check_budget(self.max_bytes)?;
         Ok(bundle)
     }
@@ -68,6 +107,17 @@ impl ClipboardProvider for NativeClipboard {
         }
         if let Some(rich) = &bundle.rich {
             contents.push(ClipboardContent::Other(rich_format().into(), rich.clone()));
+        }
+        for (mime, bytes) in &bundle.formats {
+            let format = self
+                .formats
+                .iter()
+                .find(|format| &format.mime == mime)
+                .ok_or(ClipboardError::InvalidSlice)?;
+            contents.push(ClipboardContent::Other(
+                format_name(format).into(),
+                bytes.clone(),
+            ));
         }
         ctx.set(contents).map_err(|_| ClipboardError::Write)?;
         // A successful backend call alone is insufficient: NSPasteboard can reject one custom
@@ -89,11 +139,52 @@ impl ClipboardProvider for NativeClipboard {
         {
             return Err(ClipboardError::Write);
         }
+        for (mime, bytes) in &bundle.formats {
+            let format = self
+                .formats
+                .iter()
+                .find(|format| &format.mime == mime)
+                .ok_or(ClipboardError::InvalidSlice)?;
+            if ctx
+                .get_buffer(format_name(format))
+                .map_err(|_| ClipboardError::Write)?
+                != *bytes
+            {
+                return Err(ClipboardError::Write);
+            }
+        }
         Ok(())
     }
     fn max_bytes(&self) -> usize {
         self.max_bytes
     }
+}
+
+fn format_name(format: &ClipboardFormat) -> &str {
+    if cfg!(target_os = "macos") {
+        &format.macos_uti
+    } else {
+        &format.mime
+    }
+}
+fn valid_uti(value: &str) -> bool {
+    value.contains('.')
+        && value.split('.').all(|part| {
+            !part.is_empty()
+                && part
+                    .bytes()
+                    .all(|ch| ch.is_ascii_alphanumeric() || ch == b'-')
+        })
+}
+fn valid_mime(value: &str) -> bool {
+    value.split_once('/').is_some_and(|(kind, name)| {
+        !kind.is_empty()
+            && !name.is_empty()
+            && kind
+                .bytes()
+                .chain(name.bytes())
+                .all(|ch| ch.is_ascii_alphanumeric() || b".+-".contains(&ch))
+    })
 }
 
 #[cfg(test)]

@@ -207,6 +207,7 @@ fn malformed_private_type_never_falls_back_to_replacing_selection_with_plain_tex
             rich: Some(serde_json::to_vec(&value)?),
             plain: "must not replace".into(),
             html: None,
+            ..Default::default()
         };
         assert!(target.paste_bundle(&bundle, LIMIT).is_err());
         assert_eq!(target.document(), &original);
@@ -335,6 +336,7 @@ fn html_paste_retains_word_styles_but_discards_active_content_and_unsafe_urls() 
             html: Some(html.into()),
             plain: String::new(),
             rich: None,
+            ..Default::default()
         },
         LIMIT,
     )?;
@@ -359,6 +361,7 @@ A--&gt;B</pre><figcaption>Diagram</figcaption><svg><script>hidden</script></svg>
             html: Some(html.into()),
             plain: String::new(),
             rich: None,
+            ..Default::default()
         },
         LIMIT,
     )?;

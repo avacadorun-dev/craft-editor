@@ -156,6 +156,7 @@ struct Composition {
 pub struct EditorSession {
     editor: Editor,
     clipboard_provider: Option<std::sync::Arc<dyn clipboard::ClipboardProvider>>,
+    clipboard_state: clipboard::DeferredState,
     selection: Option<Selection>,
     stored_marks: Option<Vec<Mark>>,
     node_selection: Option<NodeRef>,
@@ -178,6 +179,7 @@ impl EditorSession {
         Self {
             editor: Editor::new(document, revision),
             clipboard_provider: None,
+            clipboard_state: clipboard::DeferredState::default(),
             selection: None,
             stored_marks: None,
             node_selection: None,

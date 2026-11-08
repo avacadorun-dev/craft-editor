@@ -445,6 +445,24 @@ impl CanvasState {
         read_only: bool,
     ) -> Result<()> {
         match event {
+            Event::Copy
+                if session.clipboard_mode() == crate::clipboard::ClipboardMode::Deferred =>
+            {
+                session.queue_clipboard_copy(false)?;
+            }
+            Event::Cut
+                if !read_only
+                    && session.clipboard_mode() == crate::clipboard::ClipboardMode::Deferred =>
+            {
+                session.queue_clipboard_copy(true)?;
+            }
+            Event::Paste(_)
+                if !read_only
+                    && self.preedit.is_none()
+                    && session.clipboard_mode() == crate::clipboard::ClipboardMode::Deferred =>
+            {
+                session.queue_clipboard_paste()?;
+            }
             Event::Copy => {
                 if let Some(bundle) = session.copy_selection()? {
                     if let Some(provider) = &session.clipboard_provider {

@@ -1,6 +1,6 @@
 //! Hosted-only native clipboard ownership probe with fresh synthetic content.
 use craft_editor_egui::clipboard::{
-    ClipboardBundle, ClipboardProvider, NativeClipboard, RichSlice,
+    ClipboardBundle, ClipboardFormat, ClipboardProvider, NativeClipboard, RichSlice,
 };
 use craft_editor_egui::{DocPoint, EditorSession, Selection};
 use craft_editor_model::{Document, Revision, ScalarOffset};
@@ -15,8 +15,15 @@ fn main() -> ProbeResult<()> {
         std::process::id(),
         SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
     );
-    let writer = Arc::new(NativeClipboard::new(32 * 1024 * 1024)?);
-    let reader = NativeClipboard::new(32 * 1024 * 1024)?;
+    let formats = vec![ClipboardFormat {
+        mime: "application/vnd.craft-editor.clipboard-probe+json".into(),
+        macos_uti: "app.craft-editor.clipboard-probe-json".into(),
+    }];
+    let writer = Arc::new(NativeClipboard::with_formats(
+        32 * 1024 * 1024,
+        formats.clone(),
+    )?);
+    let reader = NativeClipboard::with_formats(32 * 1024 * 1024, formats)?;
     // Never read or print ambient clipboard data. Establish our own fresh fixture first and
     // restore that synthetic fixture even if the actual rich-content probe rejects.
     let fixture = ClipboardBundle {
@@ -36,7 +43,7 @@ fn main() -> ProbeResult<()> {
         (Ok(()), Ok(())) => {
             println!(
                 "{}",
-                json!({"native_clipboard":true,"backend":if cfg!(target_os="macos"){"macOS pasteboard"}else{"isolated X11"},"fresh_nonce_verified":true,"private_json":true,"html":true,"unicode_plain":true,"canonical_roundtrip":true,"synthetic_fixture_restored":true,"native_ui_acceptance":false})
+                json!({"native_clipboard":true,"backend":if cfg!(target_os="macos"){"macOS pasteboard"}else{"isolated X11"},"fresh_nonce_verified":true,"private_json":true,"html":true,"unicode_plain":true,"canonical_roundtrip":true,"registered_opaque_format":true,"synthetic_fixture_restored":true,"native_ui_acceptance":false})
             );
             Ok(())
         }
@@ -65,13 +72,20 @@ fn exercise(
             offset: ScalarOffset(source.block_text("source")?.chars().count()),
         },
     })?;
-    let bundle = session
+    let mut bundle = session
         .copy_selection()?
         .ok_or("native_clipboard_missing_selection")?;
+    bundle.formats.insert(
+        "application/vnd.craft-editor.clipboard-probe+json".into(),
+        serde_json::to_vec(&json!({"nonce":nonce,"opaque":true}))?,
+    );
     writer.write(&bundle)?;
     let actual = reader.read()?;
     if actual.plain != bundle.plain || !actual.plain.starts_with(nonce) {
         return Err("native_clipboard_plain_nonce_mismatch".into());
+    }
+    if actual.formats != bundle.formats {
+        return Err("native_clipboard_registered_format_mismatch".into());
     }
     if actual.rich != bundle.rich {
         return Err("native_clipboard_private_type_mismatch".into());

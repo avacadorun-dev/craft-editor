@@ -1,12 +1,16 @@
 //! Lossless canonical clipboard slices, meaningful fallbacks and explicit native transport.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 
 use craft_editor_model::{Change, Node, NodePath};
 use serde_json::{Value, json};
 
 use crate::{EditorSession, Error, Result, insertion, projection::Projection};
+
+mod deferred;
+pub(crate) use deferred::DeferredState;
+pub use deferred::{ClipboardMode, ClipboardRequest, CutGuard, PasteGuard, WriteAck, WriteTicket};
 
 mod html;
 #[cfg(feature = "native-clipboard")]
@@ -33,6 +37,15 @@ pub enum ClipboardError {
     /// Input exceeded the host's explicit clipboard budget.
     #[error("clipboard_resource_limit")]
     ResourceLimit,
+    /// The request belongs to another session/revision/selection or was explicitly cancelled.
+    #[error("clipboard_stale_request")]
+    StaleRequest,
+    /// A write acknowledgement does not match the captured content or Cut request.
+    #[error("clipboard_invalid_acknowledgement")]
+    InvalidAcknowledgement,
+    /// The bounded host-request queue needs to be drained before another request is captured.
+    #[error("clipboard_busy")]
+    Busy,
     /// A private rich slice has an invalid envelope or open edge.
     #[error("clipboard_invalid_slice")]
     InvalidSlice,
@@ -49,6 +62,9 @@ pub struct ClipboardBundle {
     pub html: Option<String>,
     /// Meaningful text, including source-form atoms rather than synthesized U+FFFC sentinels.
     pub plain: String,
+    /// Host-owned opaque named formats, such as a portable project-media capsule.
+    /// Native reads are limited to explicitly registered formats; these bytes grant no access.
+    pub formats: BTreeMap<String, Vec<u8>>,
 }
 impl ClipboardBundle {
     /// Inspect canonical paste content before mutation, for host asset/project authorization.
@@ -70,13 +86,19 @@ impl ClipboardBundle {
     }
     /// Refuse oversized external input before decoding; the host owns the selected budget.
     pub fn check_budget(&self, max_bytes: usize) -> ClipboardResult<()> {
-        let count = self
+        let mut count = self
             .rich
             .as_ref()
             .map_or(0, Vec::len)
             .checked_add(self.html.as_ref().map_or(0, String::len))
             .and_then(|sum| sum.checked_add(self.plain.len()))
             .ok_or(ClipboardError::ResourceLimit)?;
+        for (format, bytes) in &self.formats {
+            count = count
+                .checked_add(format.len())
+                .and_then(|sum| sum.checked_add(bytes.len()))
+                .ok_or(ClipboardError::ResourceLimit)?;
+        }
         if count > max_bytes {
             return Err(ClipboardError::ResourceLimit);
         }
@@ -94,6 +116,15 @@ pub trait ClipboardProvider: Send + Sync {
     fn write(&self, bundle: &ClipboardBundle) -> ClipboardResult<()>;
     /// Maximum total bytes the host permits before interpreting external clipboard content.
     fn max_bytes(&self) -> usize;
+}
+
+/// An explicitly registered opaque host format with its platform type mapping.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClipboardFormat {
+    /// Portable application MIME identifier used in [`ClipboardBundle::formats`].
+    pub mime: String,
+    /// Valid reverse-DNS UTI used for this format on macOS pasteboards.
+    pub macos_uti: String,
 }
 
 /// An untrusted canonical image reference; the host owns project authorization and acquisition.
@@ -232,6 +263,7 @@ impl RichSlice {
             rich: Some(self.encode()?),
             html: Some(html::export(&self.content)),
             plain: plain::export(&self.content),
+            formats: BTreeMap::new(),
         })
     }
 }
