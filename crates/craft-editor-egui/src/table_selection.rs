@@ -434,7 +434,7 @@ impl EditorSession {
 }
 
 impl EditorSession {
-    fn selected_cell_blocks(&self) -> Result<Vec<&craft_editor_model::Node>> {
+    pub(crate) fn selected_cell_blocks(&self) -> Result<Vec<&craft_editor_model::Node>> {
         let selected = self
             .table_selection
             .as_ref()
@@ -808,7 +808,7 @@ impl EditorSession {
     }
 }
 
-fn source_empty_paragraph(id: &str) -> craft_editor_model::Node {
+pub(crate) fn source_empty_paragraph(id: &str) -> craft_editor_model::Node {
     let mut paragraph = craft_editor_model::Node::paragraph(id, "");
     paragraph
         .attrs

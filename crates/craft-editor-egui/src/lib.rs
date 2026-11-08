@@ -31,7 +31,12 @@ pub mod clipboard;
 pub mod decorations;
 
 mod insertion;
+mod selection_state;
+/// One revision-local selection form for host dialogs and command bookmarks.
+pub use selection_state::SelectionState;
 mod structure;
+/// Canonical prose block kinds used by the source-compatible format command.
+pub use structure::TextBlockKind;
 mod table_selection;
 pub use craft_editor_model::ListKind;
 pub use insertion::ContentSlice;

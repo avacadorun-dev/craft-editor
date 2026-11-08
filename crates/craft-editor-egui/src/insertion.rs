@@ -565,8 +565,13 @@ impl EditorSession {
         };
         let mut plan = Plan::new(self, &nodes)?;
         plan.identify_incoming(&mut nodes)?;
-        let mut selected_slot: Option<(NodePath, usize)> = None;
-        let selection = if let Some(reference) = &self.node_selection {
+        let mut selected_slot: Option<(NodePath, usize, usize)> = None;
+        let selection = if let Some(cells) = &self.table_selection {
+            let path = cells.head_path(self.document())?;
+            let length = plan.doc().node(&path)?.children().len();
+            selected_slot = Some((path, 0, length));
+            None
+        } else if let Some(reference) = &self.node_selection {
             if plan.doc().node(&reference.path)? != reference.expected.as_ref() {
                 return Err(craft_editor_model::Error::NodeReferenceConflict.into());
             }
@@ -590,22 +595,29 @@ impl EditorSession {
                     },
                 })
             } else {
-                selected_slot = Some((parent_path, index));
+                selected_slot = Some((parent_path, index, index + 1));
                 None
             }
         } else {
             self.selection.clone()
         };
-        let after = if let Some((parent_path, index)) = selected_slot {
+        let after = if let Some((parent_path, index, to)) = selected_slot {
             let mut children = if inline {
                 let id = plan.id()?;
-                let mut paragraph = Node::paragraph(id, "");
+                let mut paragraph = if self.table_selection.is_some() {
+                    crate::table_selection::source_empty_paragraph(&id)
+                } else {
+                    Node::paragraph(id, "")
+                };
                 paragraph.content = Some(nodes);
                 vec![paragraph]
             } else {
                 nodes
             };
-            if children.is_empty() && plan.doc().node(&parent_path)?.children().len() == 1 {
+            if children.is_empty()
+                && index == 0
+                && to == plan.doc().node(&parent_path)?.children().len()
+            {
                 children.push(Node::paragraph(plan.id()?, ""));
             }
             let parent = plan.doc().node_ref(&parent_path)?;
@@ -614,7 +626,7 @@ impl EditorSession {
             plan.execute(vec![Command::ReplaceChildren {
                 parent,
                 from: index,
-                to: index + 1,
+                to,
                 children,
             }])?;
             if let Some(node) = selected {

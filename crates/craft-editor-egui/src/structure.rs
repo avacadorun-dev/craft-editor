@@ -10,15 +10,41 @@ use crate::{
     EditorSession, Error, MarkState, Result, Selection, insertion, projection::Projection,
 };
 
+enum Bookmark {
+    Text(Selection),
+    Cells(crate::TableSelection),
+}
+impl Bookmark {
+    fn commit(self, session: &mut EditorSession, commands: Vec<Command>) -> Result<Change> {
+        match self {
+            Self::Text(selection) => session.apply_commands_with_selection(commands, selection),
+            Self::Cells(selection) => {
+                session.apply_commands_with_cell_selection(commands, selection)
+            }
+        }
+    }
+}
 struct Bounds {
     first: NodePath,
     last: NodePath,
-    selection: Selection,
+    selection: Bookmark,
 }
 impl Bounds {
     fn new(session: &EditorSession) -> Result<Self> {
         if session.is_composing() {
             return Err(Error::CompositionActive);
+        }
+        if let Some(cells) = session.cell_selection() {
+            let path = cells.head_path(session.document())?;
+            let count = session.document().node(&path)?.children().len();
+            if count == 0 {
+                return Err(Error::InvalidSelection);
+            }
+            return Ok(Self {
+                first: path.child(0),
+                last: path.child(count - 1),
+                selection: Bookmark::Cells(cells.clone()),
+            });
         }
         let selection = session
             .selection()
@@ -59,11 +85,11 @@ impl Bounds {
         Ok(Self {
             first: NodePath(first.path.clone()),
             last: NodePath(last.path.clone()),
-            selection,
+            selection: Bookmark::Text(selection),
         })
     }
     fn ancestor(&self, document: &Document, kind: impl Fn(&str) -> bool) -> Option<NodePath> {
-        (0..self.first.0.len()).rev().find_map(|length| {
+        (0..=self.first.0.len()).rev().find_map(|length| {
             let path = NodePath(self.first.0[..length].to_vec());
             (self.last.0.starts_with(&path.0)
                 && document.node(&path).is_ok_and(|node| kind(&node.node_type)))
@@ -86,7 +112,10 @@ impl Bounds {
         let to = self.last.0.get(length).ok_or(Error::InvalidSelection)? + 1;
         Ok((NodePath(self.first.0[..length].to_vec()), from, to))
     }
-    fn child_range(&self, parent: &NodePath) -> Result<(usize, usize)> {
+    fn child_range(&self, parent: &NodePath, document: &Document) -> Result<(usize, usize)> {
+        if self.first == *parent && self.last == *parent {
+            return Ok((0, document.node(parent)?.children().len()));
+        }
         let from = *self
             .first
             .0
@@ -141,10 +170,10 @@ impl EditorSession {
     fn container_state(&self, kind: &str) -> Result<MarkState> {
         let bounds = Bounds::new(self)?;
         let projection = Projection::new(self.document())?;
-        let mut selected = projection
-            .spans
-            .iter()
-            .skip_while(|span| span.path != bounds.first.0);
+        let mut selected = projection.spans.iter().filter(|span| {
+            span.path >= bounds.first.0
+                && (span.path <= bounds.last.0 || span.path.starts_with(&bounds.last.0))
+        });
         let mut any = false;
         let mut all = true;
         let mut found = false;
@@ -185,7 +214,7 @@ impl EditorSession {
             // current kind lifts the selected item range. Generic model builders also support
             // partial type changes, but that is not the original toolbar's interaction.
             let (from, to) = if list.expected.node_type == kind.node_type() {
-                bounds.child_range(&path)?
+                bounds.child_range(&path, self.document())?
             } else {
                 (0, list.expected.children().len())
             };
@@ -247,17 +276,24 @@ impl EditorSession {
                 .filter(|node| node.node_type != "paragraph")
                 .map(|_| ids.id())
                 .collect::<Result<Vec<_>>>()?;
+            let mut style = ListStyle::new(kind);
+            if kind == ListKind::Ordered {
+                style.attrs.extend([
+                    ("start".into(), serde_json::json!(1)),
+                    ("type".into(), Value::Null),
+                ]);
+            }
             commands.push(wrap_list(
                 candidate.document(),
                 parent,
                 from,
                 to,
-                ListStyle::new(kind),
+                style,
                 &leading,
             )?);
             commands
         };
-        let change = self.apply_commands_with_selection(commands, bounds.selection)?;
+        let change = bounds.selection.commit(self, commands)?;
         self.next_id = ids.next;
         Ok(change)
     }
@@ -267,10 +303,10 @@ impl EditorSession {
         let path = bounds
             .ancestor(self.document(), is_list)
             .ok_or(Error::UnsupportedStructuralEdit)?;
-        let (from, to) = bounds.child_range(&path)?;
+        let (from, to) = bounds.child_range(&path, self.document())?;
         let command =
             indent_list_items(self.document(), self.document().node_ref(&path)?, from, to)?;
-        self.apply_commands_with_selection(vec![command], bounds.selection)
+        bounds.selection.commit(self, vec![command])
     }
     /// Outdent the selected items by one nesting level, retaining their exact text selection.
     pub fn outdent_list(&mut self) -> Result<Change> {
@@ -278,13 +314,13 @@ impl EditorSession {
         let path = bounds
             .ancestor(self.document(), is_list)
             .ok_or(Error::UnsupportedStructuralEdit)?;
-        let (from, to) = bounds.child_range(&path)?;
+        let (from, to) = bounds.child_range(&path, self.document())?;
         let list = self.document().node_ref(&path)?;
         let mut ids = IdPool::new(self);
         let portions = usize::from(from > 0) + usize::from(to < list.expected.children().len());
         let new_ids = ids.additional_portions(&list.expected, portions)?;
         let command = outdent_list_items_with_ids(self.document(), list, from, to, &new_ids)?;
-        let change = self.apply_commands_with_selection(vec![command], bounds.selection)?;
+        let change = bounds.selection.commit(self, vec![command])?;
         self.next_id = ids.next;
         Ok(change)
     }
@@ -298,7 +334,7 @@ impl EditorSession {
         let command =
             if let Some(path) = bounds.ancestor(self.document(), |kind| kind == "blockquote") {
                 let quote = self.document().node_ref(&path)?;
-                let (from, to) = bounds.child_range(&path)?;
+                let (from, to) = bounds.child_range(&path, self.document())?;
                 lift_quote(self.document(), quote, from, to, &mut ids)?
             } else {
                 let (path, from, to) = bounds.sibling_range()?;
@@ -311,7 +347,10 @@ impl EditorSession {
                     .to_vec();
                 let quote = Node::block(
                     "blockquote",
-                    Map::from_iter([("blockId".into(), Value::String(ids.id()?))]),
+                    Map::from_iter([
+                        ("blockId".into(), Value::String(ids.id()?)),
+                        ("sourceRefs".into(), serde_json::json!([])),
+                    ]),
                     selected,
                 );
                 Command::ReplaceChildren {
@@ -321,7 +360,7 @@ impl EditorSession {
                     children: vec![quote],
                 }
             };
-        let change = self.apply_commands_with_selection(vec![command], bounds.selection)?;
+        let change = bounds.selection.commit(self, vec![command])?;
         self.next_id = ids.next;
         Ok(change)
     }
@@ -339,7 +378,7 @@ impl EditorSession {
             &target,
             Map::from_iter([("kind".into(), Value::String(kind.into()))]),
         )?;
-        self.apply_commands_with_selection(vec![command], bounds.selection)
+        bounds.selection.commit(self, vec![command])
     }
 }
 
@@ -446,4 +485,159 @@ fn distribute_refs(node: &mut Node, refs: &[Value]) -> Result<bool> {
         }
     }
     Ok(retained)
+}
+
+/// Canonical prose block kind offered by the source editor's format selector.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextBlockKind {
+    /// Ordinary paragraph, retaining identity, writing and opaque metadata.
+    Paragraph,
+    /// Semantic heading level one through six.
+    Heading {
+        /// Heading level, validated before mutation.
+        level: u8,
+    },
+}
+impl EditorSession {
+    /// Format selected textblocks, including every selected cell range, in one guarded history entry.
+    /// Lists/quotes use the source head-cell policy; this command follows setBlockType's all-range policy.
+    pub fn set_text_block_kind(&mut self, kind: TextBlockKind) -> Result<Change> {
+        if self.is_composing() {
+            return Err(Error::CompositionActive);
+        }
+        if let TextBlockKind::Heading { level } = kind
+            && !(1..=6).contains(&level)
+        {
+            return Err(craft_editor_model::Error::InvalidDocument("heading_level".into()).into());
+        }
+        let (ids, bookmark) = if let Some(cells) = self.cell_selection() {
+            (
+                self.selected_cell_blocks()?
+                    .into_iter()
+                    .map(|node| {
+                        node.block_id()
+                            .map(str::to_owned)
+                            .ok_or(Error::MissingBlockIdentity)
+                    })
+                    .collect::<Result<Vec<_>>>()?,
+                Bookmark::Cells(cells.clone()),
+            )
+        } else {
+            let selected = self.selection().cloned().ok_or(Error::InvalidSelection)?;
+            let projection = Projection::new(self.document())?;
+            let a = projection.scalar(&selected.anchor)?;
+            let b = projection.scalar(&selected.head)?;
+            let first = projection
+                .spans
+                .iter()
+                .position(|span| {
+                    !span.atom
+                        && span.id
+                            == if a <= b {
+                                selected.anchor.block_id.as_str()
+                            } else {
+                                selected.head.block_id.as_str()
+                            }
+                })
+                .ok_or(Error::InvalidSelection)?;
+            let last = projection
+                .spans
+                .iter()
+                .position(|span| {
+                    !span.atom
+                        && span.id
+                            == if a <= b {
+                                selected.head.block_id.as_str()
+                            } else {
+                                selected.anchor.block_id.as_str()
+                            }
+                })
+                .ok_or(Error::InvalidSelection)?;
+            (
+                projection.spans[first..=last]
+                    .iter()
+                    .filter(|span| !span.atom)
+                    .map(|span| span.id.clone())
+                    .collect(),
+                Bookmark::Text(selected),
+            )
+        };
+        let mut candidate = Editor::new(self.document().clone(), self.revision());
+        let mut commands = Vec::new();
+        for id in ids {
+            let projection = Projection::new(candidate.document())?;
+            let path = projection
+                .spans
+                .iter()
+                .find(|span| span.id == id && !span.atom)
+                .map(|span| NodePath(span.path.clone()))
+                .ok_or(Error::InvalidSelection)?;
+            let target = candidate.document().node_ref(&path)?;
+            let mut replacement = target.expected.as_ref().clone();
+            let from_code = replacement.node_type == "codeBlock";
+            if from_code {
+                if let Some(attrs) = &mut replacement.attrs {
+                    attrs.remove("language");
+                }
+                let mut children = Vec::new();
+                for child in replacement.children() {
+                    if child.node_type == "text"
+                        && child
+                            .text
+                            .as_deref()
+                            .is_some_and(|text| text.contains('\n'))
+                    {
+                        for (index, line) in child
+                            .text
+                            .as_deref()
+                            .unwrap_or_default()
+                            .split('\n')
+                            .enumerate()
+                        {
+                            if index > 0 {
+                                children.push(Node::block("hardBreak", Map::new(), vec![]));
+                            }
+                            if !line.is_empty() {
+                                let mut leaf = child.clone();
+                                leaf.text = Some(line.into());
+                                children.push(leaf);
+                            }
+                        }
+                    } else {
+                        children.push(child.clone());
+                    }
+                }
+                replacement.content = Some(children);
+            }
+            if from_code {
+                replacement
+                    .attrs
+                    .get_or_insert_default()
+                    .entry("sourceRefs")
+                    .or_insert_with(|| serde_json::json!([]));
+            }
+            match kind {
+                TextBlockKind::Paragraph => {
+                    replacement.node_type = "paragraph".into();
+                    if let Some(attrs) = &mut replacement.attrs {
+                        attrs.remove("level");
+                    }
+                }
+                TextBlockKind::Heading { level } => {
+                    replacement.node_type = "heading".into();
+                    replacement
+                        .attrs
+                        .get_or_insert_default()
+                        .insert("level".into(), serde_json::json!(level));
+                }
+            }
+            let command = candidate.document().replace_node(&target, replacement)?;
+            candidate.apply(Transaction {
+                base_revision: candidate.revision(),
+                commands: vec![command.clone()],
+            })?;
+            commands.push(command);
+        }
+        bookmark.commit(self, commands)
+    }
 }

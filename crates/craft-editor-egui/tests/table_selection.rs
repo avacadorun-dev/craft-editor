@@ -551,3 +551,146 @@ fn selection_forms_stay_exclusive_through_setters_history_guard_cancel_and_reloa
     assert_eq!(reloaded.document(), session.document());
     Ok(())
 }
+
+#[test]
+fn source_cell_block_list_quote_and_insertion_policies_preserve_exact_rectangle_history()
+-> TestResult {
+    use craft_editor_egui::{ContentSlice, ListKind, TextBlockKind};
+    let corpus: Value = serde_json::from_str(include_str!("fixtures/source-cell-authoring.json"))?;
+    for case in corpus["cases"].as_array().ok_or("missing source cases")? {
+        let original = Document::from_json(
+            corpus[if case["codeInput"] == true {
+                "codeInput"
+            } else {
+                "input"
+            }]
+            .clone(),
+        )?;
+        let name = case["name"].as_str().ok_or("missing name")?;
+        let action = case["action"].as_str().ok_or("missing action")?;
+        let (anchor, head) = match name {
+            "all" => (
+                CellPoint { row: 0, column: 0 },
+                CellPoint { row: 1, column: 1 },
+            ),
+            "partial" => (
+                CellPoint { row: 0, column: 0 },
+                CellPoint { row: 0, column: 1 },
+            ),
+            _ => (
+                CellPoint { row: 1, column: 1 },
+                CellPoint { row: 0, column: 0 },
+            ),
+        };
+        let selected = TableSelection {
+            table_path: NodePath(vec![1]),
+            anchor,
+            head,
+        };
+        let mut session = EditorSession::new(original.clone(), Revision(0));
+        session.set_cell_selection(selected.clone())?;
+        let change = match action {
+            "paragraph" => session.set_text_block_kind(TextBlockKind::Paragraph)?,
+            "heading" => session.set_text_block_kind(TextBlockKind::Heading { level: 2 })?,
+            "bullet" => session.toggle_list(ListKind::Bullet)?,
+            "ordered" => session.toggle_list(ListKind::Ordered)?,
+            "quote" => session.toggle_blockquote()?,
+            _ => {
+                let source = Document::from_json(case["output"].clone())?;
+                let table = source.node(&selected.table_path)?;
+                let grid = TableGrid::new(table)?;
+                let cell = grid
+                    .cell_at(head.row, head.column)
+                    .ok_or("missing source head cell")?;
+                let path = selected.table_path.child(cell.row).child(cell.cell_index);
+                let nodes = source.node(&path)?.children().to_vec();
+                let slice = if action == "formula" || action == "writing" {
+                    ContentSlice::Inline(nodes[0].children().to_vec())
+                } else {
+                    ContentSlice::Blocks(nodes)
+                };
+                session.insert_content(slice)?
+            }
+        };
+        let mut actual = session.document().to_json()?;
+        let mut expected = case["output"].clone();
+        normalize(&mut actual);
+        normalize(&mut expected);
+        assert_eq!(actual, expected, "{name}/{action}");
+        assert_eq!(
+            change.replay_proof().verify(&original)?.0,
+            *session.document()
+        );
+        if case["selection"]["type"] == "cell" {
+            assert_eq!(session.cell_selection(), Some(&selected), "{name}/{action}");
+        } else if case["selection"]["type"] == "node" {
+            assert!(session.node_selection().is_some());
+            assert!(session.cell_selection().is_none());
+        } else {
+            assert!(session.selection().is_some());
+            assert!(session.cell_selection().is_none());
+        }
+        // Source appendTransaction may replace reset/default-null identities. Native must retain
+        // every untouched input identity, including all other selected cells for head-only commands.
+        if !matches!(action, "paragraph" | "heading") {
+            for id in ["a", "b", "c", "d"] {
+                let head_id = match (head.row, head.column) {
+                    (0, 0) => "a",
+                    (0, 1) => "b",
+                    (1, 0) => "c",
+                    _ => "d",
+                };
+                if id != head_id {
+                    assert_eq!(
+                        session.document().block(id)?,
+                        original.block(id)?,
+                        "{name}/{action}/{id}"
+                    );
+                }
+            }
+        }
+        if session.revision() != Revision(0) {
+            let after = session.document().clone();
+            let text = session.selection().cloned();
+            let cells = session.cell_selection().cloned();
+            let node = session.node_selection().cloned();
+            session.undo()?;
+            assert_eq!(session.document(), &original);
+            assert_eq!(session.cell_selection(), Some(&selected));
+            assert!(!session.can_undo());
+            session.redo()?;
+            assert_eq!(session.document(), &after);
+            assert_eq!(session.selection(), text.as_ref());
+            assert_eq!(session.cell_selection(), cells.as_ref());
+            assert_eq!(session.node_selection(), node.as_ref());
+        }
+    }
+    Ok(())
+}
+#[test]
+fn rectangular_repeat_list_toggle_repairs_source_identity_reset_bug_without_losing_selected_writing()
+-> TestResult {
+    let original = fixture()?;
+    let mut session = EditorSession::new(original.clone(), Revision(0));
+    session.set_cell_selection(rectangle())?;
+    session.toggle_list(craft_editor_egui::ListKind::Bullet)?;
+    assert_eq!(
+        session.list_state(craft_editor_egui::ListKind::Bullet)?,
+        craft_editor_egui::MarkState::On
+    );
+    session.toggle_list(craft_editor_egui::ListKind::Bullet)?;
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.cell_selection(), Some(&rectangle()));
+    for id in ["a", "b", "c", "d"] {
+        assert_eq!(session.document().block(id)?, original.block(id)?);
+    }
+    session.undo()?;
+    assert_eq!(
+        session.list_state(craft_editor_egui::ListKind::Bullet)?,
+        craft_editor_egui::MarkState::On
+    );
+    session.undo()?;
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.cell_selection(), Some(&rectangle()));
+    Ok(())
+}
