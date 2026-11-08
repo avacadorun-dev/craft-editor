@@ -1,3 +1,8 @@
+#![expect(
+    clippy::expect_used,
+    reason = "Synthetic renderer fixtures must construct and produce valid raster output"
+)]
+
 use craft_editor_egui::renderers::AtomResolver;
 use craft_editor_model::{Document, Node};
 use craft_editor_render::{AssetMap, Error, RenderOptions, Renderer};
