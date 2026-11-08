@@ -399,6 +399,13 @@ pub enum ReplayAction {
 }
 
 /// Native command provenance. Public Change fields are not trusted authority.
+///
+/// Remote JSON cannot construct native replay authority:
+/// ```compile_fail
+/// fn decode(value: serde_json::Value) -> Result<craft_editor_model::ReplayProof, serde_json::Error> {
+///     serde_json::from_value(value)
+/// }
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReplayProof {
     before: HistoryReceipt,
