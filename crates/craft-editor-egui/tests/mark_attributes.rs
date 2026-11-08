@@ -262,7 +262,7 @@ fn mixed_code_and_prose_marks_only_prose_and_code_caret_does_not_leak_pending_ma
     use craft_editor_egui::{DocPoint, EditorSession, Selection};
     use craft_editor_model::{Document, Mark, MarkMode, Revision, ScalarOffset};
     let document = Document::from_json(
-        serde_json::json!({"type":"doc","attrs":{"schemaVersion":1},"content":[{"type":"codeBlock","attrs":{"blockId":"code","language":"rust","vendor":null},"content":[{"type":"text","text":"AB"}]},{"type":"paragraph","attrs":{"blockId":"p"},"content":[{"type":"text","text":"CD"}]}]}),
+        serde_json::json!({"type":"doc","attrs":{"schemaVersion":4},"content":[{"type":"codeBlock","attrs":{"blockId":"code","language":"rust","vendor":null},"content":[{"type":"text","text":"AB"}]},{"type":"paragraph","attrs":{"blockId":"p"},"content":[{"type":"text","text":"CD"}]}]}),
     )?;
     let mut session = EditorSession::new(document.clone(), Revision(0));
     let point = |id: &str, n| DocPoint {
