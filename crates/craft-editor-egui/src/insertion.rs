@@ -374,6 +374,8 @@ fn disposable_empty_paragraph(node: &Node) -> bool {
 enum After {
     Text(DocPoint),
     Node(NodePath),
+    Selection(Selection),
+    IdentifiedNode(String),
 }
 impl EditorSession {
     /// Insert native plain text through the same atomic range, schema and selection planner.
@@ -414,6 +416,35 @@ impl EditorSession {
     /// Preserves supplied nodes and the unselected tail; schema/identity/placement failures do
     /// not change canonical content or history. Open clipboard slices require their own adapter.
     pub fn insert_content(&mut self, slice: ContentSlice) -> Result<Change> {
+        self.insert_content_with_after(slice, None)
+    }
+    /// Insert a closed slice and record an exact post-edit text selection in the same history.
+    ///
+    /// The selection is checked against the prepared candidate before any live mutation. This
+    /// supports commands such as table insertion that enter the first cell rather than the tail.
+    pub fn insert_content_with_selection(
+        &mut self,
+        slice: ContentSlice,
+        selection: Selection,
+    ) -> Result<Change> {
+        self.insert_content_with_after(slice, Some(After::Selection(selection)))
+    }
+    /// Insert a closed slice and select an identified opaque atom after resolving its actual path.
+    ///
+    /// A missing identity or a non-opaque destination rejects the entire insertion. Hosts do not
+    /// need to predict how splitting a paragraph or replacing an empty block changes node paths.
+    pub fn insert_content_selecting_node(
+        &mut self,
+        slice: ContentSlice,
+        block_id: &str,
+    ) -> Result<Change> {
+        self.insert_content_with_after(slice, Some(After::IdentifiedNode(block_id.to_owned())))
+    }
+    fn insert_content_with_after(
+        &mut self,
+        slice: ContentSlice,
+        explicit_after: Option<After>,
+    ) -> Result<Change> {
         if self.is_composing() {
             return Err(Error::CompositionActive);
         }
@@ -551,7 +582,14 @@ impl EditorSession {
             }
         };
         let next_id = plan.next_id;
-        let change = match after {
+        let change = match explicit_after.unwrap_or(after) {
+            After::Selection(selection) => {
+                self.apply_commands_with_selection(plan.commands, selection)?
+            }
+            After::IdentifiedNode(id) => {
+                let reference = plan.doc().node_ref(&plan.path(&id)?)?;
+                self.apply_commands_with_node_selection(plan.commands, reference)?
+            }
             After::Text(point) => self.apply_commands_with_selection(
                 plan.commands,
                 Selection {

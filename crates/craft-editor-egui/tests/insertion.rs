@@ -481,3 +481,99 @@ fn multiline_plain_paste_uses_a_bounded_transaction_for_many_paragraphs() -> Tes
     assert_eq!(session.document(), &original);
     Ok(())
 }
+
+#[test]
+fn table_insertion_records_first_cell_selection_without_losing_the_rich_tail() -> TestResult {
+    let original = Document::plain("p", "left😀right")?;
+    let mut session = EditorSession::new(original.clone(), Revision(7));
+    session.set_selection(caret("p", 5))?;
+    let table = Node::block(
+        "table",
+        Map::from_iter([("blockId".into(), json!("inserted-table"))]),
+        vec![Node::block(
+            "tableRow",
+            Map::new(),
+            vec![Node::block(
+                "tableCell",
+                Map::new(),
+                vec![Node::paragraph("first-cell", "")],
+            )],
+        )],
+    );
+    let change = session
+        .insert_content_with_selection(ContentSlice::Blocks(vec![table]), caret("first-cell", 0))?;
+    let inserted = session.document().clone();
+    assert_eq!(inserted.blocks()[0].inline_text(), "left😀");
+    assert_eq!(inserted.blocks()[2].inline_text(), "right");
+    assert_eq!(session.selection(), Some(&caret("first-cell", 0)));
+    assert_eq!(change.replay_proof().verify(&original)?.0, inserted);
+    session.undo()?;
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.selection(), Some(&caret("p", 5)));
+    session.redo()?;
+    assert_eq!(session.document(), &inserted);
+    assert_eq!(session.selection(), Some(&caret("first-cell", 0)));
+    Ok(())
+}
+
+#[test]
+fn explicit_invalid_insertion_selection_preserves_every_live_session_state() -> TestResult {
+    let original = Document::plain("p", "AB")?;
+    let mut session = EditorSession::new(original.clone(), Revision(3));
+    session.set_selection(caret("p", 1))?;
+    assert!(
+        session
+            .insert_content_with_selection(
+                ContentSlice::Blocks(vec![image("new-image")]),
+                caret("missing", 0),
+            )
+            .is_err()
+    );
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.revision(), Revision(3));
+    assert_eq!(session.selection(), Some(&caret("p", 1)));
+    assert!(!session.can_undo());
+    assert!(session.take_pending_changes().is_empty());
+    Ok(())
+}
+
+#[test]
+fn explicit_atom_selection_resolves_the_inserted_path_and_survives_redo() -> TestResult {
+    let original = Document::plain("p", "AB")?;
+    let mut session = EditorSession::new(original.clone(), Revision(0));
+    session.set_selection(caret("p", 1))?;
+    session.insert_content_selecting_node(
+        ContentSlice::Blocks(vec![image("new-image")]),
+        "new-image",
+    )?;
+    let reference = session
+        .node_selection()
+        .ok_or("missing atom selection")?
+        .clone();
+    assert_eq!(reference.path, NodePath(vec![1]));
+    session.undo()?;
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.selection(), Some(&caret("p", 1)));
+    session.redo()?;
+    assert_eq!(session.node_selection(), Some(&reference));
+    Ok(())
+}
+
+#[test]
+fn selecting_missing_or_nonopaque_inserted_nodes_rejects_atomically() -> TestResult {
+    for id in ["missing", "p"] {
+        let original = Document::plain("p", "AB")?;
+        let mut session = EditorSession::new(original.clone(), Revision(0));
+        session.set_selection(caret("p", 1))?;
+        assert!(
+            session
+                .insert_content_selecting_node(ContentSlice::Blocks(vec![image("new-image")]), id,)
+                .is_err()
+        );
+        assert_eq!(session.document(), &original);
+        assert_eq!(session.selection(), Some(&caret("p", 1)));
+        assert!(!session.can_undo());
+        assert!(session.take_pending_changes().is_empty());
+    }
+    Ok(())
+}

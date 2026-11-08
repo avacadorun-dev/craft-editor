@@ -6,6 +6,8 @@ Status: approved implementation contract; native qualification is still required
 
 `ContentSlice::Inline(Vec<Node>)` inserts canonical inline nodes. `ContentSlice::Blocks(Vec<Node>)` inserts canonical blocks. `EditorSession::insert_content(slice) -> Result<Change>` uses the existing document selection and semantic history. It never appends to the application root merely because resolving the current caret is inconvenient.
 
+`insert_content_with_selection(slice, selection)` supplies an exact post-edit text selection (for example, the first cell of a newly inserted table). `insert_content_selecting_node(slice, block_id)` resolves an identified opaque atom against the prepared candidate, avoiding caller path guesses after paragraph splitting. Both use the same transaction and Undo/Redo entry as insertion, and invalid destinations preserve the live document, revision, selection, pending queue and history.
+
 The complete operation is prepared against the exact current document revision. Schema validation, identities, content constraints and post-edit selection are checked before canonical state changes. A failure preserves the original document, active selection, acknowledged revision, history and pending changes.
 
 Inline input retains supplied marks, formula source, atom attributes and opaque extension fields. It does not parse Markdown. Block input splits the actual selected text block at the insertion boundary, retains its rich trailing fragment and places the incoming blocks under the appropriate canonical parent. In a table cell, list item, blockquote or callout, the operation respects that parent's grammar. Empty paragraph replacement and heading boundaries must follow the original editor fixtures.
