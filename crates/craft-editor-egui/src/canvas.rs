@@ -283,7 +283,7 @@ impl CanvasState {
             errors.push(error);
         }
         ui.painter().rect_filled(rect, 0.0, style.background);
-        if let Err(error) = self.paint(ui, rect, style) {
+        if let Err(error) = self.paint(ui, rect, style, &response) {
             errors.push(error);
         }
         if let Some(geometry) = &self.geometry {
@@ -748,7 +748,13 @@ impl CanvasState {
         session.canvas_composing = false;
     }
 
-    fn paint(&mut self, ui: &egui::Ui, canvas: Rect, style: &CanvasStyle) -> Result<()> {
+    fn paint(
+        &mut self,
+        ui: &egui::Ui,
+        canvas: Rect,
+        style: &CanvasStyle,
+        canvas_response: &egui::Response,
+    ) -> Result<()> {
         const TILE: f32 = 256.0;
         const MAX_TILES: usize = 32;
         let geometry = self.geometry.as_ref().ok_or(Error::InvalidSelection)?;
@@ -845,8 +851,30 @@ impl CanvasState {
             let compact = bounds.height() < 48.0;
             let inset = if compact { 5.0 } else { 12.0 };
             let font_size = (style.font_size * 0.72).clamp(11.0, 14.0);
+            if ui
+                .ctx()
+                .pointer_hover_pos()
+                .is_some_and(|pointer| bounds.contains(pointer))
+            {
+                let tooltip = if pending.placeholder.detail.is_empty() {
+                    pending.placeholder.label.clone()
+                } else {
+                    format!(
+                        "{}\n{}",
+                        pending.placeholder.label, pending.placeholder.detail
+                    )
+                };
+                // Reuse the editor's existing response; no overlay widget may steal its selection
+                // or pointer input. Compact status still has the full host-localized explanation.
+                let _ = canvas_response.clone().on_hover_text(tooltip);
+            }
+            let label_text = if compact && bounds.width() < 96.0 {
+                if failed { "!".into() } else { "…".into() }
+            } else {
+                pending.placeholder.label
+            };
             let label = painter.layout(
-                pending.placeholder.label,
+                label_text,
                 egui::FontId::proportional(font_size),
                 style.foreground,
                 (bounds.width() - inset * 2.0).max(1.0),
