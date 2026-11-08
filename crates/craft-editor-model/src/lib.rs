@@ -30,7 +30,7 @@ pub use tables::{
     empty_table_cell, insert_table_column, insert_table_row, merge_table_cells,
     set_table_cell_alignment, set_table_column_width, split_table_cell,
 };
-pub use text_projection::{BlockTextProjection, TextPoint};
+pub use text_projection::{BlockTextProjection, InlineAtomText, TextPoint, TextProjectionOptions};
 pub use transaction::{
     Change, Command, Editor, HistoryReceipt, MarkMode, PositionMap, ReplayAction, ReplayProof,
     Revision, Transaction,
