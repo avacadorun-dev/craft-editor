@@ -728,22 +728,15 @@ impl EditorSession {
                 ContentSlice::Blocks(slice.content)
             });
         }
-        let mut context_refs = Vec::new();
-        while slice.open_start > 1 && slice.open_end > 1 && slice.content.len() == 1 {
-            let wrapper = slice.content.pop().ok_or(Error::InvalidSelection)?;
-            collect_source_refs(&wrapper, &mut context_refs);
-            slice.content = wrapper.content.unwrap_or_default();
-            slice.open_start -= 1;
-            slice.open_end -= 1;
-        }
         if slice.open_start != 1
             || slice.open_end != 1
             || slice.content.is_empty()
             || !slice.content.first().is_some_and(is_text_block)
             || !slice.content.last().is_some_and(is_text_block)
         {
-            return Err(Error::UnsupportedStructuralEdit);
+            return self.insert_fitted_slice(slice);
         }
+        let mut context_refs = Vec::new();
         let inline_node_selection = self.inline_node_text_selection()?;
         if self.node_selection.is_some() && inline_node_selection.is_none() {
             return self.insert_content(ContentSlice::Blocks(slice.content));
@@ -848,6 +841,69 @@ impl EditorSession {
         Ok(change)
     }
 }
+impl EditorSession {
+    fn insert_fitted_slice(&mut self, mut slice: crate::clipboard::RichSlice) -> Result<Change> {
+        if self.is_composing() {
+            return Err(Error::CompositionActive);
+        }
+        let selection = self
+            .selection
+            .clone()
+            .or(self.inline_node_text_selection()?)
+            .ok_or(Error::InvalidSelection)?;
+        let mut plan = Plan::new(self, &slice.content)?;
+        plan.identify_incoming(&mut slice.content)?;
+        let from = craft_editor_model::TextPoint {
+            block_id: selection.anchor.block_id,
+            offset: selection.anchor.offset,
+        };
+        let to = craft_editor_model::TextPoint {
+            block_id: selection.head.block_id,
+            offset: selection.head.offset,
+        };
+        let (command, map) = craft_editor_model::plan_slice_replacement(
+            self.document(),
+            from,
+            to,
+            slice.content,
+            slice.open_start,
+            slice.open_end,
+            || {
+                plan.id().map_err(|error| match error {
+                    Error::Model(error) => error,
+                    _ => craft_editor_model::Error::UnsupportedEdit,
+                })
+            },
+        )?;
+        let next = plan.next_id;
+        let change = if let Some(point) = map.inserted_caret() {
+            let caret = DocPoint {
+                block_id: point.block_id,
+                offset: point.offset,
+            };
+            self.apply_commands_with_selection(
+                vec![command],
+                Selection {
+                    anchor: caret.clone(),
+                    head: caret,
+                },
+            )?
+        } else if let Some(path) = map.inserted_node() {
+            let mut candidate = Editor::new(self.document().clone(), self.revision());
+            candidate.apply(Transaction {
+                base_revision: self.revision(),
+                commands: vec![command.clone()],
+            })?;
+            let reference = candidate.document().node_ref(&path)?;
+            self.apply_commands_with_node_selection(vec![command], reference)?
+        } else {
+            return Err(Error::InvalidSelection);
+        };
+        self.next_id = next;
+        Ok(change)
+    }
+}
+
 fn is_text_block(node: &Node) -> bool {
     matches!(
         node.node_type.as_str(),

@@ -1,0 +1,274 @@
+{
+  "nodes": {
+    "paragraph": {
+      "content": "inline*",
+      "group": "block",
+      "attrs": {
+        "blockId": {
+          "default": null
+        },
+        "sourceRefs": {
+          "default": []
+        }
+      }
+    },
+    "blockquote": {
+      "content": "block+",
+      "group": "block",
+      "defining": true,
+      "attrs": {
+        "blockId": {
+          "default": null
+        },
+        "sourceRefs": {
+          "default": []
+        }
+      }
+    },
+    "bulletList": {
+      "content": "listItem+",
+      "group": "block list"
+    },
+    "doc": {
+      "content": "block+",
+      "attrs": {
+        "schemaVersion": {
+          "default": 1
+        }
+      }
+    },
+    "hardBreak": {
+      "group": "inline",
+      "inline": true,
+      "selectable": false,
+      "linebreakReplacement": true
+    },
+    "heading": {
+      "content": "inline*",
+      "group": "block",
+      "defining": true,
+      "attrs": {
+        "blockId": {
+          "default": null
+        },
+        "sourceRefs": {
+          "default": []
+        },
+        "level": {
+          "default": 1
+        }
+      }
+    },
+    "horizontalRule": {
+      "group": "block"
+    },
+    "listItem": {
+      "content": "paragraph block*",
+      "defining": true
+    },
+    "orderedList": {
+      "content": "listItem+",
+      "group": "block list",
+      "attrs": {
+        "start": {
+          "default": 1
+        },
+        "type": {
+          "default": null
+        }
+      }
+    },
+    "text": {
+      "group": "inline"
+    },
+    "codeBlock": {
+      "content": "text*",
+      "marks": "",
+      "group": "block",
+      "defining": true,
+      "code": true,
+      "attrs": {
+        "blockId": {
+          "default": null
+        },
+        "language": {
+          "default": null
+        }
+      }
+    },
+    "table": {
+      "content": "tableRow+",
+      "group": "block",
+      "isolating": true,
+      "attrs": {
+        "blockId": {
+          "default": null
+        }
+      }
+    },
+    "tableCell": {
+      "content": "block+",
+      "isolating": true,
+      "attrs": {
+        "colspan": {
+          "default": 1
+        },
+        "rowspan": {
+          "default": 1
+        },
+        "colwidth": {
+          "default": null
+        },
+        "align": {
+          "default": null
+        }
+      }
+    },
+    "tableHeader": {
+      "content": "block+",
+      "isolating": true,
+      "attrs": {
+        "colspan": {
+          "default": 1
+        },
+        "rowspan": {
+          "default": 1
+        },
+        "colwidth": {
+          "default": null
+        },
+        "align": {
+          "default": null
+        }
+      }
+    },
+    "tableRow": {
+      "content": "(tableCell | tableHeader)*"
+    },
+    "sceneBreak": {
+      "group": "block",
+      "atom": true,
+      "selectable": true
+    },
+    "callout": {
+      "content": "block+",
+      "group": "block",
+      "defining": true,
+      "attrs": {
+        "blockId": {
+          "default": null
+        },
+        "kind": {
+          "default": "info"
+        }
+      }
+    },
+    "imageBlock": {
+      "group": "block",
+      "atom": true,
+      "selectable": true,
+      "draggable": true,
+      "attrs": {
+        "blockId": {
+          "default": null
+        },
+        "src": {
+          "default": ""
+        },
+        "assetId": {
+          "default": null
+        },
+        "alt": {
+          "default": ""
+        },
+        "caption": {
+          "default": ""
+        },
+        "width": {
+          "default": null
+        },
+        "height": {
+          "default": null
+        }
+      }
+    },
+    "mermaidBlock": {
+      "group": "block",
+      "atom": true,
+      "selectable": true,
+      "draggable": true,
+      "attrs": {
+        "blockId": {
+          "default": null
+        },
+        "code": {
+          "default": "graph TD\n  A[Начало] --> B[Результат]"
+        },
+        "caption": {
+          "default": ""
+        }
+      }
+    },
+    "inlineMath": {
+      "group": "inline",
+      "inline": true,
+      "atom": true,
+      "selectable": true,
+      "attrs": {
+        "latex": {
+          "default": ""
+        },
+        "description": {
+          "default": ""
+        }
+      }
+    },
+    "mathBlock": {
+      "group": "block",
+      "atom": true,
+      "selectable": true,
+      "draggable": true,
+      "attrs": {
+        "blockId": {
+          "default": null
+        },
+        "latex": {
+          "default": ""
+        },
+        "description": {
+          "default": ""
+        }
+      }
+    }
+  },
+  "marks": {
+    "link": {
+      "inclusive": true,
+      "attrs": {
+        "href": {
+          "default": null
+        },
+        "target": {
+          "default": "_blank"
+        },
+        "rel": {
+          "default": "noopener noreferrer"
+        },
+        "class": {
+          "default": null
+        },
+        "title": {
+          "default": null
+        }
+      }
+    },
+    "bold": {},
+    "code": {
+      "excludes": "_",
+      "code": true
+    },
+    "italic": {},
+    "strike": {},
+    "underline": {}
+  }
+}

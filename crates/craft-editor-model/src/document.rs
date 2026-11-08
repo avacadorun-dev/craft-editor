@@ -117,6 +117,17 @@ impl Node {
         Ok(nodes)
     }
 
+    pub(crate) fn content_envelope(&self) -> Self {
+        Self {
+            node_type: self.node_type.clone(),
+            attrs: self.attrs.clone(),
+            marks: self.marks.clone(),
+            text: None,
+            content: self.content.as_ref().map(|_| Vec::new()),
+            extra: self.extra.clone(),
+            null_fields: self.null_fields.clone(),
+        }
+    }
     /// Clone only a text leaf's canonical envelope, without copying its writing payload.
     /// Omitted/null metadata stays exact. The returned template needs text before insertion.
     pub fn text_envelope(&self) -> Result<Self> {

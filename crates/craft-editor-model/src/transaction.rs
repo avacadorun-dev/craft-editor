@@ -32,6 +32,25 @@ pub enum MarkMode {
 /// A generic operation applied through one atomic canonical engine.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Command {
+    /// Fit a canonical open slice through native structural rules with computed Unicode maps.
+    ReplaceSlice {
+        /// Start text-block identity, guarded by this transaction's base revision.
+        from_block_id: String,
+        /// Start Unicode-scalar boundary.
+        from: ScalarOffset,
+        /// Final text-block identity; reversed selections are accepted.
+        to_block_id: String,
+        /// Final Unicode-scalar boundary.
+        to: ScalarOffset,
+        /// Complete canonical incoming fragment; opaque metadata remains authoritative.
+        content: Vec<Node>,
+        /// Number of open contextual wrappers on the first edge.
+        open_start: usize,
+        /// Number of open contextual wrappers on the final edge.
+        open_end: usize,
+        /// Exact fresh identities consumed by fitted filler/split blocks, in deterministic order.
+        fresh_ids: Vec<String>,
+    },
     /// Replace one exact guarded node, including the root, as one canonical edit.
     ReplaceNode {
         /// Complete expected node at its current path.
@@ -154,6 +173,8 @@ pub struct Transaction {
 /// A scalar-space mapping produced by an actual successful operation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PositionMap {
+    /// Native structural fit with model-computed block-local Unicode and path mapping.
+    Fitted(crate::FittedMap),
     /// Whole-node replacement invalidates paths and reports exact block survival.
     NodeReplacement {
         /// Replaced node path; paths inside this subtree require recapture.
@@ -237,6 +258,7 @@ impl PositionMap {
     /// Block-local scalar carets use map_existing_caret instead.
     pub fn map_path(&self, path: &NodePath) -> Option<NodePath> {
         match self {
+            Self::Fitted(map) => map.map_path(path),
             Self::NodeReplacement { path: replaced, .. } => {
                 if path.0.starts_with(&replaced.0) {
                     None
@@ -277,6 +299,17 @@ impl PositionMap {
         offset: ScalarOffset,
         right_bias: bool,
     ) -> Option<(String, ScalarOffset)> {
+        if let Self::Fitted(map) = self {
+            return map
+                .map_existing_point(
+                    &crate::TextPoint {
+                        block_id: block_id.into(),
+                        offset,
+                    },
+                    right_bias,
+                )
+                .map(|point| (point.block_id, point.offset));
+        }
         if let Self::NodeReplacement {
             removed_ids,
             invalidated_ids,
@@ -304,6 +337,16 @@ impl PositionMap {
         right_bias: bool,
     ) -> (String, ScalarOffset) {
         match self {
+            Self::Fitted(map) => map
+                .insertion_point(
+                    &crate::TextPoint {
+                        block_id: block_id.into(),
+                        offset,
+                    },
+                    right_bias,
+                )
+                .map(|point| (point.block_id, point.offset))
+                .unwrap_or_else(|| (block_id.into(), offset)),
             Self::Text {
                 block_id: changed,
                 start,
@@ -615,6 +658,41 @@ fn apply_command(
     mappings: &mut Vec<PositionMap>,
 ) -> Result<()> {
     match command {
+        Command::ReplaceSlice {
+            from_block_id,
+            from,
+            to_block_id,
+            to,
+            content,
+            open_start,
+            open_end,
+            fresh_ids,
+        } => {
+            if fresh_ids.len() > 100_000 {
+                return Err(Error::ResourceLimit);
+            }
+            let mut ids = fresh_ids.into_iter();
+            let (candidate, map) = crate::fitting::fit(
+                document,
+                &crate::TextPoint {
+                    block_id: from_block_id,
+                    offset: from,
+                },
+                &crate::TextPoint {
+                    block_id: to_block_id,
+                    offset: to,
+                },
+                &content,
+                open_start,
+                open_end,
+                &mut || ids.next().ok_or(Error::UnsupportedEdit),
+            )?;
+            if ids.next().is_some() {
+                return Err(Error::InvalidDocument("unused_fitting_identity".into()));
+            }
+            *document = candidate;
+            mappings.push(PositionMap::Fitted(map));
+        }
         Command::ReplaceNode {
             target,
             replacement,
