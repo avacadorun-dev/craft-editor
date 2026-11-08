@@ -21,3 +21,9 @@ The five existing egui backend dependencies and atom renderer's existing font de
 ## Maintenance boundary
 
 Do not absorb unrelated upstream app/UI changes. Future upstream adoption must preserve or qualify the same margin/viewport cases and retain license provenance. The small patch is suitable for later upstream review, but sending it requires separate communication authorization. A successful compile/layout fixture does not replace real native scrollbar/keyboard/IME/accessibility and independent UX acceptance.
+
+## Qualified overflow checkpoint
+
+Exact CraftEditor source `fd96a30cd650b47ef2f889120aaf0da537b201ae` passed [run42506252736](https://github.com/avacadorun-dev/craft-editor/actions/runs/42506252736): focused backend3margin regressions, all current semantic/native geometry/render tests, strict Clippy, example evidence, and actual native clipboard probes on hosted macOS and isolated X11. Raw egui cases cover final-column pointer/IME shadow/commit, reverse-cell resize/Undo, wheel/keyboard presentation-only scrolling, hidden input clipping and large host field/text styles. Artifact13627508520 SHA-256: `f8b704661bca2014f6bee07fff99586b9e62ae8c0d81a44c9b15886b1f053ba6`.
+
+This qualifies the generic checkpoint for consumer integration, not full table/editor parity or OS IME/AX acceptance. Whole-table NodeSelection remains a distinct required follow-up described in `TABLE_NODE_SELECTION.md`; it is not implied by rectangular cell selection or the overflow checks.
