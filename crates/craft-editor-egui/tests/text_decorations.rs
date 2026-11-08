@@ -80,7 +80,7 @@ fn frame(
     events: Vec<Event>,
 ) -> (ViewResponse, egui::FullOutput) {
     let mut result = None;
-    let output = ctx.run_ui(
+    let mut output = ctx.run_ui(
         egui::RawInput {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(720.0, 520.0))),
             events,
@@ -98,6 +98,7 @@ fn frame(
             });
         },
     );
+    output.textures_delta.clear();
     (result.expect("frame emits the native view"), output)
 }
 fn fixture() -> TestResult<(EditorSession, Source, egui::Context)> {
@@ -116,7 +117,11 @@ fn fixture() -> TestResult<(EditorSession, Source, egui::Context)> {
     ))
 }
 fn has_note_ink(output: &egui::FullOutput) -> bool {
-    output.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Rect(rect) if rect.fill.r()==NOTE.r()&&rect.fill.g()==NOTE.g()&&rect.fill.b()==NOTE.b()&&rect.fill.a()>0))
+    let tint = Color32::from_rgba_unmultiplied(NOTE.r(), NOTE.g(), NOTE.b(), 65);
+    output
+        .shapes
+        .iter()
+        .any(|shape| matches!(&shape.shape,egui::Shape::Rect(rect) if rect.fill==tint))
 }
 
 #[test]
@@ -128,13 +133,15 @@ fn persistent_host_decoration_remains_painted_after_the_caret_moves() -> TestRes
         head: point(12),
     })?;
     let (first, painted) = frame(&mut session, &ctx, &mut source, vec![]);
-    assert!(first.errors.is_empty() && has_note_ink(&painted));
+    assert!(first.errors.is_empty(), "{:?}", first.errors);
+    assert!(has_note_ink(&painted), "persistent note tint missing");
     session.set_selection(Selection {
         anchor: point(0),
         head: point(0),
     })?;
     let (second, painted) = frame(&mut session, &ctx, &mut source, vec![]);
-    assert!(second.errors.is_empty() && has_note_ink(&painted));
+    assert!(second.errors.is_empty(), "{:?}", second.errors);
+    assert!(has_note_ink(&painted), "note tint missing after caret move");
     assert_eq!(session.document(), &original);
     assert!(second.changes.is_empty());
     Ok(())
