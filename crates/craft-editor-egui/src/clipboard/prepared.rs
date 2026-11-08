@@ -13,7 +13,7 @@ use std::{collections::HashMap, sync::Arc};
 pub struct PasteContext {
     identity: Arc<()>,
     source: Arc<ClipboardBundle>,
-    template: Node,
+    template: Arc<Node>,
     literal_code: bool,
 }
 /// Exact image-only binding change supplied by the host after scoped acquisition/import.
@@ -80,7 +80,7 @@ impl PasteContext {
         Ok(Self {
             identity: Arc::new(()),
             source,
-            template,
+            template: Arc::new(template),
             literal_code,
         })
     }

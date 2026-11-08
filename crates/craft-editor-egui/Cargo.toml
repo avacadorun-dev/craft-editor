@@ -16,6 +16,7 @@ wordcraft-canvas = ["wordcraft-geometry", "dep:wordcraft-render"]
 [dependencies]
 egui.workspace = true
 craft-editor-model.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 scraper = { version = "=0.29.0", default-features = false }
