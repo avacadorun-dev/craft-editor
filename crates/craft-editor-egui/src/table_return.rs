@@ -57,7 +57,29 @@ impl EditorSession {
                 }
             }
             Some(SelectionState::Node(node)) => {
-                if let Some(path) = exact_retained_node(after, node.expected.as_ref()) {
+                // Repeated anonymous atoms still have a proven relative occurrence when the
+                // selected table's complete cell topology/ordered content is unchanged.
+                let local = node
+                    .path
+                    .0
+                    .strip_prefix(before.path.0.as_slice())
+                    .and_then(|suffix| {
+                        let mut path = selected.path.0.clone();
+                        path.extend_from_slice(suffix);
+                        let path = NodePath(path);
+                        after
+                            .node(&path)
+                            .is_ok_and(|actual| actual == node.expected.as_ref())
+                            .then_some(path)
+                    });
+                let path = if local.is_some()
+                    && same_cell_occurrences(before.expected.as_ref(), selected.expected.as_ref())?
+                {
+                    local
+                } else {
+                    exact_retained_node(after, node.expected.as_ref())
+                };
+                if let Some(path) = path {
                     *node = after.node_ref(&path)?;
                     true
                 } else {

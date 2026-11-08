@@ -575,3 +575,32 @@ fn unrelated_edits_and_changed_return_writing_cannot_guess_a_new_exit() -> TestR
     }
     Ok(())
 }
+
+#[test]
+fn repeated_anonymous_atoms_keep_their_proven_table_relative_return_occurrence() -> TestResult {
+    let mut input = source()?["cases"][0]["input"].clone();
+    let atom = serde_json::json!({"type":"mermaidBlock","attrs":{"code":"graph TD; A-->B","caption":"Repeated synthetic diagram"}});
+    for cell in input["content"][1]["content"][0]["content"]
+        .as_array_mut()
+        .ok_or("cells")?
+    {
+        cell["content"]
+            .as_array_mut()
+            .ok_or("cell content")?
+            .push(atom.clone());
+    }
+    let mut session = selected(&input)?;
+    let prior = session.document().node_ref(&NodePath(vec![1, 0, 0, 1]))?;
+    session.select_node(prior.clone())?;
+    session.select_current_table()?;
+    session.toggle_mark(Mark::new("bold"))?;
+    assert!(session.leave_table_node_selection()?);
+    assert_eq!(session.node_selection(), Some(&prior));
+    session.select_current_table()?;
+    session.toggle_blockquote()?;
+    assert!(session.leave_table_node_selection()?);
+    let returned = session.node_selection().ok_or("retained atom")?;
+    assert_eq!(returned.path, NodePath(vec![1, 0, 0, 0, 1]));
+    assert_eq!(returned.expected, prior.expected);
+    Ok(())
+}
