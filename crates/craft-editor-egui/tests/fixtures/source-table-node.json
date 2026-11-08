@@ -1,11 +1,13 @@
 {
   "provenance": {
-    "scope": "Actual installed original schema/tableEditing with allowTableNodeSelection:true and deleteSelection/createParagraphNear/insertText/replaceSelection. Arrow expectation uses installed view non-text-block Selection.findFrom boundary; no browser or OS clipboard claim. Synthetic writing only.",
+    "scope": "Actual installed original schema/tableEditing with allowTableNodeSelection:true and deleteSelection/createParagraphNear/insertText/replaceSelection. Arrow expectation uses installed view non-text-block Selection.findFrom boundary; no browser or OS clipboard claim. Copy plain text invokes the installed enabled Tiptap clipboard serializer helpers over selection ranges, not ProseMirror default textBetween. Synthetic writing only.",
     "sourceHashes": {
       "src/features/editor/model/extensions.ts": "cab5b92255c6e7e60a7831a9b428346f632bafbab297c515b5cef9d874eee135",
       "node_modules/prosemirror-tables/dist/index.js": "86226413762b2b8d88356f83e691a770d7b1d1c3b8de7e2de6bf25d785593cdf",
       "node_modules/prosemirror-view/src/capturekeys.ts": "edc174a4deb3e5fe0bcc033fc3ba404aa1fdb8e00cf3163516d68b4f990e4ff6",
-      "node_modules/prosemirror-view/src/input.ts": "50b081a72c89a293b15ded52a999e881a94457d09f14dc868b0690529c25a1ea"
+      "node_modules/prosemirror-view/src/input.ts": "50b081a72c89a293b15ded52a999e881a94457d09f14dc868b0690529c25a1ea",
+      "node_modules/@tiptap/core/src/extensions/clipboardTextSerializer.ts": "378a296d731c4928708464c2db29d18bdfcacb12d5cfe27e70030fbc2cae8d5d",
+      "node_modules/@tiptap/core/src/helpers/getTextBetween.ts": "d370e4b4a9d6cbbde1e7a9870a3948bf6e34a5d619199876524e447d113f6125"
     }
   },
   "cases": [
@@ -188,7 +190,7 @@
             }
           ]
         },
-        "plain": "Alpha 😀\n\nBravo"
+        "plain": "\n\n\n\n\n\nAlpha 😀\n\n\n\nBravo"
       },
       "arrows": {
         "before": {
@@ -708,7 +710,7 @@
             }
           ]
         },
-        "plain": "Alpha 😀\n\nBravo"
+        "plain": "\n\n\n\n\n\nAlpha 😀\n\n\n\nBravo"
       },
       "arrows": {
         "before": null,
@@ -1124,7 +1126,7 @@
             }
           ]
         },
-        "plain": "Alpha 😀\n\nBravo"
+        "plain": "\n\n\n\n\n\nAlpha 😀\n\n\n\nBravo"
       },
       "arrows": {
         "before": null,
@@ -1686,7 +1688,7 @@
             }
           ]
         },
-        "plain": "Alpha 😀\n\nBravo"
+        "plain": "\n\n\n\n\n\nAlpha 😀\n\n\n\nBravo"
       },
       "arrows": {
         "before": {
@@ -2557,7 +2559,7 @@
             }
           ]
         },
-        "plain": "Alpha 😀\n\nBravo"
+        "plain": "\n\n\n\n\n\nAlpha 😀\n\n\n\nBravo"
       },
       "arrows": {
         "before": null,

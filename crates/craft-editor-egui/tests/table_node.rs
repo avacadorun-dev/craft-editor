@@ -78,6 +78,13 @@ fn comparable(mut value: Value, retained: &HashSet<String>) -> Value {
                 object.remove("attrs");
             }
         }
+        if value
+            .get("content")
+            .is_some_and(|content| content.as_array().is_some_and(Vec::is_empty))
+            && let Some(object) = value.as_object_mut()
+        {
+            object.remove("content");
+        }
         for child in value
             .get_mut("content")
             .and_then(Value::as_array_mut)
@@ -88,6 +95,27 @@ fn comparable(mut value: Value, retained: &HashSet<String>) -> Value {
         }
     }
     walk(&mut value, retained);
+    value
+}
+// Original setHeading drops identities, and a quoted table gives both headings the quote's
+// identity. Compare the source's structure while separately requiring native a/b preservation.
+fn heading_shape(mut value: Value) -> Value {
+    fn walk(value: &mut Value) {
+        if value["type"] == "heading"
+            && let Some(attrs) = value.get_mut("attrs").and_then(Value::as_object_mut)
+        {
+            attrs.remove("blockId");
+        }
+        for child in value
+            .get_mut("content")
+            .and_then(Value::as_array_mut)
+            .into_iter()
+            .flatten()
+        {
+            walk(child);
+        }
+    }
+    walk(&mut value);
     value
 }
 fn assert_source_head(session: &EditorSession, expected: &Value) -> TestResult {
@@ -261,13 +289,18 @@ fn whole_table_formatting_matches_twenty_actual_original_command_manager_cases()
             assert!(!session.can_undo());
         } else {
             let ids = input_ids(&case["before"]);
-            assert_eq!(
-                comparable(session.document().to_json()?, &ids),
-                comparable(case["after"].clone(), &ids),
-                "{} {}",
-                case["name"],
-                case["action"]
-            );
+            let mut actual = comparable(session.document().to_json()?, &ids);
+            let mut expected = comparable(case["after"].clone(), &ids);
+            if case["action"] == "setHeading" {
+                for id in ["a", "b"] {
+                    let heading = session.document().block(id)?;
+                    assert_eq!(heading.node_type, "heading");
+                    assert_eq!(heading.block_id(), Some(id));
+                }
+                actual = heading_shape(actual);
+                expected = heading_shape(expected);
+            }
+            assert_eq!(actual, expected, "{} {}", case["name"], case["action"]);
             if case["action"] == "toggleBold" {
                 assert_eq!(session.mark_state("bold")?, MarkState::On);
             }
