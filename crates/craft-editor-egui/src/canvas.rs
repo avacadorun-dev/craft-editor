@@ -106,6 +106,9 @@ pub(crate) struct CanvasState {
 }
 
 impl CanvasState {
+    pub(crate) fn request_scroll_to_caret(&mut self) {
+        self.scroll_to_caret = true;
+    }
     fn measure(&mut self, session: &EditorSession, width: f32, style: &CanvasStyle) -> Result<()> {
         let key = MeasurementKey {
             revision: session.revision(),
@@ -1251,6 +1254,84 @@ mod tests {
             Some(point("p", 3))
         );
         assert_eq!(source.block_text("p")?, "Я\n😀Z");
+        Ok(())
+    }
+    #[test]
+    fn structural_delete_records_surviving_caret_for_undo_and_redo() -> TestResult {
+        let original = fixture()?;
+        let mut session = EditorSession::new(original.clone(), Revision(3));
+        let before = collapsed(point("corner", 1));
+        let after = collapsed(point("bottom", 2));
+        session.set_selection(before.clone())?;
+        let target = session
+            .document()
+            .node_ref(&craft_editor_model::NodePath(vec![1]))?;
+        let command = craft_editor_model::delete_table_row(session.document(), &target, 2)?;
+        session.apply_commands_with_selection(vec![command], after.clone())?;
+        assert_eq!(session.selection(), Some(&after));
+        assert!(session.document().block("corner").is_err());
+        assert!(session.canvas_state.scroll_to_caret);
+        session.undo()?;
+        assert_eq!(session.document(), &original);
+        assert_eq!(session.selection(), Some(&before));
+        session.redo()?;
+        assert_eq!(session.selection(), Some(&after));
+        Ok(())
+    }
+    #[test]
+    fn invalid_post_edit_caret_rejects_structural_transaction_atomically() -> TestResult {
+        let original = fixture()?;
+        let mut session = EditorSession::new(original.clone(), Revision(3));
+        let selection = collapsed(point("corner", 1));
+        session.set_selection(selection.clone())?;
+        let target = session
+            .document()
+            .node_ref(&craft_editor_model::NodePath(vec![1]))?;
+        let command = craft_editor_model::delete_table_row(session.document(), &target, 2)?;
+        assert!(matches!(
+            session.apply_commands_with_selection(vec![command], selection.clone()),
+            Err(Error::InvalidSelection)
+        ));
+        assert_eq!(session.document(), &original);
+        assert_eq!(session.revision(), Revision(3));
+        assert_eq!(session.selection(), Some(&selection));
+        assert!(!session.can_undo());
+        assert!(session.pending.is_empty());
+        Ok(())
+    }
+    #[test]
+    fn inserted_table_enters_new_cell_and_redo_restores_that_caret() -> TestResult {
+        let original = fixture()?;
+        let mut session = EditorSession::new(original.clone(), Revision(3));
+        let before = collapsed(point("intro", 3));
+        let after = collapsed(point("new-cell", 0));
+        session.set_selection(before.clone())?;
+        let table = craft_editor_model::Node::block(
+            "table",
+            serde_json::Map::new(),
+            vec![craft_editor_model::Node::block(
+                "tableRow",
+                serde_json::Map::new(),
+                vec![craft_editor_model::empty_table_cell("new-cell", false)],
+            )],
+        );
+        let parent = session
+            .document()
+            .node_ref(&craft_editor_model::NodePath::root())?;
+        session.apply_commands_with_selection(
+            vec![Command::InsertChildren {
+                parent,
+                index: 2,
+                children: vec![table],
+            }],
+            after.clone(),
+        )?;
+        assert_eq!(session.selection(), Some(&after));
+        session.undo()?;
+        assert_eq!(session.document(), &original);
+        assert_eq!(session.selection(), Some(&before));
+        session.redo()?;
+        assert_eq!(session.selection(), Some(&after));
         Ok(())
     }
 }

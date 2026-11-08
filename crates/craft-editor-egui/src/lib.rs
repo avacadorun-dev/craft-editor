@@ -286,6 +286,56 @@ impl EditorSession {
         }
         Ok(change)
     }
+    /// Commit structural commands with an exact post-edit caret/selection in the same history entry.
+    ///
+    /// The target is validated against a disposable result before the live document changes.
+    /// Undo restores the previous selection; Redo restores the supplied post-edit selection.
+    pub fn apply_commands_with_selection(
+        &mut self,
+        commands: Vec<Command>,
+        selection: Selection,
+    ) -> Result<Change> {
+        if self.is_composing() {
+            return Err(Error::CompositionActive);
+        }
+        let mut candidate = Editor::new(self.document().clone(), self.revision());
+        candidate.apply(Transaction {
+            base_revision: self.revision(),
+            commands: commands.clone(),
+        })?;
+        for point in [&selection.anchor, &selection.head] {
+            let node = candidate
+                .document()
+                .block(&point.block_id)
+                .map_err(|_| Error::InvalidSelection)?;
+            if !matches!(
+                node.node_type.as_str(),
+                "paragraph" | "heading" | "codeBlock"
+            ) || point.offset.0 > node.inline_text().chars().count()
+            {
+                return Err(Error::InvalidSelection);
+            }
+        }
+        let change = self.apply_commands(commands)?;
+        if self.selection.as_ref() != Some(&selection) {
+            self.stored_marks = None;
+        }
+        self.selection = Some(selection);
+        self.restore_cursor = true;
+        if change.before_revision != change.after_revision
+            && let Some(history) = self.undo_selection.last_mut()
+        {
+            history.after = self.selection.clone();
+        }
+        #[cfg(feature = "wordcraft-canvas")]
+        self.request_scroll_to_caret();
+        Ok(change)
+    }
+    /// Reveal the semantic caret on the next canvas frame without changing selection or focus.
+    #[cfg(feature = "wordcraft-canvas")]
+    pub fn request_scroll_to_caret(&mut self) {
+        self.canvas_state.request_scroll_to_caret();
+    }
     /// Query real formatting across selected runs, including pending marks at a caret.
     pub fn mark_state(&self, kind: &str) -> Result<MarkState> {
         let Some(selection) = self.selection.as_ref() else {

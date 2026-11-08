@@ -74,3 +74,12 @@ The source fixture is `examples/canvas_fixture.json`. Focused canvas tests cover
 The first full canvas run at `4864790` compiled and passed 24 of 25 view tests; the remaining code-line test exposed a projection bug. WordCraft documents `para::LINE_BREAK` as newline, not vertical tab. The adapter now preserves code newlines and maps canonical hard breaks through that constant. The assertion is retained and a separate Cyrillic/emoji hard-break caret/hit test was added. A subsequent passing run is required before calling this fixed in a qualified build.
 
 Hosted run [42451918260](https://github.com/avacadorun-dev/craft-editor/actions/runs/42451918260) at `c01ddeb` passed all 27 view tests and all 87 model tests, including the retained multiline-code assertion and new hard-break roundtrip. Strict Clippy then requested the Rust array-chunk API in two raster-test assertions. The follow-up uses `as_chunks::<4>()` and adds coverage for valid legacy integral JSON spans such as `2.0`; final strict qualification still requires its own passing run.
+
+
+## Qualified canvas source
+
+Hosted [run 42452125336](https://github.com/avacadorun-dev/craft-editor/actions/runs/42452125336) at `5f11b46c9218d4749a303445b14cb71c54bcdddc` passed 28 view tests and 87 model tests, workspace formatting, strict all-target/all-feature Clippy, and both actual geometry/canvas examples. Its exact source-verified lockfile was downloaded from the successful artifact and retained in the repository without a local Cargo command.
+
+The canvas example reported six real cell boxes, one covered merge continuation, seven selection rectangles, a 1200×302 premultiplied RGBA raster (1,449,600 bytes), preserved semantic formatting Undo, and an actual egui text event committed into a cell. `editor_acceptance`, `platform_ime_acceptance` and `full_schema_acceptance` remain false. Native visual/input review and the remaining original-editor requirements are separate gates.
+
+A subsequent P1 fix introduces `apply_commands_with_selection`: structural commands and their explicit post-edit selection share one history entry. It validates the selected target against a disposable result before changing the live canonical tree; invalid targets reject the whole transaction. Undo restores the original cell caret and Redo restores the surviving/new-cell caret. `request_scroll_to_caret` lets hosts reveal that target. The P1 source/tests require the subsequent hosted run; the earlier successful run does not qualify changes it did not contain.
