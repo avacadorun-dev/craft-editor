@@ -1129,14 +1129,16 @@ impl FlowGeometry {
     }
     /// Reveal an exact caret through nested table viewports without reshaping or rewriting content.
     pub fn reveal_caret(&mut self, point: &DocPoint) -> Result<bool> {
-        let block = self
+        let canonical = self
             .block_for_id(&point.block_id)
-            .ok_or(Error::UnmappedPosition)?;
+            .ok_or(Error::UnmappedPosition)?
+            .canonical
+            .clone();
         let Some(caret) = self.measured.caret(&self.to_native(point)?) else {
             return Ok(false);
         };
         let changed = self.viewports.reveal(
-            &block.canonical,
+            &canonical,
             GeometryRect {
                 page: caret.page,
                 x: caret.x,

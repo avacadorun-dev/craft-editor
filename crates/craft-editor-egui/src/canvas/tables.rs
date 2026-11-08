@@ -223,6 +223,10 @@ mod tests {
             .table_viewports()
             .remove(0);
         assert!(viewport.offset > 0.0);
+        // Drain wheel smoothing before testing the scrollbar's independent keyboard focus.
+        for _ in 0..64 {
+            frame(&mut session, &ctx, vec![]);
+        }
         let bar = on_screen(first.response.rect.min, viewport.scrollbar).center();
         frame(
             &mut session,
@@ -341,6 +345,28 @@ mod tests {
         session.undo()?;
         assert_eq!(session.document(), &original);
         frame(&mut session, &ctx, vec![]);
+        // A caret reveal exposes its exact position. Scroll to the far end to expose the
+        // last track's right border, then resize through the real pointer route.
+        let viewport = session
+            .canvas_state
+            .geometry
+            .as_ref()
+            .ok_or(Error::InvalidSelection)?
+            .table_viewports()
+            .remove(0);
+        let table_center = on_screen(first.response.rect.min, viewport.rect).center();
+        frame(
+            &mut session,
+            &ctx,
+            vec![
+                Event::PointerMoved(table_center),
+                Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: Vec2::new(-100_000.0, 0.0),
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+        );
         let geometry = session
             .canvas_state
             .geometry
