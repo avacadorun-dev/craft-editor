@@ -52,6 +52,7 @@ pub struct FittedMap {
     paths: Vec<(NodePath, NodePath)>,
     atoms: Vec<(usize, NodePath)>,
     inserted_end: usize,
+    inserted_right: bool,
 }
 impl FittedMap {
     fn global(&self, point: &TextPoint) -> Option<usize> {
@@ -129,18 +130,73 @@ impl FittedMap {
             .or(self.atoms.first())
             .map(|(_, path)| path.clone())
     }
+    fn inserted_selection(&self) -> Option<FittedSelection> {
+        let pos = self.inserted_end;
+        if let Some(block) = self
+            .after
+            .iter()
+            .find(|block| (block.start..=block.end()).contains(&pos))
+        {
+            return block.scalar(pos - block.start).map(|offset| {
+                FittedSelection::Text(TextPoint {
+                    block_id: block.id.clone(),
+                    offset: ScalarOffset(offset),
+                })
+            });
+        }
+        for right in [self.inserted_right, !self.inserted_right] {
+            let text = if right {
+                self.after
+                    .iter()
+                    .find(|block| block.start >= pos)
+                    .map(|block| (block.start, block, 0))
+            } else {
+                self.after
+                    .iter()
+                    .rev()
+                    .find(|block| block.end() <= pos)
+                    .map(|block| (block.end(), block, block.length))
+            };
+            let atom = if right {
+                self.atoms
+                    .iter()
+                    .find(|(at, _)| *at >= pos)
+                    .map(|(at, path)| (*at, path))
+            } else {
+                self.atoms
+                    .iter()
+                    .rev()
+                    .find(|(at, _)| *at < pos)
+                    .map(|(at, path)| (*at + 1, path))
+            };
+            if let Some((at, path)) = atom
+                && text
+                    .is_none_or(|(text_at, _, _)| if right { at <= text_at } else { at >= text_at })
+            {
+                return Some(FittedSelection::Node(path.clone()));
+            }
+            if let Some((_, block, offset)) = text {
+                return Some(FittedSelection::Text(TextPoint {
+                    block_id: block.id.clone(),
+                    offset: ScalarOffset(offset),
+                }));
+            }
+        }
+        None
+    }
     /// Caret at the actual fitted insertion end, independent of original selection direction.
     pub fn inserted_caret(&self) -> Option<TextPoint> {
-        self.resolve(self.inserted_end, true)
+        match self.inserted_selection()? {
+            FittedSelection::Text(point) => Some(point),
+            FittedSelection::Node(_) => None,
+        }
     }
-    /// Opaque-node selection when the fitted result has no available text caret.
+    /// Opaque-node selection when the source-compatible insertion search reaches an atom first.
     pub fn inserted_node(&self) -> Option<NodePath> {
-        self.atoms
-            .iter()
-            .rev()
-            .find(|(at, _)| *at <= self.inserted_end)
-            .or(self.atoms.first())
-            .map(|(_, path)| path.clone())
+        match self.inserted_selection()? {
+            FittedSelection::Node(path) => Some(path),
+            FittedSelection::Text(_) => None,
+        }
     }
     pub(crate) fn map_path(&self, path: &NodePath) -> Option<NodePath> {
         self.paths
@@ -148,6 +204,22 @@ impl FittedMap {
             .find(|(before, _)| before == path)
             .map(|(_, after)| after.clone())
     }
+}
+enum FittedSelection {
+    Text(TextPoint),
+    Node(NodePath),
+}
+fn insertion_search_right(content: &[Node], open_end: usize) -> bool {
+    let mut last = content.last();
+    let mut parent = None;
+    for _ in 0..open_end {
+        parent = last;
+        last = last.and_then(|node| node.children().last());
+    }
+    !last.map_or_else(
+        || parent.is_some_and(is_text_block),
+        |node| matches!(node.node_type.as_str(), "text" | "hardBreak" | "inlineMath"),
+    )
 }
 fn is_text_block(node: &Node) -> bool {
     matches!(
@@ -661,6 +733,7 @@ pub(crate) fn fit<F: FnMut() -> Result<String>>(
                 paths,
                 atoms,
                 inserted_end: from_pos,
+                inserted_right: insertion_search_right(content, open_end),
             },
         ));
     }
@@ -725,9 +798,13 @@ pub(crate) fn fit<F: FnMut() -> Result<String>>(
     }
     let mut candidate = Document::from_root(root)?;
     let after = coordinates(candidate.root());
-    let mut inserted_end = from_pos;
-    for step in &steps {
-        inserted_end = step.map(inserted_end, 1);
+    // Source selectionToInsertionEnd uses the first changed range in the final
+    // replacement step, rather than mapping the old selection start through it.
+    let mut inserted_end = None;
+    if let Some(step) = steps.last() {
+        step.for_each(|_, _, _, end| {
+            inserted_end.get_or_insert(end);
+        });
     }
     let mut map = FittedMap {
         before,
@@ -735,7 +812,8 @@ pub(crate) fn fit<F: FnMut() -> Result<String>>(
         steps,
         paths: rebuilt.paths,
         atoms: rebuilt.atoms,
-        inserted_end,
+        inserted_end: inserted_end.unwrap_or(from_pos),
+        inserted_right: insertion_search_right(content, open_end),
     };
     let known: Value = serde_json::from_str(include_str!("fitting_schema.json"))?;
     let mut incoming_refs = Vec::new();
