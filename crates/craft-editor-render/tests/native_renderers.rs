@@ -169,3 +169,28 @@ fn raster_and_catalog_limits_fail_explicitly_before_unbounded_output() {
         Error::ResourceLimit
     );
 }
+
+#[test]
+fn raster_png_decode_keeps_source_bytes_owned_by_host_and_renders_visible_pixels() {
+    let source = image::RgbaImage::from_pixel(32, 16, image::Rgba([70, 120, 180, 255]));
+    let mut encoded = std::io::Cursor::new(Vec::new());
+    source
+        .write_to(&mut encoded, image::ImageFormat::Png)
+        .expect("synthetic PNG");
+    let original = Arc::new(encoded.into_inner());
+    let mut assets = AssetMap::default();
+    assets.insert("png", Arc::clone(&original));
+    let image = renderer()
+        .render_atom(
+            &atom(json!({"type":"imageBlock","attrs":{"assetId":"png"}})),
+            &assets,
+        )
+        .expect("real PNG decode");
+    assert_eq!(image.size.width, 32.0);
+    assert_eq!(image.size.height, 16.0);
+    assert_eq!(ink_count(&image.encoded), 32 * 16);
+    assert_eq!(
+        image::guess_format(&original).expect("preserved original"),
+        image::ImageFormat::Png
+    );
+}
