@@ -229,6 +229,7 @@ impl EditorSession {
         guard.guard.check(self)?;
         self.paste_bundle(bundle, max_bytes)
     }
+    #[cfg(feature = "wordcraft-canvas")]
     pub(crate) fn queue_clipboard_copy(&mut self, cut: bool) -> Result<()> {
         self.check_clipboard_queue()?;
         let request = if cut {
@@ -241,6 +242,7 @@ impl EditorSession {
         }
         Ok(())
     }
+    #[cfg(feature = "wordcraft-canvas")]
     pub(crate) fn queue_clipboard_paste(&mut self) -> Result<()> {
         self.check_clipboard_queue()?;
         if self.is_composing() {
@@ -258,6 +260,7 @@ impl EditorSession {
         self.clipboard_state.requests.push_back(request);
         Ok(())
     }
+    #[cfg(feature = "wordcraft-canvas")]
     fn check_clipboard_queue(&self) -> Result<()> {
         // This bounds queued memory, not document capability. Hosts drain every frame and own
         // their worker's concurrency/cancellation; in-flight jobs retain their one-shot guards.
