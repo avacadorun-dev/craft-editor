@@ -409,29 +409,29 @@ fn parse_node(
                 .as_element()
                 .is_some_and(|element| element.name() == "img")
         });
-        if let Some(image) = image {
-            if let Some(mut image) = parse_image(image, attrs) {
-                let caption = node.descendants().find(|child| {
-                    child
-                        .value()
-                        .as_element()
-                        .is_some_and(|element| element.name() == "figcaption")
-                });
-                image.attrs.get_or_insert_default().insert(
-                    "caption".into(),
-                    Value::String(caption.map(text_content).unwrap_or_default()),
-                );
-                if let Some(id) = element
-                    .attr("data-asset-id")
-                    .filter(|id| safe_identifier(id))
-                {
-                    image
-                        .attrs
-                        .get_or_insert_default()
-                        .insert("assetId".into(), Value::String(id.into()));
-                }
-                return Ok(vec![image]);
+        if let Some(image) = image
+            && let Some(mut image) = parse_image(image, attrs)
+        {
+            let caption = node.descendants().find(|child| {
+                child
+                    .value()
+                    .as_element()
+                    .is_some_and(|element| element.name() == "figcaption")
+            });
+            image.attrs.get_or_insert_default().insert(
+                "caption".into(),
+                Value::String(caption.map(text_content).unwrap_or_default()),
+            );
+            if let Some(id) = element
+                .attr("data-asset-id")
+                .filter(|id| safe_identifier(id))
+            {
+                image
+                    .attrs
+                    .get_or_insert_default()
+                    .insert("assetId".into(), Value::String(id.into()));
             }
+            return Ok(vec![image]);
         }
         return Ok(vec![]);
     }
