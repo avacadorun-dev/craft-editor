@@ -72,6 +72,7 @@ impl TableSelection {
             .ok_or(Error::InvalidSelection)?;
         Ok(self.table_path.child(cell.row).child(cell.cell_index))
     }
+    #[cfg(feature = "wordcraft-canvas")]
     pub(crate) fn neighbor(
         &self,
         document: &Document,
@@ -524,6 +525,7 @@ impl EditorSession {
         }
         self.apply_commands_with_cell_selection(commands, selection)
     }
+    #[cfg(feature = "wordcraft-canvas")]
     pub(crate) fn head_cell_text_point(&self, backward: bool) -> Result<Option<crate::DocPoint>> {
         let selected = self
             .table_selection

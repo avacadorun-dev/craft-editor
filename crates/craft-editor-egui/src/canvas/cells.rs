@@ -261,7 +261,7 @@ mod tests {
     fn frame(
         session: &mut EditorSession,
         ctx: &egui::Context,
-        events: Vec<Event>,
+        mut events: Vec<Event>,
         style: &CanvasStyle,
     ) -> (ViewResponse, egui::FullOutput) {
         let modifiers = events
@@ -274,12 +274,12 @@ mod tests {
                 _ => None,
             })
             .unwrap_or_else(|| ctx.input(|input| input.modifiers));
+        events.insert(0, Event::ModifiersChanged(modifiers));
         let mut result = None;
         let mut output = ctx.run_ui(
             egui::RawInput {
                 screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(700.0, 650.0))),
                 events,
-                modifiers,
                 focused: true,
                 ..Default::default()
             },
@@ -527,13 +527,10 @@ mod tests {
             let (response, _) = frame(
                 &mut session,
                 &ctx,
-                vec![
-                    Event::Ime(egui::ImeEvent::Enabled),
-                    Event::Ime(egui::ImeEvent::Preedit {
-                        text: "候補".into(),
-                        active_range_chars: Some(0..2),
-                    }),
-                ],
+                vec![Event::Ime(egui::ImeEvent::Preedit {
+                    text: "候補".into(),
+                    active_range_chars: Some(0..2),
+                })],
                 &style,
             );
             assert!(response.errors.is_empty(), "{:?}", response.errors);
