@@ -26,8 +26,8 @@ fn normalize(value: &mut Value) {
             {
                 object.remove("content");
             }
-            if let Some(children) = object.get_mut("content") {
-                normalize(children);
+            for child in object.values_mut() {
+                normalize(child);
             }
         }
         _ => {}
