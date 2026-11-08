@@ -235,3 +235,95 @@ fn copied_opaque_context_conflict_and_invalid_open_depth_preserve_document_and_h
     }
     Ok(())
 }
+
+#[test]
+fn selected_node_fitting_matches_actual_source_without_detaching_other_writing() -> TestResult {
+    use craft_editor_model::{NodePath, plan_node_slice_replacement};
+    let fixture: Value =
+        serde_json::from_str(include_str!("fixtures/source_node_slice_fitting.json"))?;
+    let cases = fixture["cases"].as_array().ok_or("missing node corpus")?;
+    assert_eq!(cases.len(), 5);
+    for case in cases {
+        let original = Document::from_json(
+            json!({"type":"doc","attrs":{"schemaVersion":4},"content":case["target"]}),
+        )?;
+        let target =
+            original.node_ref(&NodePath(serde_json::from_value(case["nodePath"].clone())?))?;
+        let mut next = 0;
+        let (command, map) = plan_node_slice_replacement(
+            &original,
+            target.clone(),
+            serde_json::from_value(case["slice"].clone())?,
+            serde_json::from_value(case["openStart"].clone())?,
+            serde_json::from_value(case["openEnd"].clone())?,
+            || {
+                next += 1;
+                Ok(format!("new-{next}"))
+            },
+        )?;
+        let mut editor = Editor::new(original.clone(), Revision(0));
+        let change = editor.apply(Transaction {
+            base_revision: Revision(0),
+            commands: vec![command.clone()],
+        })?;
+        let after = editor.document().clone();
+        let mut actual = after.to_json()?;
+        let mut expected = case["output"].clone();
+        normalize(&mut actual);
+        normalize(&mut expected);
+        assert_eq!(actual, expected, "{}", case["name"]);
+        assert_eq!(
+            serde_json::to_value(&map)?["steps"],
+            case["maps"],
+            "{}",
+            case["name"]
+        );
+        let caret = map.inserted_caret().ok_or("source expected a text caret")?;
+        let encoded = serde_json::to_value(&map)?;
+        let block = encoded["after"]
+            .as_array()
+            .ok_or("missing coordinates")?
+            .iter()
+            .find(|entry| entry["id"] == caret.block_id)
+            .ok_or("missing caret")?;
+        let units = after
+            .block(&caret.block_id)?
+            .inline_text()
+            .chars()
+            .take(caret.offset.0)
+            .map(char::len_utf16)
+            .sum::<usize>();
+        assert_eq!(
+            block["start"].as_u64().ok_or("invalid coordinate")? + u64::try_from(units)?,
+            case["selection"]["anchor"]
+                .as_u64()
+                .ok_or("missing source caret")?,
+            "{}",
+            case["name"]
+        );
+        for id in ["before", "after"] {
+            if original.block(id).is_ok() {
+                assert_eq!(
+                    map.map_existing_point(&point(id, 1), true),
+                    Some(point(id, 1))
+                );
+                assert_eq!(after.block(id)?, original.block(id)?);
+            }
+        }
+        assert_eq!(change.replay_proof().verify(&original)?.0, after);
+        editor.undo(editor.revision())?;
+        assert_eq!(editor.document(), &original);
+        editor.redo(editor.revision())?;
+        assert_eq!(editor.document(), &after);
+        let mut stale = target;
+        stale
+            .expected
+            .extra
+            .insert("notTheOriginalNode".into(), json!(true));
+        assert!(
+            plan_node_slice_replacement(&original, stale, vec![], 0, 0, || Ok("unused".into()))
+                .is_err()
+        );
+    }
+    Ok(())
+}

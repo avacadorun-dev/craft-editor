@@ -1,5 +1,7 @@
 //! Native structural fitting with private canonical envelope transport.
-use crate::{Command, Document, Error, Mark, Node, NodePath, Result, ScalarOffset, TextPoint};
+use crate::{
+    Command, Document, Error, Mark, Node, NodePath, NodeRef, Result, ScalarOffset, TextPoint,
+};
 use prosemirror::{
     dynamic::{DynamicSchema, types::Dyn},
     model::{Fragment, Slice},
@@ -631,6 +633,75 @@ pub fn plan_slice_replacement<F: FnMut() -> Result<String>>(
         map,
     ))
 }
+/// Plan an open or closed rich slice replacing one exact guarded node.
+/// Structural mapping retains unaffected text identities, including notes outside that node.
+pub fn plan_node_slice_replacement<F: FnMut() -> Result<String>>(
+    document: &Document,
+    target: NodeRef,
+    content: Vec<Node>,
+    open_start: usize,
+    open_end: usize,
+    mut allocate: F,
+) -> Result<(Command, FittedMap)> {
+    let mut fresh_ids = Vec::new();
+    let (_, map) = fit_node(
+        document,
+        &target,
+        &content,
+        open_start,
+        open_end,
+        &mut || {
+            let id = allocate()?;
+            fresh_ids.push(id.clone());
+            Ok(id)
+        },
+    )?;
+    Ok((
+        Command::ReplaceNodeSlice {
+            target,
+            content,
+            open_start,
+            open_end,
+            fresh_ids,
+        },
+        map,
+    ))
+}
+fn node_range(document: &Document, target: &NodeRef) -> Result<std::ops::Range<usize>> {
+    crate::structural::check_ref(document, target)?;
+    if target.path.0.is_empty()
+        || matches!(target.expected.node_type.as_str(), "text" | "hardBreak")
+    {
+        return Err(Error::InvalidPosition);
+    }
+    let mut node = document.root();
+    let mut pos = 0;
+    for (depth, index) in target.path.0.iter().copied().enumerate() {
+        if depth > 0 {
+            pos += 1;
+        }
+        pos += node.children().iter().take(index).map(size).sum::<usize>();
+        node = node.children().get(index).ok_or(Error::InvalidPosition)?;
+    }
+    Ok(pos..pos + size(node))
+}
+pub(crate) fn fit_node<F: FnMut() -> Result<String>>(
+    document: &Document,
+    target: &NodeRef,
+    content: &[Node],
+    open_start: usize,
+    open_end: usize,
+    allocate: &mut F,
+) -> Result<(Document, FittedMap)> {
+    fit_at(
+        document,
+        node_range(document, target)?,
+        content,
+        open_start,
+        open_end,
+        allocate,
+    )
+}
 fn edge_depth(nodes: &[Node], last: bool) -> usize {
     let node = if last { nodes.last() } else { nodes.first() };
     match node {
@@ -649,6 +720,26 @@ pub(crate) fn fit<F: FnMut() -> Result<String>>(
     open_end: usize,
     allocate: &mut F,
 ) -> Result<(Document, FittedMap)> {
+    let before = coordinates(document.root());
+    let from = global(&before, from)?;
+    let to = global(&before, to)?;
+    fit_at(
+        document,
+        from.min(to)..from.max(to),
+        content,
+        open_start,
+        open_end,
+        allocate,
+    )
+}
+fn fit_at<F: FnMut() -> Result<String>>(
+    document: &Document,
+    range: std::ops::Range<usize>,
+    content: &[Node],
+    open_start: usize,
+    open_end: usize,
+    allocate: &mut F,
+) -> Result<(Document, FittedMap)> {
     if open_start > 64
         || open_end > 64
         || open_start > edge_depth(content, false)
@@ -658,9 +749,7 @@ pub(crate) fn fit<F: FnMut() -> Result<String>>(
     }
     Node::decode_open_fragment(serde_json::to_value(content)?)?;
     let before = coordinates(document.root());
-    let from_pos = global(&before, from)?;
-    let to_pos = global(&before, to)?;
-    let (from_pos, to_pos) = (from_pos.min(to_pos), from_pos.max(to_pos));
+    let (from_pos, to_pos) = (range.start, range.end);
     fn ids(node: &Node, out: &mut HashSet<String>) {
         if let Some(id) = node.block_id() {
             out.insert(id.into());

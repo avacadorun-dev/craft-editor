@@ -16,7 +16,7 @@ mod text_projection;
 mod transaction;
 
 pub use document::{Document, Mark, Node, is_allowed_link_uri};
-pub use fitting::{FittedMap, plan_slice_replacement};
+pub use fitting::{FittedMap, plan_node_slice_replacement, plan_slice_replacement};
 pub use lists::{
     ListKind, ListStyle, exit_empty_list_item, indent_list_items, join_adjacent_lists,
     lift_list_items, lift_list_items_with_ids, outdent_list_items, outdent_list_items_with_ids,

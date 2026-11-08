@@ -51,6 +51,19 @@ pub enum Command {
         /// Exact fresh identities consumed by fitted filler/split blocks, in deterministic order.
         fresh_ids: Vec<String>,
     },
+    /// Fit rich content in place of one exact guarded selectable node.
+    ReplaceNodeSlice {
+        /// Complete expected node and path at this transaction's guarded revision.
+        target: NodeRef,
+        /// Complete incoming canonical fragment, without flattening its open context.
+        content: Vec<Node>,
+        /// Open contextual wrappers on the first edge.
+        open_start: usize,
+        /// Open contextual wrappers on the final edge.
+        open_end: usize,
+        /// Exact caller-allocated identities for fitted filler and split nodes.
+        fresh_ids: Vec<String>,
+    },
     /// Replace one exact guarded node, including the root, as one canonical edit.
     ReplaceNode {
         /// Complete expected node at its current path.
@@ -682,6 +695,31 @@ fn apply_command(
                     block_id: to_block_id,
                     offset: to,
                 },
+                &content,
+                open_start,
+                open_end,
+                &mut || ids.next().ok_or(Error::UnsupportedEdit),
+            )?;
+            if ids.next().is_some() {
+                return Err(Error::InvalidDocument("unused_fitting_identity".into()));
+            }
+            *document = candidate;
+            mappings.push(PositionMap::Fitted(map));
+        }
+        Command::ReplaceNodeSlice {
+            target,
+            content,
+            open_start,
+            open_end,
+            fresh_ids,
+        } => {
+            if fresh_ids.len() > 100_000 {
+                return Err(Error::ResourceLimit);
+            }
+            let mut ids = fresh_ids.into_iter();
+            let (candidate, map) = crate::fitting::fit_node(
+                document,
+                &target,
                 &content,
                 open_start,
                 open_end,

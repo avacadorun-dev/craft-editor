@@ -194,3 +194,51 @@ fn consumed_paragraph_context_merges_nonconflicting_opaque_fields_without_flatte
     assert_eq!(editor.document(), &original);
     Ok(())
 }
+
+#[test]
+fn paste_replaces_selected_atoms_with_fitted_context_and_one_exact_selection_history() -> TestResult
+{
+    use craft_editor_model::NodePath;
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../craft-editor-model/tests/fixtures/source_node_slice_fitting.json"
+    ))?;
+    for case in fixture["cases"].as_array().ok_or("missing node corpus")? {
+        if case["name"] == "selected-table-to-closed-image" {
+            continue;
+        }
+        let original = Document::from_json(
+            json!({"type":"doc","attrs":{"schemaVersion":4},"content":case["target"]}),
+        )?;
+        let mut editor = EditorSession::new(original.clone(), Revision(0));
+        let selected =
+            original.node_ref(&NodePath(serde_json::from_value(case["nodePath"].clone())?))?;
+        editor.select_node(selected.clone())?;
+        let slice = RichSlice {
+            content: serde_json::from_value(case["slice"].clone())?,
+            open_start: serde_json::from_value(case["openStart"].clone())?,
+            open_end: serde_json::from_value(case["openEnd"].clone())?,
+        };
+        let change = editor
+            .paste_bundle(&slice.bundle()?, 1_000_000)
+            .map_err(|error| format!("{}: {error}", case["name"]))?;
+        let after = editor.document().clone();
+        let after_selection = editor.selection().cloned();
+        assert!(after_selection.is_some());
+        assert!(editor.node_selection().is_none());
+        assert!(
+            change
+                .mappings
+                .iter()
+                .any(|map| matches!(map, PositionMap::Fitted(_)))
+        );
+        assert_eq!(change.replay_proof().verify(&original)?.0, after);
+        editor.undo()?;
+        assert_eq!(editor.document(), &original);
+        assert_eq!(editor.node_selection(), Some(&selected));
+        assert!(!editor.can_undo());
+        editor.redo()?;
+        assert_eq!(editor.document(), &after);
+        assert_eq!(editor.selection(), after_selection.as_ref());
+    }
+    Ok(())
+}
