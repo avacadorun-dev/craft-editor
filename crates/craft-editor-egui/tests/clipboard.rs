@@ -436,3 +436,26 @@ fn full_fixture_copy_preserves_every_selected_node_and_mark_without_whole_docume
     assert!(!copied.plain.contains("vendorRoot"));
     Ok(())
 }
+
+#[test]
+fn empty_native_clipboard_never_deletes_the_current_selection_or_creates_history() -> TestResult {
+    let mut editor = session()?;
+    editor.set_selection(range("target", 1, "target", 7))?;
+    let original = editor.document().clone();
+    let original_selection = editor.selection().cloned();
+    for bundle in [
+        ClipboardBundle::default(),
+        ClipboardBundle {
+            html: Some(String::new()),
+            ..Default::default()
+        },
+    ] {
+        let change = editor.paste_bundle(&bundle, LIMIT)?;
+        assert_eq!(change.before_revision, change.after_revision);
+        assert_eq!(editor.document(), &original);
+        assert_eq!(editor.selection(), original_selection.as_ref());
+        assert!(!editor.can_undo());
+        assert!(editor.take_pending_changes().is_empty());
+    }
+    Ok(())
+}

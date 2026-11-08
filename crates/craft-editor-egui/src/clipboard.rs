@@ -407,6 +407,11 @@ impl EditorSession {
         if let Some(slice) = bundle.canonical_slice(max_bytes)? {
             return self.paste_rich_slice(slice);
         }
+        if bundle.plain.is_empty() {
+            // Original ProseMirror parseFromClipboard returns no slice for an empty clipboard.
+            // An unavailable text representation must never mean "delete the selected writing".
+            return self.apply_commands(vec![]);
+        }
         self.insert_plain_text(&bundle.plain.replace("\r\n", "\n"))
     }
     fn paste_rich_slice(&mut self, mut slice: RichSlice) -> Result<Change> {

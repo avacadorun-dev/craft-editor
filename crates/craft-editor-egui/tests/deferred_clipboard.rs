@@ -266,3 +266,42 @@ fn focused_canvas_captures_one_native_bundle_then_uses_that_snapshot_after_clipb
     assert_eq!(provider.reads.load(Ordering::Relaxed), 1);
     Ok(())
 }
+
+#[test]
+#[cfg(feature = "wordcraft-canvas")]
+fn ordinary_dialog_text_edit_keeps_native_paste_without_intercepting_rich_canvas_jobs() -> TestResult
+{
+    let mut session = editor()?;
+    let original = session.document().clone();
+    let provider = Arc::new(Provider::default());
+    session.set_clipboard_provider(Some(provider.clone()));
+    session.set_clipboard_mode(ClipboardMode::Deferred)?;
+    let context = egui::Context::default();
+    let dialog_id = egui::Id::new("synthetic-dialog-input");
+    context.memory_mut(|memory| memory.request_focus(dialog_id));
+    let mut dialog = String::new();
+    let mut output = context.run_ui(
+        egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::Vec2::new(700.0, 650.0),
+            )),
+            events: vec![egui::Event::Paste("normal dialog paste".into())],
+            focused: true,
+            ..Default::default()
+        },
+        |root| {
+            egui::CentralPanel::default().show(root, |ui| {
+                ui.add(egui::TextEdit::singleline(&mut dialog).id(dialog_id));
+                session.show_canvas(ui, &Default::default());
+            });
+        },
+    );
+    output.textures_delta.clear();
+    assert_eq!(dialog, "normal dialog paste");
+    assert_eq!(provider.reads.load(Ordering::Relaxed), 0);
+    assert_eq!(provider.writes.load(Ordering::Relaxed), 0);
+    assert!(session.take_clipboard_requests().is_empty());
+    assert_eq!(session.document(), &original);
+    Ok(())
+}
