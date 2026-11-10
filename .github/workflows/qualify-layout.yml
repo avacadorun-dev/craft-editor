@@ -3,13 +3,43 @@ on:
   push:
     branches: [feature/wordcraft-layout-probe]
   workflow_dispatch:
+    inputs:
+      resolve_only:
+        description: Prepare a minimally updated lock for source review; no qualification
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
   group: layout-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  resolve-lock:
+    if: inputs.resolve_only == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Resolve without compiling or qualifying
+        run: |
+          mkdir -p artifacts
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          cargo metadata --all-features --format-version 1 > artifacts/dependency-metadata.json
+          cp Cargo.lock artifacts/Cargo.lock
+          git diff -- Cargo.lock > artifacts/lock.patch
+          git rev-parse HEAD > artifacts/source-commit.txt
+          echo 'Dependency resolution only; this run grants no source or native acceptance.' > artifacts/NOT-QUALIFIED.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: resolved-lock-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 14
   geometry:
+    if: inputs.resolve_only != true
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
