@@ -3657,7 +3657,7 @@ dependencies = [
 [[package]]
 name = "wordcraft-doc"
 version = "0.15.1"
-source = "git+https://github.com/storytold/wordcraft?rev=da914ce674f18ebc4e08cca425cc8f8acca3372f#da914ce674f18ebc4e08cca425cc8f8acca3372f"
+source = "git+https://github.com/avacadorun-dev/wordcraft?rev=82ace77a17d71f8fce770227624319203e74cc7b#82ace77a17d71f8fce770227624319203e74cc7b"
 dependencies = [
  "base64 0.23.1",
  "log",
@@ -3671,7 +3671,7 @@ dependencies = [
 [[package]]
 name = "wordcraft-fonts"
 version = "0.15.1"
-source = "git+https://github.com/storytold/wordcraft?rev=da914ce674f18ebc4e08cca425cc8f8acca3372f#da914ce674f18ebc4e08cca425cc8f8acca3372f"
+source = "git+https://github.com/avacadorun-dev/wordcraft?rev=82ace77a17d71f8fce770227624319203e74cc7b#82ace77a17d71f8fce770227624319203e74cc7b"
 dependencies = [
  "brotli-decompressor 5.0.3",
  "harfrust 0.13.3",
@@ -3686,7 +3686,7 @@ dependencies = [
 [[package]]
 name = "wordcraft-geom"
 version = "0.15.1"
-source = "git+https://github.com/storytold/wordcraft?rev=da914ce674f18ebc4e08cca425cc8f8acca3372f#da914ce674f18ebc4e08cca425cc8f8acca3372f"
+source = "git+https://github.com/avacadorun-dev/wordcraft?rev=82ace77a17d71f8fce770227624319203e74cc7b#82ace77a17d71f8fce770227624319203e74cc7b"
 dependencies = [
  "image",
  "serde",
@@ -3695,7 +3695,7 @@ dependencies = [
 [[package]]
 name = "wordcraft-layout"
 version = "0.15.1"
-source = "git+https://github.com/storytold/wordcraft?rev=da914ce674f18ebc4e08cca425cc8f8acca3372f#da914ce674f18ebc4e08cca425cc8f8acca3372f"
+source = "git+https://github.com/avacadorun-dev/wordcraft?rev=82ace77a17d71f8fce770227624319203e74cc7b#82ace77a17d71f8fce770227624319203e74cc7b"
 dependencies = [
  "craft-proof",
  "image",
@@ -3716,7 +3716,7 @@ dependencies = [
 [[package]]
 name = "wordcraft-metafile"
 version = "0.15.1"
-source = "git+https://github.com/storytold/wordcraft?rev=da914ce674f18ebc4e08cca425cc8f8acca3372f#da914ce674f18ebc4e08cca425cc8f8acca3372f"
+source = "git+https://github.com/avacadorun-dev/wordcraft?rev=82ace77a17d71f8fce770227624319203e74cc7b#82ace77a17d71f8fce770227624319203e74cc7b"
 dependencies = [
  "kurbo",
  "thiserror 2.0.21",
@@ -3725,7 +3725,7 @@ dependencies = [
 [[package]]
 name = "wordcraft-render"
 version = "0.15.1"
-source = "git+https://github.com/storytold/wordcraft?rev=da914ce674f18ebc4e08cca425cc8f8acca3372f#da914ce674f18ebc4e08cca425cc8f8acca3372f"
+source = "git+https://github.com/avacadorun-dev/wordcraft?rev=82ace77a17d71f8fce770227624319203e74cc7b#82ace77a17d71f8fce770227624319203e74cc7b"
 dependencies = [
  "image",
  "log",
