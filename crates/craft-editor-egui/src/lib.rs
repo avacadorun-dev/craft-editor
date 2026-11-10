@@ -643,6 +643,40 @@ impl EditorSession {
     pub fn request_scroll_to_caret(&mut self) {
         self.canvas_state.request_scroll_to_caret();
     }
+    /// Reveal the complete measured selection on the next canvas frame, without changing
+    /// content, selection direction, history or focus. A range that fits the usable clip
+    /// viewport is shown in full. An oversized text range reveals its document-order start,
+    /// independently of selection direction; an oversized node reveals its leading edge.
+    /// Collapsed selections, table-cell selections and active IME use their measured caret.
+    ///
+    /// This one-shot request overrides a pending caret reveal. Later typing or an explicit
+    /// caret request takes precedence. Request again after a host layout change when needed.
+    /// Before restoring an exact host scroll offset, call [`Self::cancel_scroll_request`]
+    /// and let the host cancel any already-submitted scroll-area animation.
+    #[cfg(feature = "wordcraft-canvas")]
+    pub fn request_scroll_to_selection(&mut self) {
+        self.canvas_state.request_scroll_to_selection();
+    }
+    /// Cancel pending caret and selection reveal requests before restoring a host-owned offset.
+    /// This does not change selection or cancel animations already owned by a host scroll area.
+    #[cfg(feature = "wordcraft-canvas")]
+    pub fn cancel_scroll_request(&mut self) {
+        self.canvas_state.cancel_scroll_request();
+    }
+    /// Query the union of the current measured selection in screen coordinates, without layout
+    /// or mutation. Call with the response from the last completed canvas frame. Node selections
+    /// return their measured bounds; collapsed/table-cell/IME selections return their caret.
+    /// Returns `None` when that frame is unavailable or belongs to an older document revision.
+    ///
+    /// # Errors
+    /// Returns an error when current measured geometry cannot resolve the semantic selection.
+    #[cfg(feature = "wordcraft-canvas")]
+    pub fn canvas_selection_rect(&self, response: &egui::Response) -> Result<Option<egui::Rect>> {
+        if response.id != self.options.id {
+            return Ok(None);
+        }
+        self.canvas_state.selection_rect(self, response.rect.min)
+    }
     /// Query real formatting across selected runs, including pending marks at a caret.
     pub fn mark_state(&self, kind: &str) -> Result<MarkState> {
         if self.table_selection.is_some() {

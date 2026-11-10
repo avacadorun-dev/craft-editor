@@ -16,6 +16,8 @@ use crate::{
 
 mod cells;
 mod resize;
+#[cfg(test)]
+mod selection_reveal_tests;
 mod tables;
 
 pub use crate::layout::LineHeightBasis;
@@ -132,6 +134,7 @@ pub(crate) struct CanvasState {
     preedit: Option<Preedit>,
     preedit_epoch: u64,
     scroll_to_caret: bool,
+    scroll_to_selection: bool,
     cell_drag: Option<crate::TableSelection>,
     column_resize: Option<resize::ColumnDrag>,
     table_offsets: std::collections::HashMap<String, f32>,
@@ -141,7 +144,93 @@ pub(crate) struct CanvasState {
 
 impl CanvasState {
     pub(crate) fn request_scroll_to_caret(&mut self) {
+        self.scroll_to_selection = false;
         self.scroll_to_caret = true;
+    }
+    pub(crate) fn request_scroll_to_selection(&mut self) {
+        self.scroll_to_caret = false;
+        self.scroll_to_selection = true;
+    }
+    pub(crate) fn cancel_scroll_request(&mut self) {
+        self.scroll_to_caret = false;
+        self.scroll_to_selection = false;
+    }
+    pub(crate) fn selection_rect(
+        &self,
+        session: &EditorSession,
+        origin: Pos2,
+    ) -> Result<Option<Rect>> {
+        if self.measured.as_ref().is_none_or(|key| {
+            key.revision != session.revision() || key.preedit_epoch != self.preedit_epoch
+        }) {
+            return Ok(None);
+        }
+        let Some(geometry) = &self.geometry else {
+            return Ok(None);
+        };
+        if self.preedit.is_some() || session.cell_selection().is_some() {
+            return self.caret_rect(session, origin);
+        }
+        if let Some(reference) = &session.node_selection {
+            return Ok(geometry
+                .nodes()
+                .iter()
+                .find(|node| node.canonical_path == reference.path)
+                .map(|node| on_screen(origin, node.rect)));
+        }
+        let Some(selection) = &session.selection else {
+            return Ok(None);
+        };
+        let bounds = geometry
+            .selection_rects(selection)?
+            .into_iter()
+            .map(|rect| on_screen(origin, rect))
+            .reduce(Rect::union);
+        match bounds {
+            Some(bounds) => Ok(Some(bounds)),
+            None => self.caret_rect(session, origin),
+        }
+    }
+    fn selection_reveal_target(
+        &self,
+        session: &EditorSession,
+        origin: Pos2,
+        viewport: Rect,
+    ) -> Result<Option<(Rect, Option<egui::Align>)>> {
+        if !viewport.is_finite() || !viewport.is_positive() {
+            return Ok(None);
+        }
+        let Some(bounds) = self.selection_rect(session, origin)? else {
+            return Ok(None);
+        };
+        let fits =
+            |rect: Rect| rect.width() <= viewport.width() && rect.height() <= viewport.height();
+        if fits(bounds) {
+            let padded = bounds.expand(12.0);
+            return Ok(Some((if fits(padded) { padded } else { bounds }, None)));
+        }
+        if self.preedit.is_none()
+            && let Some(selection) = &session.selection
+        {
+            // Semantic document order also handles reverse and bidirectional selections.
+            let projection = Projection::new(session.document())?;
+            let start =
+                if projection.scalar(&selection.anchor)? <= projection.scalar(&selection.head)? {
+                    &selection.anchor
+                } else {
+                    &selection.head
+                };
+            let start_rect = self
+                .geometry
+                .as_ref()
+                .map(|geometry| geometry.caret(start))
+                .transpose()?
+                .flatten();
+            return Ok(start_rect.map(|rect| (on_screen(origin, rect), Some(egui::Align::Min))));
+        }
+        // Large nodes and caret fallbacks have an explicit leading-edge policy, never a
+        // guessed text point or a temporary change to the author's semantic selection.
+        Ok(Some((bounds, Some(egui::Align::Min))))
     }
     pub(crate) fn caret_rect(&self, session: &EditorSession, origin: Pos2) -> Result<Option<Rect>> {
         let Some(geometry) = &self.geometry else {
@@ -230,6 +319,8 @@ impl CanvasState {
         resolver: Option<&dyn crate::renderers::AtomResolver>,
         decorations: Option<&mut dyn crate::decorations::DecorationSource>,
     ) -> ViewResponse {
+        // Consume even on a failed measurement or absent selection: reveal is never sticky.
+        let reveal_selection = std::mem::take(&mut self.scroll_to_selection);
         let mut errors = Vec::new();
         let width = ui.available_width().max(144.0);
         if let Err(error) = self.measure_with_resolver(session, width, style, resolver) {
@@ -503,6 +594,13 @@ impl CanvasState {
         {
             errors.push(error);
         }
+        if reveal_selection && !self.scroll_to_caret {
+            match self.selection_reveal_target(session, rect.min, rect.intersect(ui.clip_rect())) {
+                Ok(Some((target, align))) => ui.scroll_to_rect(target, align),
+                Ok(None) => {}
+                Err(error) => errors.push(error),
+            }
+        }
         if let Some(geometry) = &self.geometry {
             let selection = session.selection.as_ref();
             if let Some(reference) = &session.node_selection
@@ -710,7 +808,7 @@ impl CanvasState {
             }
             Event::Cut if !read_only => {
                 session.cut_to_clipboard()?;
-                self.scroll_to_caret = true;
+                self.request_scroll_to_caret();
             }
             Event::Paste(text) if !read_only && self.preedit.is_none() => {
                 if session.clipboard_provider.is_some() {
@@ -725,11 +823,11 @@ impl CanvasState {
                         max_bytes,
                     )?;
                 }
-                self.scroll_to_caret = true;
+                self.request_scroll_to_caret();
             }
             Event::Text(text) if !read_only && self.preedit.is_none() => {
                 replace(session, &text.replace("\r\n", "\n"))?;
-                self.scroll_to_caret = true;
+                self.request_scroll_to_caret();
             }
             Event::Ime(egui::ImeEvent::Preedit { text, .. }) if !read_only => {
                 self.preedit_epoch = self.preedit_epoch.wrapping_add(1);
@@ -746,7 +844,7 @@ impl CanvasState {
                     session.canvas_composing = true;
                 }
                 // A new shadow caret may cross the local table viewport or visible line edge.
-                self.scroll_to_caret = true;
+                self.request_scroll_to_caret();
             }
             Event::Ime(egui::ImeEvent::Commit(text)) if !read_only => {
                 self.cancel_preedit(session);
@@ -757,7 +855,7 @@ impl CanvasState {
                         replace(session, &text)?;
                     }
                 }
-                self.scroll_to_caret = true;
+                self.request_scroll_to_caret();
             }
             Event::Ime(egui::ImeEvent::DeleteSurrounding {
                 before_chars,
@@ -821,14 +919,14 @@ impl CanvasState {
                     } else if !modifiers.shift && session.can_undo() {
                         session.undo()?;
                     }
-                    self.scroll_to_caret = true;
+                    self.request_scroll_to_caret();
                     return Ok(());
                 }
                 Key::Y if !read_only => {
                     if session.can_redo() {
                         session.redo()?;
                     }
-                    self.scroll_to_caret = true;
+                    self.request_scroll_to_caret();
                     return Ok(());
                 }
                 Key::B | Key::I | Key::U if !read_only && session.node_selection.is_none() => {
@@ -848,18 +946,18 @@ impl CanvasState {
             && matches!(key, Key::Backspace | Key::Delete)
         {
             session.delete_cell_selection()?;
-            self.scroll_to_caret = true;
+            self.request_scroll_to_caret();
             return Ok(());
         }
         if session.cell_selection().is_some() && key == Key::Enter {
             if !read_only && !modifiers.shift && !modifiers.command {
                 session.append_paragraph_in_head_cell()?;
-                self.scroll_to_caret = true;
+                self.request_scroll_to_caret();
             }
             return Ok(());
         }
         if key == Key::Tab && !read_only && session.advance_table_cell(modifiers.shift)? {
-            self.scroll_to_caret = true;
+            self.request_scroll_to_caret();
             return Ok(());
         }
         if self.cell_arrow(session, key, modifiers)? {
@@ -870,12 +968,12 @@ impl CanvasState {
             && matches!(key, Key::Backspace | Key::Delete)
         {
             session.delete_selected_node()?;
-            self.scroll_to_caret = true;
+            self.request_scroll_to_caret();
             return Ok(());
         }
         if !read_only && key == Key::Enter && session.node_selection.is_some() {
             session.insert_paragraph()?;
-            self.scroll_to_caret = true;
+            self.request_scroll_to_caret();
             return Ok(());
         }
         let geometry = self.geometry.as_ref().ok_or(Error::InvalidSelection)?;
@@ -902,7 +1000,7 @@ impl CanvasState {
                     };
                     if let Some(point) = geometry.hit(node.rect.page, node.rect.x, y)? {
                         session.set_selection(collapsed(point))?;
-                        self.scroll_to_caret = true;
+                        self.request_scroll_to_caret();
                     }
                 }
             }
@@ -929,7 +1027,7 @@ impl CanvasState {
             }
             replace(session, "")?;
             self.goal_x = None;
-            self.scroll_to_caret = true;
+            self.request_scroll_to_caret();
             return Ok(());
         }
         if !read_only && key == Key::Enter {
@@ -938,7 +1036,7 @@ impl CanvasState {
             } else {
                 session.insert_paragraph()?;
             }
-            self.scroll_to_caret = true;
+            self.request_scroll_to_caret();
             return Ok(());
         }
         if !read_only
@@ -956,7 +1054,7 @@ impl CanvasState {
                 } else {
                     session.indent_list()?;
                 }
-                self.scroll_to_caret = true;
+                self.request_scroll_to_caret();
                 return Ok(());
             }
         }
@@ -1015,7 +1113,7 @@ impl CanvasState {
             if !matches!(key, Key::ArrowUp | Key::ArrowDown) {
                 self.goal_x = None;
             }
-            self.scroll_to_caret = true;
+            self.request_scroll_to_caret();
         }
         Ok(())
     }

@@ -23,10 +23,11 @@ jobs:
         run: |
           rustup toolchain install stable --profile minimal --component rustfmt --component clippy
           rustup default stable
-      - name: Resolve optional layout dependencies on GitHub
+      - name: Verify the exact committed dependency graph
         run: |
           mkdir -p artifacts
-          cargo generate-lockfile
+          cargo metadata --all-features --locked --format-version 1 > artifacts/dependency-metadata.json
+          git diff --exit-code -- Cargo.lock
           cp Cargo.lock artifacts/Cargo.lock
           git rev-parse HEAD > artifacts/source-commit.txt
           rustc -V > artifacts/compiler.txt
